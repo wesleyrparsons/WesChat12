@@ -1,0 +1,11 @@
+--- BPE Statistics ---
+Total elapsed time: 552 minutes, 53.5400 seconds
+Elapsed time applying merges: 552 min 53.4870 sec
+Original text size (bytes/tokens): 1062424
+Encoded text size (bytes/tokens): 393152
+Compression ratio: 2.7023
+Number of merges performed: 674
+Tokens per second: 0.0000
+Average token length: 2.7023
+Number of symbols: 934
+Vocabulary size: 782

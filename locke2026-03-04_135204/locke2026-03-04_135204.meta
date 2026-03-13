@@ -1,0 +1,32 @@
+--- Program Information ---
+Author: Wesley R. Parsons
+Date: February 15, 2026
+Version: 1.1
+Sequence Length (SeqLen): 129
+Model Dimensions (ModelDim): 160
+Model Projections (Proj): 5
+Heads (nHead): 8
+Blocks (nBlock): 4
+Learning Rate (LearningRate): 0.0100
+Trainable Parameters: Wq, Wk, Wv, W0, W1, b1, W2, b2, gamma1, beta1, beta2, gamma2
+Maximum Vocabulary (MaxVocab): 300
+Number of Vocabulary (nVocab): 342
+
+--- BPE Statistics ---
+Total elapsed time: 0 hours, 0 min 40.3920 sec
+Elapsed time applying merges: 0 hours, 0 min 40.3760 sec
+Original text size (bytes/tokens): 339046
+Encoded text size (bytes/tokens): 197712
+Compression ratio: 1.7148
+Tokens per second: 8393.8899
+--- Symbol Statistics ---
+Number of symbols: 342
+Non-merged symbols: 179
+Vocabulary size: 342
+Longest symbol:
+  Index: 329
+  Length: 6
+  Value: ", and "
+--- Token Statistics ---
+Average token length: 1.7148
+Number of merges performed: 82

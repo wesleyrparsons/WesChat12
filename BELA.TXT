@@ -1,0 +1,22 @@
+Many years ago, Bela Julesz, a researcher at Bell Laboratories working in the 
+field of perception, used two fields of computer-generated random dots to
+explore our ability to see things in 3D.
+
+The BELA program included here will let you see this for yourself.  Run it on
+your HP95LX or HP100LX and it will display two random dot fields.  Cross or
+relax your eyes so that the vertical line at the left edge merges with the
+vertical line between the fields.  Once accomplished, there should be a square
+region in the center of the field which seems to be at a different distance
+than the rest of the field.
+
+Julesz discovered that certain people with "photographic" memory can view one
+field with their left eye, then close that one and subsequently view the other
+field with their right eye, and were then able to "see" the stereo vision 
+effect using their memory alone!  I first read about this in a Popular 
+Psychology article more than 20 years ago.
+
+Dave Goodman
+448 Ignacio Bl #220-HPHAND
+Novato, CA 94949
+
+

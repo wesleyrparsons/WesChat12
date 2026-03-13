@@ -1,0 +1,517 @@
+unit ChatGPTTok;               ''Runs JSON 0304
+
+{$mode objfpc}{$H+}
+
+interface
+
+uses
+  Classes,
+  Fpjson,
+  Global,
+  Jsonparser,
+  SysUtils,
+  Strutils;
+
+procedure RunGPTTok(var TokenizedCorpus: TIVector);
+
+implementation
+
+var
+  Vocab, Merges: TStringList;
+
+type
+  TStringArray = array of RawByteString;
+
+function LoadFileRaw(const FileName: string): RawByteString;
+var
+  FS: TFileStream;
+begin
+  FS := TFileStream.Create(FileName, fmOpenRead or fmShareDenyNone);
+  try
+    SetLength(Result, FS.Size);
+    if FS.Size > 0 then
+      FS.ReadBuffer(Result[1], FS.Size);
+  finally
+    FS.Free;
+  end;
+end;
+
+function IsLetterOrDigit(c: AnsiChar): Boolean;
+begin
+  Result :=
+    ((c >= 'a') and (c <= 'z')) or
+    ((c >= 'A') and (c <= 'Z')) or
+    ((c >= '0') and (c <= '9'));
+end;
+
+function IsWhitespace(c: AnsiChar): Boolean;
+begin
+  Result :=
+    (c = ' ') or
+    (c = #9)  or  // tab
+    (c = #10) or  // LF
+    (c = #13);    // CR
+end;
+
+procedure GPTChunk(const Text: RawByteString; var Chunks: TStringArray);
+var
+  i, start, count: Integer;
+  mode: (mNone, mWord, mSpace, mPunct);
+  c: AnsiChar;
+
+  procedure AddChunk(aStart, aLen: Integer);
+  begin
+    if aLen <= 0 then Exit;
+    Inc(count);
+    SetLength(Chunks, count);
+    Chunks[count-1] := Copy(Text, aStart, aLen);
+  end;
+
+begin
+  SetLength(Chunks, 0);
+  count := 0;
+  mode := mNone;
+  start := 1;
+
+  for i := 1 to Length(Text) do begin
+    c := Text[i];
+
+    if IsLetterOrDigit(c) then begin
+      if mode <> mWord then begin
+        AddChunk(start, i - start);
+        start := i;
+        mode := mWord;
+      end;
+    end
+    else if IsWhitespace(c) then begin
+      if mode <> mSpace then begin
+        AddChunk(start, i - start);
+        start := i;
+        mode := mSpace;
+      end;
+    end
+    else begin
+      if mode <> mPunct then begin
+        AddChunk(start, i - start);
+        start := i;
+        mode := mPunct;
+      end;
+    end;
+  end;
+
+  AddChunk(start, Length(Text) - start + 1);
+end;
+
+procedure LoadVocab(const FileName: string; Vocab: TStringList);
+var
+  SL: TStringList;
+  JSON: TJSONData;
+  Obj: TJSONObject;
+  i, j: Integer;
+  s: string;
+begin
+  if not FileExists(FileName) then
+    writeln('ERROR: File not found.');
+
+  SL := TStringList.Create;
+  try
+    SL.LoadFromFile(FileName, TEncoding.UTF8);
+
+    Vocab.Clear;
+    Vocab.OwnsObjects := False;
+    Vocab.Sorted := False;
+    Vocab.Duplicates := dupIgnore;
+    Vocab.CaseSensitive := True;
+
+    JSON := GetJSON(SL.Text);
+    try
+      if not (JSON is TJSONObject) then
+        writeln('Invalid JSON format');
+
+      Obj := TJSONObject(JSON);
+      writeln('Size of JSON: ', Obj.count - 1);
+
+      for i := 0 to Obj.Count - 1 do
+        Vocab.AddObject(Obj.Names[i], TObject(PtrInt(Obj.Items[i].AsInteger)));
+
+    finally
+      JSON.Free;
+    end;
+
+  finally
+    SL.Free;
+  end;
+
+  WriteLn('Length of vocab: ', Vocab.Count - 1);
+
+  writeln('Vocab 0 to 9: ');
+  for i := 0 to 9 do begin
+    Write(i, ' ', 'Vocab[i]: ', Vocab[i], ' ');
+    Write('Raw bytes: ');
+    s := Vocab[i];
+    for j := 1 to Length(s) do
+      Write(Ord(s[j]), ' ');
+    writeln;
+  end;
+  readln;
+
+  writeln('Vocab 120 to 130: ');
+  for i := 120 to 130 do begin
+    Write(i, ' ', 'Vocab[i]: ', Vocab[i], ' ');
+    Write('Raw bytes: ');
+    s := Vocab[i];
+    for j := 1 to Length(s) do
+      Write(Ord(s[j]), ' ');
+    writeln;
+  end;
+  readln;
+
+  writeln('Vocab 288 to 301: ');
+  for i := 288 to 301 do begin
+    Write(i, ' ', 'Vocab[i]: ', Vocab[i], ' ');
+    Write('Raw bytes: ');
+    s := Vocab[i];
+    for j := 1 to Length(s) do
+      Write(Ord(s[j]), ' ');
+    writeln;
+  end;
+  readln;
+end;
+
+procedure LoadMerges(const FileName: string; Merges: TStringList);
+var
+  SL: TStringList;
+  Line: string;
+  Parts: TStringArray;
+  i: Integer;
+begin
+  Merges.Clear;
+  Merges.CaseSensitive := True;   // IMPORTANT for GPT-2
+  Merges.Sorted := False;
+  Merges.Duplicates := dupIgnore;
+
+  SL := TStringList.Create;
+  try
+    SL.LoadFromFile(FileName, TEncoding.UTF8);
+
+    for i := 0 to SL.Count - 1 do begin
+      Line := Trim(SL[i]);
+      if (Line = '') or (Line[1] = '#') then
+        Continue;
+
+      Parts := Line.Split([' ']);
+      if Length(Parts) = 2 then
+        Merges.AddObject(Parts[0] + ' ' + Parts[1], TObject(PtrInt(Merges.Count)));
+        // rank = insertion order
+    end;
+
+  finally
+    SL.Free;
+  end;
+  writeln('End of loadmerges. Length of merges: ', i);
+  readln;
+  write('Merges 0: ',Merges[0],'   Raw: ');
+  for i := 1 to Length(Merges[0]) do
+    write(ord(merges[0][i]), ' ');
+  writeln;
+  write('Merges 1: ', Merges[1],'   Raw: ');
+  for i := 1 to Length(Merges[1]) do
+    write(ord(merges[1][i]), ' ');
+  writeln;
+  write('Merges 2: ', Merges[2],'   Raw: ');
+  for i := 1 to Length(Merges[2]) do
+    write(ord(merges[2][i]), ' ');
+  writeln;
+end;
+
+procedure PreTokenize(const Text: String; var Words: TStringArray);
+var
+  Parts: TStringArray;
+  i, j, k: Integer;
+const
+  GPTSpace: AnsiString = #$C4#$A0;  { UTF-8 for Ġ }
+ begin
+   writeln('start pre ', Text);
+
+         setlength(words, 1);
+         words[0] := '';
+   for i := 1 to High(Text) do
+     //for j := 0 to Length(Text[i]) do begin
+       if Text[i] = ' ' then
+         Words[0] := Words[0] + GPTSpace
+       else
+         Words[0] := Words[0] + Text[i];
+
+   writeln('pretoken', words[0]);
+   for k := 1 to High(Words[0]) do write(Words[0][k]);
+end;
+
+{Parts := Text.Split([' ']);
+  SetLength(Words, Length(Parts));
+
+  for i := 0 to High(Parts) do begin
+    if i = 0 then
+      Words[i] := Parts[i]
+    else  begin
+      Words[i] := GPTSpace + Parts[i];        // ``
+      {writeln('word in pretoken: ', words[i], ' ');
+      for j := 1 to Length(words[i]) do
+        write(ord(words[i][j]), ' ');
+      writeln; }
+    end;
+
+  end;
+end;}
+
+function UTF8CharLen(P: PChar): Integer;
+var
+  B: Byte;
+begin
+  B := Byte(P^);
+  if B < $80 then Result := 1
+  else if (B and $E0) = $C0 then Result := 2
+  else if (B and $F0) = $E0 then Result := 3
+  else if (B and $F8) = $F0 then Result := 4
+  else Result := 1;
+end;
+
+
+// new bpe 0301 w/ ' ' in merges
+procedure BPE(const Word: string; const Merges: TStringList; var Output: TStringArray);
+var
+  Symbols: TStringArray;
+  Pair, BestPair: string;
+  i, j, Rank, BestRank: Integer;
+  Found: Boolean;
+var // add 0301
+  p, len: Integer;
+begin
+  { 1. Initialize symbols as UTF‑8 bytes }
+  // Change 0301
+  {SetLength(Symbols, Length(Word));
+  for i := 1 to Length(Word) do
+    Symbols[i-1] := Word[i];   { one byte per symbol }}
+  begin
+
+    p := 1;
+    SetLength(Symbols, 0);
+    while p <= Length(Word) do begin
+      len := UTF8CharLen(@Word[p]);
+      SetLength(Symbols, Length(Symbols)+1);
+      Symbols[High(Symbols)] := Copy(Word, p, len);
+      Inc(p, len);
+    end;
+    {p := 1;
+    while p <= Length(Word) do begin
+      len := UTF8CharacterLength(@Word[p]);
+      SetLength(Symbols, Length(Symbols)+1);
+      Symbols[High(Symbols)] := Copy(Word, p, len);
+      Inc(p, len);
+    end;}
+  end;
+
+  { 2. Main merge loop }
+  while True do
+  begin
+    BestRank := MaxInt;
+    BestPair := '';
+    Found := False;
+
+    { 2a. Find the best-ranked mergeable pair }
+    for i := 0 to High(Symbols)-1 do
+    begin
+      Pair := Symbols[i] + ' ' + Symbols[i+1];   { GPT‑2 uses space delimiter }
+
+      j := Merges.IndexOf(Pair);
+      if j >= 0 then
+      begin
+        Rank := PtrInt(Merges.Objects[j]);
+        if Rank < BestRank then
+        begin
+          BestRank := Rank;
+          BestPair := Pair;
+          Found := True;
+        end;
+      end;
+    end;
+
+    if not Found then
+      Break;
+
+    { 2b. Apply the best merge everywhere }
+    i := 0;
+    while i < High(Symbols) do
+    begin
+      Pair := Symbols[i] + ' ' + Symbols[i+1];
+      if Pair = BestPair then
+      begin
+        Symbols[i] := Symbols[i] + Symbols[i+1];  { merge into UTF‑8 string }
+
+        { shift left }
+        for j := i+1 to High(Symbols)-1 do
+          Symbols[j] := Symbols[j+1];
+
+        SetLength(Symbols, Length(Symbols)-1);
+      end
+      else
+        Inc(i);
+    end;
+  end;
+
+  Output := Symbols;
+end;
+
+procedure TokenizeFile(const Corpus: String; const Vocab, Merges: TStringList;
+  var TokenIDs: TIVector);
+var
+ SL: TStringList;
+ Line, s: string;
+ Words, Pieces: TStringArray;
+ i, j, idx, l, ll, Count, k: Integer;
+begin
+ SL := TStringList.Create;
+ SL.LoadFromFile(Corpus);
+
+ writeln('after loading corpus');
+ writeln('*', SL[1], '*');
+ writeln('*', SL[2], '*');
+ writeln('*', SL[3], '*'); readln;
+ Count := 0;
+ SetLength(TokenIDs, 0);
+
+ writeln('CL.Count = ', SL.Count);
+ for i := 0 to SL.Count - 1 do begin
+   Line := SL[i];
+
+   if Trim(Line) = '' then Continue;
+
+   PreTokenize(Line, Words);
+
+  writeln('After Pretokenize. In tokenize. Here are the words 0 to 9.');
+   for j := 0 to 0 do begin
+     write('Word ', j, ' Length=', Length(words[j]), ' ', words[j], '   Raw: ');
+     s := words[j];
+
+     for k := 1 to length(words[j]) do begin
+       Write(Ord(s[k]), ' ');
+     end;
+   end;
+
+   for j := 0 to High(Words) do begin
+     BPE(Words[j], Merges, Pieces);
+
+{     writeln('Now doing j loop thru high(words). There are total no. piece ', Length(Pieces));
+     write('^^After UTFtoByte and back in tokenize/pieces Length of pieces (array of strings) is ', Length(Pieces));
+       for l := 0 to High(Pieces) do begin
+       writeln('Piece ', l, ' ', Pieces[l], 'Length: ', Length(Pieces[l]), ' RAW: ');
+       for ll := 1 to High(Pieces[l]) do                // It seems that when a word goes to piecesin in BPE  that starts 196 160
+         write(ord(Pieces[l][ll]), ' ');                // the 196 160 get stripped off into separate pieces.
+       end;                                             // Or happen after BPE?
+       writeln;   }
+     // writeln('Now doing loop thru pieces, whch is k. ');
+     for k := 0 to High(Pieces) do begin
+
+       writeln;
+       writeln('Iterating thru Pieces on no. ', k);
+       write('Piece ', k, ' is ', Pieces[k], '. Length of pieces[k] is ', Length(Pieces[k]), '. RAW: ');
+       for ll:= 1 to Length(Pieces[k]) do write(ord(Pieces[k][ll]));
+       writeln('Vocab index for this is ', Vocab.IndexOf(Pieces[k]));
+       //Read;
+
+       idx := Vocab.IndexOf(Pieces[k]);     // here will it find pieces[i] if its 196 160.
+       if idx >= 0 then begin
+         Inc(Count);
+         SetLength(TokenIDs, Count);
+         TokenIDs[Count - 1] := PtrInt(Vocab.Objects[idx]);
+
+         // writeln('In pieces/TokenIDs loop. No. k', k, ' count ', count);
+         // writeln('Token IDs ', TokenIDs[Count - 1], ' ');
+       end;
+     end;
+
+     {writeln('Pieces After UTFtoByte and back in tokenize/pieces but at end of loop Length ', Length(Pieces), ' RAW: ');
+     for l := 0 to High(Pieces) do begin
+       write(l, ' ', Pieces[l], ' Raw: ');
+       for ll := 1 to High(Pieces[l]) do
+         write(ord(Pieces[l][ll]), ' ');
+     end; }
+   end;
+
+   {writeln('TokenIDs After UTFtoByte and back in tokenize/tokenids at end of loop Length TIDS', Length(TokenIDs) , ' ');
+   for l := 0 to High(TokenIDs) do begin
+     write(l, ' ', TokenIDs[l]);
+   end;
+   readln;  }
+
+ end;
+ {writeln('exiting tokenize pieces[0] and [1] ');
+  for l := 0 to 1 do begin
+    write(l, ' ', Pieces[l], ' Raw: ');
+    for ll := 1 to High(Pieces[l]) do
+      write(ord(Pieces[l][ll]), ' ');
+  end; }
+
+  SL.Free;
+end;
+
+procedure RunGPTTok(var TokenizedCorpus: IVectorType);
+var
+  Merges: TStringList;
+  Tokens: TIVector;
+  i, j: Integer;
+  s: string;
+begin
+  Vocab := TStringList.Create;
+  LoadVocab('vocab1.json', Vocab);
+  writeln('end vocab');
+  readln;
+
+  Merges := TStringList.Create;
+  LoadMerges('merges.txt', Merges);
+  writeln('end merges');
+  readln;
+
+  TokenizeFile('bela.txt', Vocab, Merges, Tokens);
+
+  {writeln('first 10 tokens ');
+  for j := 1 to 10 do
+    Write(Tokens[j], ' ');
+  writeln; }
+
+  writeln('End of three routines in TokGPT.');
+
+  SetLength(TokenizedCorpus, Length(Tokens));
+
+  for i := 0 to High(Tokens) do
+    TokenizedCorpus[i] := Tokens[i];
+
+  writeln('In run after 3 routines. 60 tokens.');
+  for i := 0 to 60 do begin
+    Write(' *', i, ' ', Tokens[i], ' ', Vocab[Tokens[i]], '*  ');
+    s := Vocab[Tokens[i]];
+    write('=');
+    for j := 1 to Length(s) do
+      Write(Ord(s[j]), ' ');
+    write('=');
+    readln;
+  end;
+  writeln;
+
+  writeln('End of tokenize. TokenizedCorpus:');
+  for i := 0 to High(TokenizedCorpus) do begin
+
+    s := Vocab[TokenizedCorpus[i]];
+    {if s = 'Ġ' then
+      s := ' '; }
+    Write(s);
+  end;
+  writeln;
+  readln;
+
+  Vocab.Free;
+  Merges.Free;
+end;
+
+end.
+
+

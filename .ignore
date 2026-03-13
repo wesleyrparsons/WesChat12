@@ -1,0 +1,57 @@
+# Lazarus build output
+lib/
+backup/
+*.compiled
+*.dbg
+*.ppu
+*.o
+*.or
+*.a
+*.rsj
+*.rst
+*.s
+*.swp
+
+# Lazarus session and state files
+*.lps
+*.lps.bak
+
+# Lazarus-generated resource files
+*.res
+*.rc
+*.ico
+*.drc
+
+# Build artifacts
+*.exe
+*.dll
+*.so
+*.dylib
+*.app
+*.out
+
+# Package output
+*.ppl
+*.ppl.bak
+
+# Unit output folders (common Lazarus defaults)
+units/
+tmp/
+bin/
+
+# Editor/IDE backups
+*.bak
+*.old
+*~
+
+# OS-specific clutter
+# Windows
+Thumbs.db
+Desktop.ini
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Linux

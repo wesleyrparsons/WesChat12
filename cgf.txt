@@ -1,0 +1,7 @@
+locke.txt
+gibbon.txt
+franklin1.txt
+franklin2.txt
+franklin3.txt
+gibbon.txt
+churchill.txt

@@ -23,7 +23,7 @@ type
     Prev, Next: PTokenNode;
   end;
 
-  // New hash code.
+  // New hash code here.
   type
   TPairSlotState = (psEmpty, psUsed);
 

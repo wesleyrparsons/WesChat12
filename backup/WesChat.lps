@@ -8,8 +8,8 @@
       <Unit>
         <Filename Value="WesChat.lpr"/>
         <IsPartOfProject Value="True"/>
-        <TopLine Value="155"/>
-        <CursorPos X="30" Y="161"/>
+        <TopLine Value="7"/>
+        <CursorPos X="17" Y="24"/>
         <UsageCount Value="233"/>
         <Loaded Value="True"/>
       </Unit>
@@ -38,8 +38,8 @@
         <IsPartOfProject Value="True"/>
         <IsVisibleTab Value="True"/>
         <EditorIndex Value="4"/>
-        <TopLine Value="63"/>
-        <CursorPos Y="86"/>
+        <TopLine Value="215"/>
+        <CursorPos X="35" Y="240"/>
         <UsageCount Value="210"/>
         <Loaded Value="True"/>
       </Unit>
@@ -166,6 +166,10 @@
     <JumpHistory HistoryIndex="29">
       <Position>
         <Filename Value="Tokenize.pas"/>
+        <Caret Line="1432" Column="30" TopLine="1428"/>
+      </Position>
+      <Position>
+        <Filename Value="Tokenize.pas"/>
         <Caret Line="536" Column="47" TopLine="523"/>
       </Position>
       <Position>
@@ -279,10 +283,6 @@
       <Position>
         <Filename Value="Tokenize.pas"/>
         <Caret Line="166" Column="26" TopLine="138"/>
-      </Position>
-      <Position>
-        <Filename Value="Tokenize.pas"/>
-        <Caret Line="1318" TopLine="1303"/>
       </Position>
     </JumpHistory>
     <RunParams>

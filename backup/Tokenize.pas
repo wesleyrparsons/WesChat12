@@ -82,6 +82,7 @@ var
   TrieHead: PTrieNode = nil;                     // Nodes for Trie.
   i: Integer;
 
+procedure TestInitPairHash;
 procedure ReadFileBytes(const FileName: String; var OneCorpus: TBVector);
 procedure WriteTokenList(const Part: TPart = B);
 procedure LoadTokenList(const BinFileName: String);

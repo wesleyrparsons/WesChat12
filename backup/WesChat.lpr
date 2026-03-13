@@ -158,7 +158,7 @@ begin
   SetConsoleOutputCP(CP_UTF8);
   SetConsoleCP(CP_UTF8);
 
-  ClrScr;   testinitpairhash;
+  ClrScr;
   writeln('WesChat, Version 1.2, begun January 19, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wespar.com.');
   writeln;
   writeln('Options:');

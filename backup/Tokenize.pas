@@ -82,7 +82,7 @@ var
   TrieHead: PTrieNode = nil;                     // Nodes for Trie.
   i: Integer;
 
-procedure TestInitPairHashFromList;
+procedure TestInitPairHashFromList2;
 procedure ReadFileBytes(const FileName: String; var OneCorpus: TBVector);
 procedure WriteTokenList(const Part: TPart = B);
 procedure LoadTokenList(const BinFileName: String);
@@ -439,6 +439,37 @@ begin
   Dispose(N1);
 end;
 
+procedure TestInitPairHashFromList2;
+var
+  H: TPairHash;
+  N1, N2, N3, N4: PTokenNode;
+  A, B, Best: Integer;
+begin
+  New(N1);
+  New(N2);
+  New(N3);
+  New(N4);
+
+  N1^.Tok := 7;   N1^.Prev := nil; N1^.Next := N2;
+  N2^.Tok := 8;   N2^.Prev := N1;  N2^.Next := N3;
+  N3^.Tok := 7;   N3^.Prev := N2;  N3^.Next := N4;
+  N4^.Tok := 8;   N4^.Prev := N3;  N4^.Next := nil;
+
+  InitPairHash(H, 32);
+  InitPairHashFromList(N1, H);
+
+  Best := FindBestPairHash(H, A, B);
+
+  if (Best = 2) and (A = 7) and (B = 8) then
+    Writeln('TestInitPairHashFromList2 PASS')
+  else
+    Writeln('TestInitPairHashFromList2 FAIL: Best=', Best, ' A=', A, ' B=', B);
+
+  Dispose(N4);
+  Dispose(N3);
+  Dispose(N2);
+  Dispose(N1);
+end;
 { Pair count process }
 // Initial pair count.
 procedure InitPairCounts(Head: PTokenNode; var PC: TPairCounts);
@@ -523,6 +554,35 @@ begin
   Result := Max;
 end;
 
+procedure UpdatePairsForMergeHash(Node: PTokenNode; NewTok: Integer; var H: TPairHash);
+var
+  A, B: Integer;
+begin
+  if (Node = nil) or (Node^.Next = nil) then Exit;
+
+  A := Node^.Tok;
+  B := Node^.Next^.Tok;
+
+  // Remove (A, B).
+  PairDecHash(H, A, B);
+
+  // Remove (Prev, A).
+  if Node^.Prev <> nil then
+    PairDecHash(H, Node^.Prev^.Tok, A);
+
+  // Remove (B, Next).
+  if Node^.Next^.Next <> nil then
+    PairDecHash(H, B, Node^.Next^.Next^.Tok);
+
+  // Add (Prev, NewTok).
+  if Node^.Prev <> nil then
+    PairIncHash(H, Node^.Prev^.Tok, NewTok);
+
+  // Add (NewTok, Next).
+  if Node^.Next^.Next <> nil then
+    PairIncHash(H, NewTok, Node^.Next^.Next^.Tok);
+end;
+
 // Update the pair count and nodes from a merge in linked list.
 procedure UpdatePairsForMerge(Node: PTokenNode; NewTok: Integer; var PC: TPairCounts);
 var
@@ -572,6 +632,37 @@ begin
     Right^.Next^.Prev := Node;
 
   Dispose(Right);
+end;
+
+procedure MergeAllPairsHash(var Head, Tail: PTokenNode; A, B, NewTok: Integer; var H: TPairHash);
+var
+  Cur: PTokenNode;
+begin
+  Cur := Head;
+
+  while (Cur <> nil) and (Cur^.Next <> nil) do begin
+    if not (IsSpecial(Cur^.Tok) or IsSpecial(Cur^.Next^.Tok)) then begin
+      if (Cur^.Tok = A) and (Cur^.Next^.Tok = B) then begin
+        UpdatePairsForMergeHash(Cur, NewTok, H);
+        MergeAt(Head, Tail, Cur, NewTok);
+        Cur := Cur^.Next;
+      end
+      else
+        Cur := Cur^.Next;
+    end
+    else
+      Cur := Cur^.Next;
+  end;
+end;
+
+procedure CheckPairHashCounts(const H: TPairHash);
+var
+  i: Integer;
+begin
+  for i := 0 to H.Capacity - 1 do
+    if (H.Entries[i].State = psUsed) and (H.Entries[i].Count < 0) then
+      Writeln('Negative pair count: (', H.Entries[i].A, ',', H.Entries[i].B,
+        ') Count=', H.Entries[i].Count);
 end;
 
 // Merge all the pairs in the token list.
@@ -855,6 +946,138 @@ begin
   nVocab := nSymbols;
   writeln('nSymbols = ', nSymbols, ' nonmerged symbols = ', nNonmergedSymbols);
   writeln('End of tokenization. Press <CR> to continue.');
+end;
+
+procedure TrainBPEHash(var Head, Tail: PTokenNode; MaxMerges: Integer;
+  var MergeCount, StartSymbol: Integer);
+var
+  m, BestCount, A, B: Integer;
+  H: TPairHash;
+
+  procedure ReadMergeIfKeyPressed;
+  var
+    key: Char;
+  begin
+    key := CheckForControlKey;
+    case key of
+      'x', 'X':
+        begin
+          Writeln('Exit requested. Stopping execution.');
+          Pause;
+          Halt;
+        end;
+      'b', 'B':
+        begin
+          Writeln('Break requested. Exiting loop.');
+          Pause;
+          BestCount := 0;   // causes outer loop to stop
+        end;
+      'v', 'V':
+        begin
+          VeryVerbose := not VeryVerbose;
+          Writeln('Very verbose mode: ', VeryVerbose);
+        end;
+      'i', 'I':
+        begin
+          Writeln;
+          ReportInfo;
+          Pause;
+        end;
+      'p', 'P':
+        begin
+          Pause;
+        end;
+      'm', 'M':
+        begin
+          Writeln;
+          Writeln('Maximum symbols = ', MaxVocab,
+                  '. Maximum merges = ', MaxMerges,
+                  '. Hash capacity = ', H.Capacity,
+                  '. Used slots = ', H.Used,
+                  '. Best count = ', BestCount, '.');
+          Write(DateTimeToStr(Now),
+            '  X = Exit program. B = Break out of merge loop. V = toggle Verbose mode.');
+          Writeln('  P = Program information. M = Merging information. S = maximum Symbols. Merging...');
+        end;
+      's', 'S':
+        begin
+          Writeln;
+          Write('Current maximum symbols = ', MaxVocab,
+                '. Enter new maximum symbols: ');
+          ReadLn(MaxVocab);
+        end;
+    end;
+  end;
+
+begin
+  MergeCount := 0;
+
+  Write(DateTimeToStr(Now),
+    '  X = Exit program. B = Break out of merge loop. V = toggle Verbose mode.');
+  Writeln('  P = Program information. M = Merging information. S = maximum Symbols. Merging...');
+
+  if ShowMergeWork then
+    Writeln('--- List of Merges (Hash) ---');
+
+  for m := 1 to MaxMerges do
+  begin
+    if PauseIfKeyPressed then
+      ReadMergeIfKeyPressed;
+
+    // Rebuild pair counts from current token list.
+    InitPairHash(H, MaxPairCount * 2 + 1024);
+    InitPairHashFromList(Head, H);
+
+    // Optional: save partial symbol table
+    if SavePartialSymbolTable then
+      if (Length(SymbolTable) mod PartialSymbolTableTrigger) = 0 then
+        SaveSymbolTable(WorkingName + FormatDateTime('yyyy-mm-dd_hhnnss' + '.sym', Now), SymbolTable);
+
+    // Stop if hash table got too full
+    if H.Used > MaxPairCount then
+    begin
+      Writeln('Stopping: pair table exceeded ', MaxPairCount, ' entries.');
+      Break;
+    end;
+
+    BestCount := FindBestPairHash(H, A, B);
+
+    // Stop if no useful merges remain
+    if BestCount < 2 then
+    begin
+      Writeln('Stopping: no more valid merges at iteration ', m, '.');
+      Break;
+    end;
+
+    // Stop if symbol table is full
+    if Length(SymbolTable) >= MaxVocab then
+    begin
+      Writeln('Stopping: symbol table reached ', MaxVocab, ' entries.');
+      Break;
+    end;
+
+    // Perform merge
+    MergeAllPairsHash(Head, Tail, A, B, StartSymbol, H);
+
+    AddMergeSymbol(StartSymbol, A, B);
+    RecordMerge(Merges, MergeCount, A, B, StartSymbol);
+
+    Inc(MergeCount);
+    Inc(StartSymbol);
+
+    if ShowMergeWork then
+    begin
+      Write(MergeCount,
+        ' Merged (', A:5, ',', B:5, ') -> (', StartSymbol - 1:5, ') #', BestCount);
+      if (MergeCount mod 4) = 0 then
+        Writeln
+      else
+        Write('  |  ');
+    end;
+  end;
+
+  Writeln('Hash tokenization complete. Total merges: ', MergeCount, '.');
+  Pause;
 end;
 
 { Apply the BPE encoder }

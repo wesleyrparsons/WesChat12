@@ -15,17 +15,17 @@ var
 { Place all verbosity and control options at start }
   DoNotPause: Boolean = False;          // Pause disabled.
   PauseIfKeyPressed: Boolean = True;
-  DisplayCorpus: Boolean = False;       // one set for real tokenizing and one set for debug
+  DisplayCorpus: Boolean = True;       // one set for real tokenizing and one set for debug
   VeryVerbose: Boolean = False;
-  VerboseTokenize: Boolean = False;
+  VerboseTokenize: Boolean = True;
   VerboseTransform: Boolean = False;
   ShowTokenWork: Boolean = False;
   ShowMergeWork: Boolean = True;
-  ShowVerification: Boolean = False;
+  ShowVerification: Boolean = True;
   ShowEachByteRead: Boolean = False;
   SaveFiles: Boolean = True;
   SavePartialSymbolTable: Boolean = True;
-  PartialSymbolTableTrigger: Integer = 100;
+  PartialSymbolTableTrigger: Integer = 5000;
 
 const
   ModelDim = 160;                 // Number of loadings for a symbol.
@@ -114,7 +114,6 @@ var
   WorkingName: string;
   nCorpus: Integer;                              // Length of original corpus, and final output.
   nSymbols: Integer;                             // Number of symbols = Length(SymbolTable);
-  nNonmergedSymbols: Integer;                    // Number of symbols not merged away in tokenization.
   //TokenizedCorpus: TIVector;                     // Output corpus of tokens.
   nTokenizedCorpus: Integer;                     // Length of tokenized corpus.
   X: TSeqMatrix;                                 // Original X matrix. (Not a tensor.)

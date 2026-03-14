@@ -17,16 +17,16 @@ Files used in symbol table:
 bela.txt   1036 bytes   3/13/2026 2:01:08 PM  
 
 --- Time Statistics ---
-Start time: 3/14/2026 2:22:10 PM     End time: 3/14/2026 2:22:12 PM
-Total elapsed time: 0 hours, 0 min 1.5500 sec
+Start time: 3/14/2026 2:43:37 PM     End time: 3/14/2026 2:43:39 PM
+Total elapsed time: 0 hours, 0 min 1.6170 sec
 Hit <CR> to continue.... 
 
 --- BPE Statistics ---
-Elapsed time applying merges: 0 hours, 0 min 1.5380 sec
+Elapsed time applying merges: 0 hours, 0 min 1.6170 sec
 Original text size (bytes/tokens): 1036
 Encoded text size (bytes/tokens): 446
 Compression ratio: 2.3229
-Tokens per second: 668.3871
+Tokens per second: 640.6926
 --- Symbol Statistics ---
 Number of symbols: 399
 Non-merged symbols: 161

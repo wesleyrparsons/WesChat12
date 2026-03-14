@@ -10,8 +10,62 @@ begin
 end.
 {Notes
 
+Vocabulary structure
+These describe the symbol table itself and help you understand how your merges
+shaped the final vocabulary.
+
+Total vocabulary size — number of symbols.
+
+Base (unmerged) symbols — usually 256 byte tokens.
+
+Merged symbols — symbols with length > 1.
+
+Merged-symbol length distribution — histogram of symbol lengths (e.g., how many 2‑byte merges, 3‑byte merges, etc.).
+
+Average merged‑symbol length — mean length of all merged symbols.
+
+Longest symbol length — maximum length of any merged token.
+
+Vocabulary compression ratio — merged symbols ÷ total symbols.
+
+These tell you whether your vocabulary is too shallow (few merges) or too bloated (many long merges that rarely appear).
+
+Corpus tokenization statistics
+These describe how the tokenizer actually behaved on the corpus.
+
+Total token count — number of tokens in the tokenized corpus.
+
+Merged token instances — count of tokens whose symbol length > 1.
+
+Unmerged token instances — count of tokens whose symbol length = 1.
+
+Merged‑instance ratio — merged instances ÷ total instances.
+
+Average token length in characters — mean length of the symbol for each token instance.
+
+Token length distribution — histogram of token lengths across the corpus.
+
+Compression ratio (characters ÷ tokens) — how many characters per token on average.
+
+This tells you how much compression your merges achieved and whether
+the tokenizer is efficient on real text.
+
+Frequency‑based insights
+These help you understand which merges matter and which are dead weight.
+
+Top N most frequent merged tokens — the merges doing the real work.
+
+Merged tokens that never appear — candidates for pruning.
+
+Merged tokens that appear only once — likely overfitting or noise.
+
+Coverage of top merges — e.g., top 100 merges account for X% of merged instances.
+
+This is where you can see whether your vocabulary is well-balanced or needs refinement.
+
+
 To Do.
-The .rcn file is not showing up.
+
 Fix computevocabfromlist.
 In main program: Read Corpus, Read Files (vocab and merge), Tokenize, Embed, Transform.
 One proc: display merge/token info. One proc: display transform/embed info. Move keypressed to global.

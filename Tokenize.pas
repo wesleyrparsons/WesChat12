@@ -82,7 +82,6 @@ var
   TrieHead: PTrieNode = nil;                     // Nodes for Trie.
   i: Integer;
 
-procedure TestInitPairHashFromList2;
 procedure ReadFileBytes(const FileName: String; var OneCorpus: TBVector);
 procedure WriteTokenList(const Part: TPart = B);
 procedure LoadTokenList(const BinFileName: String);
@@ -95,7 +94,6 @@ procedure ReconstructText(Head: PTokenNode; out Text: String);
 function MatchLongest(root: PTrieNode; const text: TBVector; startPos: Integer;
   out tokenID, matchLen: Integer): Boolean;
 procedure DetokenizeToDisplay(const TokenizedCorpus: TIVector; const Part: TPart = B);
-function ComputeVocabularyFromList(Head: PTokenNode; const SymbolTable: TSymbolTable): Integer;
 procedure ReportStatistics;
 procedure RunTokenize(const Corpus: TBVector);
 
@@ -142,7 +140,7 @@ begin
     writeln('ReadByteFile: ');
     for i := 0 to 150 do
       write(OneCorpus[i], ' ');
-    Readln;
+    Pause;
   end;
   if VeryVerbose and VerboseTokenize then
     writeln;
@@ -296,38 +294,6 @@ begin
   end;
 end;
 
-procedure TestPairDecMissing;
-var
-  H: TPairHash;
-begin
-  InitPairHash(H, 32);
-
-  PairDecHash(H, 99, 100);
-
-  Writeln('TestPairDecMissing PASS');
-end;
-
-procedure TestPairDecHash;
-var
-  H: TPairHash;
-  Idx: Integer;
-begin
-  InitPairHash(H, 32);
-
-  PairIncHash(H, 10, 20);
-  PairIncHash(H, 10, 20);
-  PairIncHash(H, 10, 20);
-
-  PairDecHash(H, 10, 20);
-
-  Idx := FindSlot(H, 10, 20);
-
-  if (H.Entries[Idx].State = psUsed) and (H.Entries[Idx].Count = 2) then
-    Writeln('TestPairDecHash PASS')
-  else
-    Writeln('TestPairDecHash FAIL');
-end;
-
 function FindBestPairHash(const H: TPairHash; out A, B: Integer): Integer;
 var
   i, Max: Integer;
@@ -346,56 +312,7 @@ begin
   Result := Max;
 end;
 
-procedure TestFindBestPairHash;
-var
-  H: TPairHash;
-  A, B, Best: Integer;
-begin
-  InitPairHash(H, 32);
-
-  PairIncHash(H, 1, 2);
-  PairIncHash(H, 1, 2);
-  PairIncHash(H, 3, 4);
-  PairIncHash(H, 3, 4);
-  PairIncHash(H, 3, 4);
-  PairIncHash(H, 5, 6);
-
-  Best := FindBestPairHash(H, A, B);
-
-  if (Best = 3) and (A = 3) and (B = 4) then
-    Writeln('TestFindBestPairHash PASS')
-  else
-    Writeln('TestFindBestPairHash FAIL: Best=', Best, ' A=', A, ' B=', B);
-end;
-
-// Test init hash code.
-procedure TestInitPairHash;
-var
-  H: TPairHash;
-  i: Integer;
-  OK: Boolean;
-begin
-  InitPairHash(H, 32);
-
-  OK := True;
-
-  if H.Capacity <> 32 then
-    OK := False;
-
-  if H.Used <> 0 then
-    OK := False;
-
-  for i := 0 to H.Capacity - 1 do
-    if H.Entries[i].State <> psEmpty then
-      OK := False;
-
-  if OK then
-    Writeln('TestInitPairHash PASS')
-  else
-    Writeln('TestInitPairHash FAIL');
-end;
-
-// new hash routine replacing initpaircounts.
+// New hash routine.
 procedure InitPairHashFromList(Head: PTokenNode; var H: TPairHash);
 var
   Cur: PTokenNode;
@@ -410,69 +327,9 @@ begin
   end;
 end;
 
-procedure TestInitPairHashFromList;
-var
-  H: TPairHash;
-  N1, N2, N3: PTokenNode;
-  A, B, Best: Integer;
-begin
-  New(N1);
-  New(N2);
-  New(N3);
-
-  N1^.Tok := 10;  N1^.Prev := nil; N1^.Next := N2;
-  N2^.Tok := 20;  N2^.Prev := N1;  N2^.Next := N3;
-  N3^.Tok := 10;  N3^.Prev := N2;  N3^.Next := nil;
-
-  InitPairHash(H, 32);
-  InitPairHashFromList(N1, H);
-
-  Best := FindBestPairHash(H, A, B);
-
-  if (Best = 1) then
-    Writeln('TestInitPairHashFromList PASS')
-  else
-    Writeln('TestInitPairHashFromList FAIL');
-
-  Dispose(N3);
-  Dispose(N2);
-  Dispose(N1);
-end;
-
-procedure TestInitPairHashFromList2;
-var
-  H: TPairHash;
-  N1, N2, N3, N4: PTokenNode;
-  A, B, Best: Integer;
-begin
-  New(N1);
-  New(N2);
-  New(N3);
-  New(N4);
-
-  N1^.Tok := 7;   N1^.Prev := nil; N1^.Next := N2;
-  N2^.Tok := 8;   N2^.Prev := N1;  N2^.Next := N3;
-  N3^.Tok := 7;   N3^.Prev := N2;  N3^.Next := N4;
-  N4^.Tok := 8;   N4^.Prev := N3;  N4^.Next := nil;
-
-  InitPairHash(H, 32);
-  InitPairHashFromList(N1, H);
-
-  Best := FindBestPairHash(H, A, B);
-
-  if (Best = 2) and (A = 7) and (B = 8) then
-    Writeln('TestInitPairHashFromList2 PASS')
-  else
-    Writeln('TestInitPairHashFromList2 FAIL: Best=', Best, ' A=', A, ' B=', B);
-
-  Dispose(N4);
-  Dispose(N3);
-  Dispose(N2);
-  Dispose(N1);
-end;
 { Pair count process }
 // Initial pair count.
-procedure InitPairCounts(Head: PTokenNode; var PC: TPairCounts);
+{procedure InitPairCounts(Head: PTokenNode; var PC: TPairCounts);
 var
   Cur: PTokenNode;
   i: Integer;
@@ -552,7 +409,7 @@ begin
     end;
 
   Result := Max;
-end;
+end;}
 
 procedure UpdatePairsForMergeHash(Node: PTokenNode; NewTok: Integer; var H: TPairHash);
 var
@@ -584,7 +441,7 @@ begin
 end;
 
 // Update the pair count and nodes from a merge in linked list.
-procedure UpdatePairsForMerge(Node: PTokenNode; NewTok: Integer; var PC: TPairCounts);
+{procedure UpdatePairsForMerge(Node: PTokenNode; NewTok: Integer; var PC: TPairCounts);
 var
   A, B: Integer;
 begin
@@ -609,7 +466,7 @@ begin
   // Add (C, Next).
   if Node^.Next^.Next <> nil then
     PairInc(PC, NewTok, Node^.Next^.Next^.Tok);
-end;
+end;}
 
 { Merge process in linked list }
 // Merge two nodes in token linked list.
@@ -666,7 +523,7 @@ begin
 end;
 
 // Merge all the pairs in the token list.
-procedure MergeAllPairs(Head: PTokenNode; A, B, NewTok: Integer; var PC: TPairCounts);
+{procedure MergeAllPairs(Head: PTokenNode; A, B, NewTok: Integer; var PC: TPairCounts);
 var
   Cur: PTokenNode;
 begin
@@ -685,7 +542,7 @@ begin
     else
       Cur := Cur^.Next;
   end;
-end;
+end;}
 
 // Record the merge in the Merges array.
 procedure RecordMerge(var Merges: TMergeArray; MergeIndex, A, B, NewSym: Integer);
@@ -925,7 +782,7 @@ begin
   end;
 
   nTokenizedCorpus := Length(TokenizedCorpus);
-  nNonMergedSymbols := ComputeVocabularyFromList(Head, SymbolTable);
+  //nNonMergedSymbols := ComputeVocabularyFromList(Head, SymbolTable);
 
   writeln('Created ', nTokenizedCorpus, ' tokens from ', TextFileName);
   // Verify by reconstructing.
@@ -944,7 +801,7 @@ begin
   end;
 
   nVocab := nSymbols;
-  writeln('nSymbols = ', nSymbols, ' nonmerged symbols = ', nNonmergedSymbols);
+  writeln('nSymbols = ', nSymbols);
   writeln('End of tokenization. Press <CR> to continue.');
 end;
 
@@ -1077,7 +934,7 @@ end;
 
 { Apply the BPE encoder }
 // Main training loop, traverse the merges.
-procedure TrainBPE(var Head, Tail: PTokenNode; MaxMerges: Integer;
+{procedure TrainBPE(var Head, Tail: PTokenNode; MaxMerges: Integer;
   var MergeCount, StartSymbol: Integer);
 var
   m, BestCount, A, B: Integer;
@@ -1138,7 +995,7 @@ begin
     if PauseIfKeyPressed then
       ReadMergeIfKeyPressed;
 
-    InitPairCounts(Head, PC);
+    //InitPairCounts(Head, PC);
 
     // Write symbol table to file each 2000 symbols.
     if SavePartialSymbolTable then
@@ -1183,7 +1040,7 @@ begin
 
   Writeln('Tokenization complete. Total merges: ', MergeCount, '.');
   Pause;
-end;
+end;}
 
 { Create the tokenized corpus from linked list }
 // Create tokenized corpus.
@@ -1333,7 +1190,7 @@ end;
 
 { Computations and reports }
 // Compute the number of vocabulary items from the linked list of tokens.
-function ComputeVocabularyFromList(Head: PTokenNode; const SymbolTable: TSymbolTable): Integer;
+{function ComputeVocabularyFromList(Head: PTokenNode; const SymbolTable: TSymbolTable): Integer;
 var
   Seen: TBooleanVector;
   Node: PTokenNode;
@@ -1352,7 +1209,7 @@ begin
   for i := 0 to High(Seen) do
     if Seen[i] then
       Inc(Result);
-end;
+end;}
 
 // Calculate time statistics.
 procedure CalculateTimeStatistics;
@@ -1366,6 +1223,36 @@ begin
   MHours := MElapsedMS div 3600000;
   MMins := MElapsedMS div 60000;
   MSecs := (MElapsedMS mod 60000) / 1000.0;
+end;
+
+// Calculate number of symbol types and instances.
+procedure SymbolCount;
+var
+  i, T: Integer;
+  MergedTypes, UnmergedTypes: Integer;
+  MergedInstances, UnmergedInstances: Integer;
+begin
+  MergedTypes := 0;
+  UnmergedTypes := 0;
+
+  // Count symbol types.
+  for i := 0 to High(SymbolTable) do
+    if Length(SymbolTable[i]) > 1 then
+      Inc(MergedTypes)
+    else
+      Inc(UnmergedTypes);
+
+  // Count token instances.
+  MergedInstances := 0;
+  UnmergedInstances := 0;
+
+  for i := 0 to High(TokenizedCorpus) do begin
+    T := TokenizedCorpus[i];
+    if Length(SymbolTable[T]) > 1 then
+      Inc(MergedInstances)
+    else
+      Inc(UnmergedInstances);
+  end;
 end;
 
 // Calculate statistics on the symbol table.
@@ -1451,7 +1338,6 @@ var
 begin
   Writeln('--- Symbol Statistics ---');
   Writeln('Number of symbols: ', nSymbols);
-  Writeln('Non-merged symbols: ', nNonmergedSymbols);
   Writeln('Vocabulary size: ', nVocab);
   DisplayLongestSymbol(SymbolTable);
   CountSymbols(SymbolTable, Counts);
@@ -1857,8 +1743,6 @@ begin
     writeln;
     DisplaySymbolTable;
   end;
-  nNonMergedSymbols := ComputeVocabularyFromList(Head, SymbolTable); // Wrong, says ChatGPT.
-                       // Because Head not built from tokenized result.
   nVocab := nSymbols;
 
   // Report statistics.
@@ -1881,7 +1765,6 @@ begin
     writeln('--- Reconstructed Corpus ---');
     ReconstructText(Head, Reconstructed);
     Writeln(Reconstructed);
-    ReconstructToFile(Head, SymbolTable, WorkingName + Stamp + '.rcn');
   end;
 
   // Create the tokenized corpus.
@@ -1889,14 +1772,17 @@ begin
 
   // Save various files.
   if SaveFiles then begin
+    writeln;
+    writeln('--- Saving Files ---');
     SaveTokenList(WorkingName + Stamp + '.bin');
     SaveSymbolTable(WorkingName + Stamp + '.sym', SymbolTable);
     SaveMergeTable(Merges, WorkingName + Stamp + '.mer');
     SaveMetaData(WorkingName + Stamp + '.meta');
+    ReconstructToFile(Head, SymbolTable, WorkingName + Stamp + '.rcn');
     ChDir('..');
   end;
 
-  writeln('nSymbols = ', nSymbols, ' nonmerged symbols = ', nNonmergedSymbols);
+  writeln('nSymbols = ', nSymbols);
   writeln('End of tokenization.');
   Pause;
   //nTokens := nTokenizedCorpus;    // For embedding, need nTokens.

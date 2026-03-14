@@ -23,7 +23,7 @@ type
     Prev, Next: PTokenNode;
   end;
 
-  // New hash code.
+  // New hash code here.
   type
   TPairSlotState = (psEmpty, psUsed);
 
@@ -82,7 +82,7 @@ var
   TrieHead: PTrieNode = nil;                     // Nodes for Trie.
   i: Integer;
 
-procedure TestInitPairHash;
+procedure TestInitPairHashFromList;
 procedure ReadFileBytes(const FileName: String; var OneCorpus: TBVector);
 procedure WriteTokenList(const Part: TPart = B);
 procedure LoadTokenList(const BinFileName: String);
@@ -241,6 +241,133 @@ begin
   end;
 end;
 
+function HashPair(A, B, Capacity: Integer): Integer;
+var
+  H: QWord;
+begin
+  H := QWord(Cardinal(A)) * 1000003 + QWord(Cardinal(B));
+  Result := Integer(H mod QWord(Capacity));
+end;
+
+function FindSlot(const H: TPairHash; A, B: Integer): Integer;
+var
+  Idx: Integer;
+begin
+  Idx := HashPair(A, B, H.Capacity);
+
+  while H.Entries[Idx].State = psUsed do begin
+    if (H.Entries[Idx].A = A) and (H.Entries[Idx].B = B) then Exit(Idx);
+
+    Idx := (Idx + 1) mod H.Capacity;
+  end;
+
+  Result := Idx;
+end;
+
+procedure PairIncHash(var H: TPairHash; A, B: Integer);
+var
+  Idx: Integer;
+begin
+  Idx := FindSlot(H, A, B);
+
+  if H.Entries[Idx].State = psUsed then
+    Inc(H.Entries[Idx].Count)
+  else begin
+    H.Entries[Idx].State := psUsed;
+    H.Entries[Idx].A := A;
+    H.Entries[Idx].B := B;
+    H.Entries[Idx].Count := 1;
+    Inc(H.Used);
+  end;
+end;
+
+procedure PairDecHash(var H: TPairHash; A, B: Integer);
+var
+  Idx: Integer;
+begin
+  Idx := FindSlot(H, A, B);
+
+  if (H.Entries[Idx].State = psUsed) and
+     (H.Entries[Idx].A = A) and
+     (H.Entries[Idx].B = B) then
+  begin
+    if H.Entries[Idx].Count > 0 then
+      Dec(H.Entries[Idx].Count);
+  end;
+end;
+
+procedure TestPairDecMissing;
+var
+  H: TPairHash;
+begin
+  InitPairHash(H, 32);
+
+  PairDecHash(H, 99, 100);
+
+  Writeln('TestPairDecMissing PASS');
+end;
+
+procedure TestPairDecHash;
+var
+  H: TPairHash;
+  Idx: Integer;
+begin
+  InitPairHash(H, 32);
+
+  PairIncHash(H, 10, 20);
+  PairIncHash(H, 10, 20);
+  PairIncHash(H, 10, 20);
+
+  PairDecHash(H, 10, 20);
+
+  Idx := FindSlot(H, 10, 20);
+
+  if (H.Entries[Idx].State = psUsed) and (H.Entries[Idx].Count = 2) then
+    Writeln('TestPairDecHash PASS')
+  else
+    Writeln('TestPairDecHash FAIL');
+end;
+
+function FindBestPairHash(const H: TPairHash; out A, B: Integer): Integer;
+var
+  i, Max: Integer;
+begin
+  Max := 0;
+  A := -1;
+  B := -1;
+
+  for i := 0 to H.Capacity - 1 do
+    if (H.Entries[i].State = psUsed) and (H.Entries[i].Count > Max) then begin
+      Max := H.Entries[i].Count;
+      A := H.Entries[i].A;
+      B := H.Entries[i].B;
+    end;
+
+  Result := Max;
+end;
+
+procedure TestFindBestPairHash;
+var
+  H: TPairHash;
+  A, B, Best: Integer;
+begin
+  InitPairHash(H, 32);
+
+  PairIncHash(H, 1, 2);
+  PairIncHash(H, 1, 2);
+  PairIncHash(H, 3, 4);
+  PairIncHash(H, 3, 4);
+  PairIncHash(H, 3, 4);
+  PairIncHash(H, 5, 6);
+
+  Best := FindBestPairHash(H, A, B);
+
+  if (Best = 3) and (A = 3) and (B = 4) then
+    Writeln('TestFindBestPairHash PASS')
+  else
+    Writeln('TestFindBestPairHash FAIL: Best=', Best, ' A=', A, ' B=', B);
+end;
+
 // Test init hash code.
 procedure TestInitPairHash;
 var
@@ -266,6 +393,50 @@ begin
     Writeln('TestInitPairHash PASS')
   else
     Writeln('TestInitPairHash FAIL');
+end;
+
+// new hash routine replacing initpaircounts.
+procedure InitPairHashFromList(Head: PTokenNode; var H: TPairHash);
+var
+  Cur: PTokenNode;
+begin
+  Cur := Head;
+
+  while (Cur <> nil) and (Cur^.Next <> nil) do begin
+    if not (IsSpecial(Cur^.Tok) or IsSpecial(Cur^.Next^.Tok)) then
+      PairIncHash(H, Cur^.Tok, Cur^.Next^.Tok);
+
+    Cur := Cur^.Next;
+  end;
+end;
+
+procedure TestInitPairHashFromList;
+var
+  H: TPairHash;
+  N1, N2, N3: PTokenNode;
+  A, B, Best: Integer;
+begin
+  New(N1);
+  New(N2);
+  New(N3);
+
+  N1^.Tok := 10;  N1^.Prev := nil; N1^.Next := N2;
+  N2^.Tok := 20;  N2^.Prev := N1;  N2^.Next := N3;
+  N3^.Tok := 10;  N3^.Prev := N2;  N3^.Next := nil;
+
+  InitPairHash(H, 32);
+  InitPairHashFromList(N1, H);
+
+  Best := FindBestPairHash(H, A, B);
+
+  if (Best = 1) then
+    Writeln('TestInitPairHashFromList PASS')
+  else
+    Writeln('TestInitPairHashFromList FAIL');
+
+  Dispose(N3);
+  Dispose(N2);
+  Dispose(N1);
 end;
 
 { Pair count process }

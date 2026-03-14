@@ -1,0 +1,40 @@
+--- Program Information ---
+WesChat, Version: 1.1
+Author: Wesley R. Parsons
+Date: February 15, 2026
+Sequence Length (SeqLen): 128
+Model Dimensions (ModelDim): 160
+Dimensional Projections (Proj): 4
+Heads (nHead): 8
+Blocks (nBlock): 4
+Learning Rate (LearningRate): 0.0100
+Trainable Parameters: Wq, Wk, Wv, W0, W1, b1, W2, b2, gamma1, beta1, beta2, gamma2
+Maximum Vocabulary (MaxVocab): 12000
+Number of Vocabulary (nVocab): 399
+
+--- File Information ---
+Files used in symbol table: 
+bela.txt   1036 bytes   3/13/2026 2:01:08 PM  
+
+--- Time Statistics ---
+Start time: 3/14/2026 10:02:54 AM     End time: 3/14/2026 10:02:58 AM
+Total elapsed time: 0 hours, 0 min 4.8040 sec
+Hit <CR> to continue.... 
+
+--- BPE Statistics ---
+Elapsed time applying merges: 0 hours, 0 min 4.7920 sec
+Original text size (bytes/tokens): 1036
+Encoded text size (bytes/tokens): 446
+Compression ratio: 2.3229
+Tokens per second: 215.6536
+--- Symbol Statistics ---
+Number of symbols: 399
+Non-merged symbols: 161
+Vocabulary size: 399
+Longest symbol:
+  Index: 398
+  Length: 14
+  Value: "vertical line "
+--- Token Statistics ---
+Average token length: 2.3229
+Number of merges performed: 139

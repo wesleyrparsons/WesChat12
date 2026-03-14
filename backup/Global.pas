@@ -15,13 +15,13 @@ var
 { Place all verbosity and control options at start }
   DoNotPause: Boolean = False;          // Pause disabled.
   PauseIfKeyPressed: Boolean = True;
-  DisplayCorpus: Boolean = True;       // one set for real tokenizing and one set for debug
+  DisplayCorpus: Boolean = False;       // one set for real tokenizing and one set for debug
   VeryVerbose: Boolean = False;
-  VerboseTokenize: Boolean = True;
+  VerboseTokenize: Boolean = False;
   VerboseTransform: Boolean = False;
   ShowTokenWork: Boolean = False;
   ShowMergeWork: Boolean = True;
-  ShowVerification: Boolean = True;
+  ShowVerification: Boolean = False;
   ShowEachByteRead: Boolean = False;
   SaveFiles: Boolean = True;
   SavePartialSymbolTable: Boolean = True;

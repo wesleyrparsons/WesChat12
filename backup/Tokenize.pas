@@ -1019,8 +1019,7 @@ begin
   if ShowMergeWork then
     Writeln('--- List of Merges (Hash) ---');
 
-  for m := 1 to MaxMerges do
-  begin
+  for m := 1 to MaxMerges do begin
     if PauseIfKeyPressed then
       ReadMergeIfKeyPressed;
 
@@ -1034,8 +1033,7 @@ begin
         SaveSymbolTable(WorkingName + FormatDateTime('yyyy-mm-dd_hhnnss' + '.sym', Now), SymbolTable);
 
     // Stop if hash table got too full
-    if H.Used > MaxPairCount then
-    begin
+    if H.Used > MaxPairCount then begin
       Writeln('Stopping: pair table exceeded ', MaxPairCount, ' entries.');
       Break;
     end;
@@ -1043,15 +1041,13 @@ begin
     BestCount := FindBestPairHash(H, A, B);
 
     // Stop if no useful merges remain
-    if BestCount < 2 then
-    begin
+    if BestCount < 2 then begin
       Writeln('Stopping: no more valid merges at iteration ', m, '.');
       Break;
     end;
 
     // Stop if symbol table is full
-    if Length(SymbolTable) >= MaxVocab then
-    begin
+    if Length(SymbolTable) >= MaxVocab then begin
       Writeln('Stopping: symbol table reached ', MaxVocab, ' entries.');
       Break;
     end;
@@ -1065,8 +1061,7 @@ begin
     Inc(MergeCount);
     Inc(StartSymbol);
 
-    if ShowMergeWork then
-    begin
+    if ShowMergeWork then begin
       Write(MergeCount,
         ' Merged (', A:5, ',', B:5, ') -> (', StartSymbol - 1:5, ') #', BestCount);
       if (MergeCount mod 4) = 0 then
@@ -1249,7 +1244,7 @@ begin
         if not (i mod 5) = 4 then writeln;
         Writeln(i: 8, '     ', Disp);
       end;
-      if (i > 0) and (i mod 200 = 199) then Pause;
+      if (i > 0) and (i mod 100 = 99) then Pause;
     end;
   writeln;
   writeln('Symbol table length = ', Length(SymbolTable));
@@ -1738,7 +1733,7 @@ var
   F: File;
   s: string;
 begin
-  Assign(F, FileName);
+  Assign(F, ReconFileName);
   Rewrite(F, 1);
 
   Cur := Head;
@@ -1838,7 +1833,7 @@ begin
 
   // Run BPE.
   Mt0 := Now;
-  TrainBPE(Head, Tail, MaxMerges, MergeCount, StartSymbol);
+  TrainBPEHash(Head, Tail, MaxMerges, MergeCount, StartSymbol);
   Mt1 := Now;
 
   // Insert BOS and EOS.
@@ -1884,8 +1879,9 @@ begin
   // Verify by reconstructing.
   if ShowVerification and VerboseTokenize and DisplayCorpus then begin
     writeln('--- Reconstructed Corpus ---');
-    ReconstructText(Head, Reconstructed);
-    Writeln(Reconstructed);
+    ReconstructText(Head, Reconstructed);      writeln('after recontext'); readln;
+    Writeln(Reconstructed);                    writeln('after write recontext'); readln;
+    writeln;
     ReconstructToFile(Head, SymbolTable, WorkingName + Stamp + '.rcn');
   end;
 

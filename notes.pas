@@ -11,6 +11,7 @@ end.
 {Notes
 
 To Do.
+The .rcn file is not showing up.
 Fix computevocabfromlist.
 In main program: Read Corpus, Read Files (vocab and merge), Tokenize, Embed, Transform.
 One proc: display merge/token info. One proc: display transform/embed info. Move keypressed to global.

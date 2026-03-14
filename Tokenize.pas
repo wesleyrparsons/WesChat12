@@ -1244,7 +1244,7 @@ begin
         if not (i mod 5) = 4 then writeln;
         Writeln(i: 8, '     ', Disp);
       end;
-      if (i > 0) and (i mod 200 = 199) then Pause;
+      if (i > 0) and (i mod 100 = 99) then Pause;
     end;
   writeln;
   writeln('Symbol table length = ', Length(SymbolTable));
@@ -1733,7 +1733,7 @@ var
   F: File;
   s: string;
 begin
-  Assign(F, FileName);
+  Assign(F, ReconFileName);
   Rewrite(F, 1);
 
   Cur := Head;
@@ -1833,7 +1833,7 @@ begin
 
   // Run BPE.
   Mt0 := Now;
-  TrainBPE(Head, Tail, MaxMerges, MergeCount, StartSymbol);
+  TrainBPEHash(Head, Tail, MaxMerges, MergeCount, StartSymbol);
   Mt1 := Now;
 
   // Insert BOS and EOS.

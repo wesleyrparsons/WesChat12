@@ -1,0 +1,26 @@
+3/15/2026 Notes
+
+1. Add a regex pretokenizer.
+
+2. Add a max-heap helps for “what is the most frequent pair right now?”
+Instead of scanning all pairs every iteration, keep a heap ordered by count.
+But because counts change after merges, you usually do lazy heap updates: 
+push updated (pair, count, version) records
+when popping, discard stale entries. What heap unit to use in FPC?
+
+3. DetokenizeToDisplay has a symbol index bug.
+You do: else begin
+  symIndex := t - 260;
+  Write(SymbolTable[symIndex]);
+end; But your symbol table already stores merged symbols at their true token IDs:
+That code should likely just be:
+Write(SymbolTable[t]);
+
+4. Tokenizer. Corpus array of bute. Use RawByteString.
+
+5. Drop linked lists. So if you later optimize training hard, use
+Tok[i]
+Prev[i]
+Next[i]
+Alive[i]
+

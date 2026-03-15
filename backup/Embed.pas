@@ -106,7 +106,7 @@ begin
   end;
 end;
 
-// Run the training.
+// Run the training.                          Make this a Raw Byte Vector.
 procedure RunEmbed(const TokenizedCorpus: TIVector);
 var
   i, j, k: Integer;

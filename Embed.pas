@@ -177,7 +177,7 @@ begin
   // Initialize.
   InitializeTransformer;
 
-  // Stride loop theu Sequence.
+  // Stride loop thru Sequence.
   Start := 0;
   EmbedLoop := 0;
   while (Start + SeqLen) < Length(TokenizedCorpus) do begin

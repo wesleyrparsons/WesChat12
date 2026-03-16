@@ -19,58 +19,16 @@ uses
   nSymbols is vocabulary size. ModelDim is the dimension of the models, the loads.}
 
 procedure RunEmbed(const TokenizedCorpus: TIVector);
-procedure TestEmbedding;
 
 implementation
 
 const
-  MaxSeq = 128;                        // Need maximum size of sequence to dimension array.
+  //MaxSeq = 128;                             // Need maximum size of sequence to dimension array.
   Scale = Sqrt(ModelDim);
 
 var
-  Embeddings: array of array of Single;        // Row is token, column is weights.
+  Embeddings: array of array of Single;     // Row is token, column is weights.
   Block: Integer;
-
-// Test emnbedding with small model of 4 tokens.
-procedure TestEmbedding;
-const
-  TestVocab = 5;
-  TestSeq = 4;
-var
-  i, j: Integer;
-  Tokens: array[0..TestSeq - 1] of Integer; // For testing, tokens.
-  XTest: TSeqMatrix;                        // For tesing, sequence.
-  ETest: TEmbeddingMatrix;                  // For testing, embedding matrix.
-begin
-  Writeln('--- Embedding Test ---');
-
-  { 1. Define a small token sequence. }
-  Tokens[0] := 0;
-  Tokens[1] := 1;
-  Tokens[2] := 2;
-  Tokens[3] := 3;
-
-  { 2. Create deterministic embeddings. }
-  for i := 0 to TestVocab - 1 do
-    for j := 0 to ModelDim - 1 do
-      ETest[i, j] := i + 0.01 * j;  // Easy to verify visually.
-
-  { 3.  Standardizatio to keep in range. }
-  for i := 0 to SeqLen - 1 do
-    for j := 0 to ModelDim - 1 do
-      X[i, j] := X[i, j] * Scale;
-
-  { 4. Display result. }
-  for i := 0 to TestSeq - 1 do begin
-    Write('Token ', Tokens[i], ': ');
-    for j := 0 to Min(7, ModelDim - 1) do
-      Write(X[i, j]:8:4, ' ');
-    Writeln;
-  end;
-
-  Writeln('--- End Test ---');
-  Readln;
-end;
 
 // Create the target vector for use in head output.
 procedure BuildTargetVector(var Target: TIDimVector; const TokenizedCorpus: TIVector;
@@ -141,7 +99,7 @@ var
       end;
       'e', 'E': begin
         writeln('Embedding. nVocab = ', nVocab, ' nSymbols = ', nSymbols, ' ModelDim = ', ModelDim + 1,
-          '  Start = ', Start, ' Stride = ', Stride, ' SeqLen = ', SeqLen, ' MaxSeq = ', MaxSeq, ' Length of TokenizedCorpus = ', Length(TokenizedCorpus));
+          '  Start = ', Start, ' Stride = ', Stride, ' SeqLen = ', SeqLen, {' MaxSeq = ', MaxSeq, }' Length of TokenizedCorpus = ', Length(TokenizedCorpus));
         writeln(DateTimeToStr(Now), '  X = Exit program. B = Break out of merge loop. V = toggle Verbose mode.');
         writeln(' P = Program information. E = Embedding information. Embedding & transforming...');
         Pause;
@@ -152,7 +110,7 @@ var
 begin
   if VeryVerbose then begin
     writeln('Start Embedding. nVocab = ', nVocab, ' nSymbols = ', nSymbols, ' ModelDim = ', ModelDim + 1,
-       ' SeqLen = ', SeqLen, ' MaxSeq = ', MaxSeq, ' Length of TokenizedCorpus = ', Length(TokenizedCorpus));
+       ' SeqLen = ', SeqLen, {' MaxSeq = ', MaxSeq, }' Length of TokenizedCorpus = ', Length(TokenizedCorpus));
   end;
 
   // Set the dimensions of the embedding matrix.
@@ -216,9 +174,8 @@ begin
 
       if PauseIfKeyPressed then
         ReadEmbedIfKeyPressed;
-
-      Start := Start + Stride;
     end;
+    Start := Start + Stride;
   end;
 
   nVocab := nSymbols;    // I have two names for this variable.

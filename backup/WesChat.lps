@@ -8,8 +8,8 @@
       <Unit>
         <Filename Value="WesChat.lpr"/>
         <IsPartOfProject Value="True"/>
-        <TopLine Value="156"/>
-        <CursorPos Y="160"/>
+        <TopLine Value="145"/>
+        <CursorPos Y="161"/>
         <UsageCount Value="233"/>
         <Loaded Value="True"/>
       </Unit>
@@ -37,19 +37,19 @@
         <Filename Value="tokenize.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="Tokenize"/>
-        <IsVisibleTab Value="True"/>
         <EditorIndex Value="4"/>
-        <TopLine Value="659"/>
-        <CursorPos Y="673"/>
+        <TopLine Value="1494"/>
+        <CursorPos Y="1522"/>
         <UsageCount Value="210"/>
         <Loaded Value="True"/>
       </Unit>
       <Unit>
         <Filename Value="Embed.pas"/>
         <IsPartOfProject Value="True"/>
+        <IsVisibleTab Value="True"/>
         <EditorIndex Value="5"/>
-        <TopLine Value="204"/>
-        <CursorPos X="23" Y="209"/>
+        <TopLine Value="91"/>
+        <CursorPos X="54" Y="114"/>
         <UsageCount Value="210"/>
         <Loaded Value="True"/>
       </Unit>
@@ -115,7 +115,7 @@
         <EditorIndex Value="1"/>
         <TopLine Value="138"/>
         <CursorPos X="5" Y="161"/>
-        <UsageCount Value="155"/>
+        <UsageCount Value="199"/>
         <Loaded Value="True"/>
       </Unit>
       <Unit>
@@ -124,14 +124,14 @@
         <EditorIndex Value="-1"/>
         <TopLine Value="991"/>
         <CursorPos Y="1012"/>
-        <UsageCount Value="145"/>
+        <UsageCount Value="141"/>
       </Unit>
       <Unit>
         <Filename Value="unit1.pas"/>
         <UnitName Value="Unit1"/>
         <EditorIndex Value="-1"/>
         <CursorPos X="24" Y="16"/>
-        <UsageCount Value="67"/>
+        <UsageCount Value="63"/>
       </Unit>
       <Unit>
         <Filename Value="Global.pas"/>
@@ -151,34 +151,6 @@
       </Unit>
     </Units>
     <JumpHistory HistoryIndex="29">
-      <Position>
-        <Filename Value="tokenize.pas"/>
-        <Caret Line="1371" Column="22" TopLine="1369"/>
-      </Position>
-      <Position>
-        <Filename Value="tokenize.pas"/>
-        <Caret Line="1176" TopLine="1153"/>
-      </Position>
-      <Position>
-        <Filename Value="tokenize.pas"/>
-        <Caret Line="1889" TopLine="1866"/>
-      </Position>
-      <Position>
-        <Filename Value="tokenize.pas"/>
-        <Caret Line="1927" Column="3" TopLine="1903"/>
-      </Position>
-      <Position>
-        <Filename Value="Global.pas"/>
-        <Caret Line="95" Column="44" TopLine="95"/>
-      </Position>
-      <Position>
-        <Filename Value="tokenize.pas"/>
-        <Caret Line="917" Column="26" TopLine="914"/>
-      </Position>
-      <Position>
-        <Filename Value="tokenize.pas"/>
-        <Caret Line="928" Column="35" TopLine="914"/>
-      </Position>
       <Position>
         <Filename Value="tokenize.pas"/>
         <Caret Line="1337" TopLine="1312"/>
@@ -270,6 +242,34 @@
       <Position>
         <Filename Value="tokenize.pas"/>
         <Caret Line="91" Column="12" TopLine="77"/>
+      </Position>
+      <Position>
+        <Filename Value="WesChat.lpr"/>
+        <Caret Line="160" TopLine="156"/>
+      </Position>
+      <Position>
+        <Filename Value="Embed.pas"/>
+        <Caret Column="31"/>
+      </Position>
+      <Position>
+        <Filename Value="Embed.pas"/>
+        <Caret Line="27" Column="45" TopLine="17"/>
+      </Position>
+      <Position>
+        <Filename Value="Embed.pas"/>
+        <Caret Line="103" Column="96" TopLine="81"/>
+      </Position>
+      <Position>
+        <Filename Value="Embed.pas"/>
+        <Caret Line="114" Column="50" TopLine="91"/>
+      </Position>
+      <Position>
+        <Filename Value="Embed.pas"/>
+        <Caret Line="27" Column="11" TopLine="13"/>
+      </Position>
+      <Position>
+        <Filename Value="Embed.pas"/>
+        <Caret Line="104" Column="100" TopLine="81"/>
       </Position>
     </JumpHistory>
     <RunParams>

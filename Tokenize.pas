@@ -952,7 +952,7 @@ begin
 end;
 
 // Calculate number of symbol types and instances.
-procedure SymbolCount;
+procedure CalculateSymbolCount;
 var
   i, T: Integer;
   MergedTypes, UnmergedTypes: Integer;
@@ -1104,12 +1104,13 @@ begin
 // Report all statistics.
 procedure ReportStatistics;
 begin
-  // Elapsed time.
+  CalculateSymbolCount;
   CalculateTimeStatistics;
 
   ReportInfo;
   ReportBasicStatistics;
-  If VerboseTokenize then Pause;
+  if VerboseTokenize and (TextRec(Output).Handle = StdOutputHandle) then
+    Pause;
   ReportBPEStatistics;
   ReportSymbolStatistics;
   ReportTokenStatistics;

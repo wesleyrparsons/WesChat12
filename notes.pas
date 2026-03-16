@@ -104,8 +104,6 @@ Merged tokens that appear only once — likely overfitting or noise.
 
 Coverage of top merges — e.g., top 100 merges account for X% of merged instances.
 
-This is where you can see whether your vocabulary is well-balanced or needs refinement.
-
 Embed.
 
 The name RunEmbed understates what it does. It seems to:

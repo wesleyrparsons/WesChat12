@@ -2,7 +2,7 @@ unit Tokenize;
 
 {$mode ObjFPC}{$H+}{$I proprietary.txt}
 
-{ WesChat, Version 1.1, January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wespar.com.}
+{ WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wespar.com.}
 
 interface
 
@@ -952,7 +952,7 @@ begin
 end;
 
 // Calculate number of symbol types and instances.
-procedure SymbolCount;
+procedure CalculateSymbolCount;
 var
   i, T: Integer;
   MergedTypes, UnmergedTypes: Integer;
@@ -1104,12 +1104,12 @@ begin
 // Report all statistics.
 procedure ReportStatistics;
 begin
-  // Elapsed time.
+  CalculateSymbolCount;
   CalculateTimeStatistics;
 
   ReportInfo;
   ReportBasicStatistics;
-  If VerboseTokenize then Pause;
+  if VerboseTokenize and (Output = StdOut) then Pause;
   ReportBPEStatistics;
   ReportSymbolStatistics;
   ReportTokenStatistics;

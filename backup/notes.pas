@@ -2,18 +2,22 @@ unit Notes;
 
 {$mode ObjFPC}{$H+}{$I proprietary.txt}
 
-{ WesChat, Version 1.1, January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wespar.com.}
-{ ttest for git }
-interface
-implementation
-begin
-end.
-{Notes
+{ WesChat, Version 1.2, January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wespar.com.}
 
-To Do.
-The .rcn file is not showing up.
-Fix computevocabfromlist.
-In main program: Read Corpus, Read Files (vocab and merge), Tokenize, Embed, Transform.
+General
+
+1. Better model architecture.
+  type
+    TModel = record
+      Embedding : TEmbeddingMatrix;
+      Wq : TMatrix;
+      Wk : TMatrix;
+      Wv : TMatrix;
+      Wo : TMatrix;
+      ...
+    end;
+
+2. In main program: Read Corpus, Read Files (vocab and merge), Tokenize, Embed, Transform.
 One proc: display merge/token info. One proc: display transform/embed info. Move keypressed to global.
 
 LoadCorpus    FileName          Corpus
@@ -22,20 +26,117 @@ Embed         Symbol & Merge    Sequence
 Tokenize      Sequence          TokCorpus
 RunForward    UserInput         Output
 
-What to do with nTokens and append proc.
+Tokenize.
+
+1. Add a max-heap helps for “what is the most frequent pair right now?”
+Instead of scanning all pairs every iteration, keep a heap ordered by count.
+But because counts change after merges, you usually do lazy heap updates:
+push updated (pair, count, version) records
+when popping, discard stale entries. What heap unit to use in FPC?
+
+2. DetokenizeToDisplay has a symbol index bug.
+You do: else begin
+  symIndex := t - 260;
+  Write(SymbolTable[symIndex]);
+end; But your symbol table already stores merged symbols at their true token IDs:
+That code should likely just be: Write(SymbolTable[t]);
+
+4. Corpus array of byte. Use RawByteString.
+
+5. Drop linked lists. So if you later optimize training hard, use
+Tok[i], Prev[i], Next[i], Alive[i].
+
+6. Avoid repeated trie rebuilds.
+If the symbol table is fixed, build the trie once after loading. ??
+
+7. nSymbols or nVocab?
+
+8. Add a regex pretokenizer. Nope, not necessary.
+
+Tokenize.
+
+Vocabulary structure
+These describe the symbol table itself and help you understand how your merges
+shaped the final vocabulary.
+
+Total vocabulary size — number of symbols.
+
+Base (unmerged) symbols — usually 256 byte tokens.
+
+Merged symbols — symbols with length > 1.
+
+Merged-symbol length distribution — histogram of symbol lengths (e.g., how many 2‑byte merges, 3‑byte merges, etc.).
+
+Average merged‑symbol length — mean length of all merged symbols.
+
+Longest symbol length — maximum length of any merged token.
+
+Vocabulary compression ratio — merged symbols ÷ total symbols.
+
+These tell you whether your vocabulary is too shallow (few merges) or too bloated (many long merges that rarely appear).
+
+Corpus tokenization statistics
+These describe how the tokenizer actually behaved on the corpus.
+
+Total token count — number of tokens in the tokenized corpus.
+
+Merged token instances — count of tokens whose symbol length > 1.
+
+Unmerged token instances — count of tokens whose symbol length = 1.
+
+Merged‑instance ratio — merged instances ÷ total instances.
+
+Average token length in characters — mean length of the symbol for each token instance.
+
+Compression ratio (characters ÷ tokens) — how many characters per token on average.
+
+This tells you how much compression your merges achieved and whether
+the tokenizer is efficient on real text.
+
+Frequency‑based insights
+These help you understand which merges matter and which are dead weight.
+
+Top N most frequent merged tokens — the merges doing the real work.
+
+Merged tokens that never appear — candidates for pruning.
+
+Merged tokens that appear only once — likely overfitting or noise.
+
+Coverage of top merges — e.g., top 100 merges account for X% of merged instances.
+
+This is where you can see whether your vocabulary is well-balanced or needs refinement.
+
+Embed.
+
+The name RunEmbed understates what it does. It seems to:
+initialize embeddings
+initialize transformer
+create training windows
+build input and targets
+run transformer blocks
+That is more like: RunTrainingWindows or RunEmbeddingAndTransform.
+Transform.
+
+1. Many models reuse the embedding matrix for output projection:
+logits = X_final · Embedding^T.
+This is called weight tying. Don't need WVocab.
+The gradient has to hit the embedding matrix after X0.
+
+2. What to do with nTokens and append proc.
 Check adding EOS and BOS at end of multiple corpuses.
 Should SeqLen be a BVectorType.
 In Tokenize, add maxheap with a hash table to speed up tokenization.
 🔹 Store attention softmax outputs
 Do I need them intact for backprop through softmax.
 
-Resolved.
+Matrix
+
 Use Welford addition. No, not with sgemm.
-Use nSymbols in Tokenization, and nVocab in Training.
 In tokenize, add longest token, and 20 most common tokens. No, too much trouble. Remove.
 Put Hidden on the heap; make it a dynamically allocated variable.
   No. cblas will not work.
 
+Work Flow.
                         X
                        |||
               +------------------+

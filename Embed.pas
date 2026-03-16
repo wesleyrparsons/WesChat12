@@ -2,7 +2,7 @@ unit Embed;
 
 {$mode ObjFPC}{$H+}{$I proprietary.txt}
 
-{ WesChat, Version 1.1, January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wespar.com.}
+{ WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wespar.com.}
 
 interface
 
@@ -23,8 +23,8 @@ procedure RunEmbed(const TokenizedCorpus: TIVector);
 implementation
 
 const
-  //MaxSeq = 128;                             // Need maximum size of sequence to dimension array.
-  Scale = Sqrt(ModelDim);
+  //MaxSeq = 128;            // Need maximum size of sequence to dimension array.
+  Scale = Sqrt(ModelDim);    // Optional transformer-style embedding scaling by sqrt(d_model).
 
 var
   Embeddings: array of array of Single;     // Row is token, column is weights.
@@ -36,7 +36,9 @@ procedure BuildTargetVector(var Target: TIDimVector; const TokenizedCorpus: TIVe
 var
   i: Integer;
 begin
-  // Target must be sized [0..L - 1].
+  Assert(StartIndex >= 0);
+  Assert(StartIndex + L <= Length(TokenizedCorpus));
+
   for i := 0 to L - 1 do
     Target[i] := TokenizedCorpus[StartIndex + i];
 end;
@@ -151,7 +153,7 @@ begin
     // Build X from TokenizedCorpus[start .. start + SeqLen - 1].
     BuildInputMatrix(X, TokenizedCorpus, Start, SeqLen);
 
-    // Standardizatio to keep in range.
+    // Optional transformer-style embedding scaling by sqrt(d_model).
     for i := 0 to SeqLen - 1 do
       for j := 0 to ModelDim - 1 do
         X[i, j] := X[i, j] * Scale;
@@ -175,6 +177,7 @@ begin
       if PauseIfKeyPressed then
         ReadEmbedIfKeyPressed;
     end;
+
     Start := Start + Stride;
   end;
 

@@ -2,7 +2,7 @@ unit Global;
 
 {$mode ObjFPC}{$H+}{$I proprietary.txt}
 
-{ WesChat, Version 1.1, January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wespar.com.}
+{ WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wespar.com.}
 
 interface
 
@@ -98,15 +98,14 @@ type                                                                           /
     Value, Grad:  TScoresMatrix;
   end;
 
-  TBooleanVector = array of Boolean;
-  TIVector = array of Integer;    // Array of integers for corpuses.
-  TBVector = array of Byte;       // Array of integers (UTF-8) for initial corpus.
+  TBooleanVector = array of Boolean;        // Array of Boolean.
+  TIVector = array of Integer;         // Array of integers for corpuses.
+  TBVector = array of Byte;            // Array of integers (UTF-8) for initial corpus.
   TRBSVector = array of RawByteString;      // Array of raw byte strings for initial corpus.
-  TFVector = array of Single;     // Array of single for embedding matrix.
-  TSVector = array of String;     // Array of string.
+  TFVector = array of Single;          // Array of single for embedding matrix.
+  TSVector = array of String;          // Array of string.
   TEmbeddingMatrix = array[0..DimVocab - 1] of TSeqVector;
-  TPart = (B, E, F, G);           // Length = VocabSize * Dimension. But only use nSymbols in rows.
-                                  // Size of matrix for positional encoding.
+  TPart = (B, E, F, G);                // Length = VocabSize * Dimension. But only use nSymbols in rows.
 
 var
   CorpusFileNames: TSVector;
@@ -119,7 +118,7 @@ var
   TargetTokens: TIDimVector;                     // Input and target tokenns. Input lags by one.
   nVocab: Integer = DimVocab;                    // nVocab is also nSymbol. Number of symbol items.
   Mt0, Mt1, t0, t1, StopTime: TDateTime;         // For timing.
-  Version: ShortString = '1.1';                  // Version 1.1.
+  Version: ShortString = '1.2';                  // Version 1.2.
   FromSymbolTable: Boolean = False;              // Operating from input Symbol Table rather than from tokenization.
   MultipleCorpus: Boolean = False;               // Using mutiple corpuses in tokenization.
   MultipleFileName: String;                      // Using multiple corpuses and outputting single file name.

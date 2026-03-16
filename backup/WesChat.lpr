@@ -2,7 +2,7 @@ program WesChat;
 
 {$mode ObjFPC}{$H+}{$I proprietary.txt}
 
-{ WesChat, Version 1.1, January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wespar.com.}
+{ WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wespar.com.}
 
 uses
   Crt,
@@ -18,10 +18,9 @@ uses
   CombineTables;
 
 var
-  Ch, CorpusFileName, MultiCorpusFileName, SymbolFileName,
-    MergeFileName, ListFile: string;
+  Ch, CorpusFileName, SymbolFileName, MergeFileName, ListFile: string;
   OldLen: Integer;
-  Corpus: TBVector;
+  Corpus: TBVector;           // Vector of byte.
   TokenizedCorpus: TIVector;  // Make this one big dimensioned vector at start.
   // Allocate size of corpus, make nTC count the size.
 
@@ -93,6 +92,7 @@ begin
   while not EOF(F) do begin
     ReadLn(F, Line);
     Line := Trim(Line);
+    CombinedCorpus := '';
     if Line = '' then Continue;         // Skip blank lines.
     if FileExists(Line) then begin
       if Count = 0 then
@@ -157,19 +157,19 @@ begin
   { Below is not working on my Lazarus console }
   SetConsoleOutputCP(CP_UTF8);
   SetConsoleCP(CP_UTF8);
-  WriteLn('Testing UTF‑8: äöü ß é ñ 中 文 😀'); Pause;
+  //WriteLn('Testing UTF‑8: äöü ß é ñ 中 文 😀'); Pause;
   writeln('WesChat, Version 1.2, begun January 19, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wespar.com.');
   writeln;
   writeln('Options:');
   writeln('  1: Tokenize an input single file using WesChat''s byte-level byte-pair encoding, with');
   writeln('     deterministic left-to-right longest-prefix matching and greedy longest-match decoding.');
   writeln('     Write the symbol table and other information to disk.');
-  writeln('  2: Tokenize using WesChat an input set of files listed one per line in a file.');
+  writeln('  2: Tokenize using WesChat and input set of files listed one per line in a file.');
   writeln('     The concatenated token list will appear in the first file.');
   writeln('  3: Tokenize Locke corpus using Bela symbol table.');
   writeln('  4: Tokenize an input single file, based on an input symbol table, ');
   writeln('     using WesChat''s tokenizer.');
-  writeln('  5: Tokenize bela corpus using ChatGPT''s symbol and merge tables and WesChat''s');
+  writeln('  5: Tokenize Bela corpus using ChatGPT''s symbol and merge tables and WesChat''s');
   writeln('     tokenization routine.');
   writeln('  6: Tokenize an input single file using ChatGPT''s symbol and merge tables and WesChat''s');
   writeln('     tokenization routine.');

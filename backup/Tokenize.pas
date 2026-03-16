@@ -937,28 +937,6 @@ begin
 end;
 
 { Computations and reports }
-// Compute the number of vocabulary items from the linked list of tokens.
-{function ComputeVocabularyFromList(Head: PTokenNode; const SymbolTable: TSymbolTable): Integer;
-var
-  Seen: TBooleanVector;
-  Node: PTokenNode;
-  i: Integer;
-begin
-  SetLength(Seen, Length(SymbolTable));
-
-  Node := Head;
-  while Node <> nil do begin
-    if (Node^.Tok >= 0) and (Node^.Tok < Length(Seen)) then
-      Seen[Node^.Tok] := True;
-    Node := Node^.Next;
-  end;
-
-  Result := 0;
-  for i := 0 to High(Seen) do
-    if Seen[i] then
-      Inc(Result);
-end;}
-
 // Calculate time statistics.
 procedure CalculateTimeStatistics;
 begin
@@ -1500,10 +1478,6 @@ begin
   end;
 
   // Create new directory and stamps for saving files.
-{  if MultipleCorpus then
-    WorkingName := ChangeFileExt(MultipleFileName, '')
-  else
-    WorkingName := ChangeFileExt(FileName, ''); }
   Stamp := FormatDateTime('yyyy-mm-dd_hhnnss', Now);
   CreateDir(WorkingName + Stamp);
   ChDir(WorkingName + Stamp);

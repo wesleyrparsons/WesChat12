@@ -80,6 +80,8 @@ var
   SymbolTable: TSymbolTable;                     // Table of symbols.
   Magic: array[0..3] of Char = ('S', 'Y', 'M', 'T');  // For saving symbol table.
   TrieHead: PTrieNode = nil;                     // Nodes for Trie.
+  MergedTypes, UnmergedTypes: Integer;
+  MergedInstances, UnmergedInstances: Integer;
   i: Integer;
 
 procedure ReadFileBytes(const FileName: String; var OneCorpus: TBVector);
@@ -664,7 +666,6 @@ begin
   end;
 
   nVocab := nSymbols;
-  writeln('nSymbols = ', nSymbols);
   writeln('End of tokenization. Press <CR> to continue.');
 end;
 
@@ -857,7 +858,7 @@ begin
 end;
 
 // Display all symbols in the Corpus with their frequency.
-procedure DisplayAllTokenFrequencies(const Corpus: TBVector);
+{procedure DisplayAllTokenFrequencies(const Corpus: TBVector);
 var
   Counts: array of Integer;
   TST: String;
@@ -900,7 +901,8 @@ begin
 
   // Print all symbols with frequency.
   for i := 0 to High(TokenList) do begin
-    S := TokenList[i].Symbol;
+      writeln(i: 4, '  ', SymbolTable[TokenList[i].Symbol], '   ', TokenList[i].Count);
+  {  S := TokenList[i].Symbol;
     LS := Length(SymbolTable[S]);
     TST := SymbolTable[S];        // TST is temporary SymbolTable character.
     for j := 1 to LS do begin     // Used for displaying below.
@@ -913,9 +915,9 @@ begin
       // if (k < 32) or (k > 126) then TST[j] := Chr(183);
     end;
     Write(i: 5, S: 5, ' ': (10 - LS), '*', TST, '*', TokenList[i].Count: 5, '          ');
-    if (i mod 4 = 3) then writeln;
+    if (i mod 4 = 3) then writeln;}
   end;
-end;
+end;}
 
 { Reconstruction check }
 // Reconstruct original corpus from linked list and symbol table.
@@ -930,7 +932,7 @@ begin
     if Cur^.Tok <= High(SymbolTable) then
       Text := Text + SymbolTable[Cur^.Tok]
     else
-      Text := Text + Chr(183);    // Chr(183) is non-display char.
+      Text := Text + Chr(183);    // Chr(183) is non-display char. Need this?
 
     Cur := Cur^.Next;
   end;
@@ -940,11 +942,12 @@ end;
 // Calculate time statistics.
 procedure CalculateTimeStatistics;
 begin
-  // Elapsed time.
+  // Total elapsed time.
   ElapsedMS := MilliSecondsBetween(t0, t1) - Round(StopTime);
   Hours := ElapsedMS div 3600000;
   Mins := ElapsedMS div 60000;
   Secs := (ElapsedMS mod 60000) / 1000.0;
+  // Merge eotal elapsed time.
   MElapsedMS := MilliSecondsBetween(Mt0, Mt1) - Round(StopTime);
   MHours := MElapsedMS div 3600000;
   MMins := MElapsedMS div 60000;
@@ -955,8 +958,6 @@ end;
 procedure CalculateSymbolCount;
 var
   i, T: Integer;
-  MergedTypes, UnmergedTypes: Integer;
-  MergedInstances, UnmergedInstances: Integer;
 begin
   MergedTypes := 0;
   UnmergedTypes := 0;
@@ -981,19 +982,27 @@ begin
   end;
 end;
 
-// Calculate statistics on the symbol table.
-procedure DisplayLongestSymbol(const SymbolTable: TSymbolTable);
+// Calculate and report statistics on the symbol table.
+procedure ReportSymbolLengths(const SymbolTable: TSymbolTable);
 var
-  i, maxLen, maxIndex: Integer;
+  i, MaxLen, MaxIndex, SumLen: Integer;
+  SymbolLengths: array[1..10] of Integer;
 begin
-  maxLen := 0;
-  maxIndex := -1;
+  MaxLen := 0;
+  MaxIndex := -1;
+  SumLen := 0;
+  FillChar(SymbolLengths, SizeOf(SymbolLengths), 0);
 
   for i := 0 to High(SymbolTable) do begin
-    if Length(SymbolTable[i]) > maxLen then begin
-      maxLen := Length(SymbolTable[i]);
-      maxIndex := i;
+    if Length(SymbolTable[i]) > MaxLen then begin
+      MaxLen := Length(SymbolTable[i]);
+      MaxIndex := i;
     end;
+    SumLen := SumLen + Length(SymbolTable[i]);
+    if (Length(SymbolTable[i]) <= 9) then
+      Inc(SymbolLengths[Length(SymbolTable[i])])
+    else
+      Inc(SymbolLengths[10]);
   end;
 
   if maxIndex >= 0 then  begin
@@ -1001,51 +1010,53 @@ begin
     writeln('  Index: ', maxIndex);
     writeln('  Length: ', maxLen);
     writeln('  Value: "', SymbolTable[maxIndex], '"');
+    writeln('Mean symbol length: ', SumLen / Length(SymbolTable): 6: 4);
   end;
 end;
 
-// Count the number of occurances of each symbol.
-procedure CountSymbols(const SymbolTable: TSymbolTable; var Counts: TIVector);
+// Count the number of occurrences of each symbol.
+procedure CountSymbols(const SymbolTable: TSymbolTable);
 var
-  i, t: Integer;
+  Counts, Index: TIVector;
+  i, j, k, N, TmpIndex: Integer;
 begin
+  // Allocate and zero Counts.
   SetLength(Counts, Length(SymbolTable));
-  for i := 0 to High(Counts) do
-    Counts[i] := 0;
+  FillChar(Counts[0], SizeOf(Counts[0]), 0);
 
-  for i := 0 to High(TokenizedCorpus) do begin
-    t := TokenizedCorpus[i];
+  // Count occurrences.
+  for i := 0 to High(TokenizedCorpus) do
+    Inc(Counts[TokenizedCorpus[i]]);
 
-    if t >= 260 then begin
-      Inc(Counts[t]);
-    end;
+  // Build index array.
+  N := Length(Counts);
+  SetLength(Index, N);
+  for i := 0 to N - 1 do
+    Index[i] := i;
+
+  // Selection sort index array by Counts[index] descending.
+  for i := 0 to N - 2 do begin
+    k := i;
+    for j := i + 1 to N-1 do
+      if Counts[Index[j]] > Counts[Index[k]] then
+        k := j;
+
+    // Swap Index[i] and Index[k].
+    TmpIndex := Index[i];
+    Index[i] := Index[k];
+    Index[k] := TmpIndex;
   end;
-end;
 
-// Sort the list of symbols by frequency (count).
-procedure SortSymbolsByCount(var Indices: TIVector; const Counts: TIVector);
-var
-  i, j, tmp: Integer;
-begin
-  for i := 0 to High(Indices) - 1 do
-    for j := i + 1 to High(Indices) do
-      if Counts[Indices[j]] > Counts[Indices[i]] then begin
-        tmp := Indices[i];
-        Indices[i] := Indices[j];
-        Indices[j] := tmp;
-      end;
-end;
+  // Print top 60.
+  writeln('Top 60 most frequent symbols:');
+  for i := 0 to 59 do begin
+    k := Index[i];
+    write(i + 1: 8, ': Symbol ', k: 8, '  Count=', Counts[k]: 6, '  ', '"' + SymbolTable[k] + '"': 15);
+    if ((i + 1) mod 3) = 0 then
+      writeln;
+  end;
 
-// Write symbol number in hex Ansi.
-procedure WriteEscaped(const S: AnsiString);
-var
-  i: Integer;
-begin
-  for i := 1 to Length(S) do
-    if Ord(S[i]) < 32 then
-      Write('\x', IntToHex(Ord(S[i]), 2))
-    else
-      Write(S[i]);
+  Pause;
 end;
 
 { Report Statistics }
@@ -1053,8 +1064,11 @@ end;
 procedure ReportTokenStatistics;
 begin
   Writeln('--- Token Statistics ---');
-  Writeln('Average token length: ', nCorpus / nTokenizedCorpus: 6: 4);
-  if not FromSymbolTable then Writeln('Number of merges performed: ', MergeCount);
+  Writeln('Merged token instances: ', MergedInstances);
+  Writeln('Unmerged token instances: ', UnmergedInstances);
+  Writeln('Mean token length: ', nCorpus / nTokenizedCorpus: 6: 4);
+  if not FromSymbolTable then
+    Writeln('Number of merges performed: ', MergeCount);
 end;
 
 // Report symbol statistics.
@@ -1064,9 +1078,12 @@ var
 begin
   Writeln('--- Symbol Statistics ---');
   Writeln('Number of symbols: ', nSymbols);
-  Writeln('Vocabulary size: ', nVocab);
-  DisplayLongestSymbol(SymbolTable);
-  CountSymbols(SymbolTable, Counts);
+  // Writeln('Vocabulary size: ', nVocab);
+  Writeln('Number of merged symbols: ', MergedTypes);
+  Writeln('Mean merged symbol length: ');
+  Writeln('Vocabulary compression ratio (merged symbols ÷ total symbols): ', MergedTypes / nSymbols);
+  Writeln('Number of unmerged symbols: ', UnmergedTypes);
+  writeln;
 end;
 
 // Report basic statistics (time, file names).
@@ -1099,6 +1116,7 @@ begin
   Writeln('Compression ratio: ', nCorpus   / nTokenizedCorpus:0: 4);
   if not FromSymbolTable then
     Writeln('Tokens per second: ', nCorpus / (ElapsedMS / 1000): 6: 4);
+  writeln;
   end;
 
 // Report all statistics.
@@ -1459,9 +1477,9 @@ begin
   // Count nTokenizedCorpus (and display).
   DisplayCountTokenList(Head, nTokenizedCorpus);
 
- if ShowTokenWork and VerboseTokenize then begin
+  if ShowTokenWork and VerboseTokenize then begin
     Writeln('---  Token Frequencies ---');
-    DisplayAllTokenFrequencies(Corpus);
+    CountSymbols(SymbolTable);
   end;
 
   nSymbols := Length(SymbolTable);
@@ -1471,6 +1489,9 @@ begin
     DisplaySymbolTable;
   end;
   nVocab := nSymbols;
+
+  // Create the tokenized corpus.
+  CreateTokenizedCorpus;
 
   // Report statistics.
   if VerboseTokenize then begin
@@ -1489,9 +1510,6 @@ begin
     ReconstructText(Head, Reconstructed);
     Writeln(Reconstructed);
   end;
-
-  // Create the tokenized corpus.
-  CreateTokenizedCorpus;
 
   // Save various files.
   if SaveFiles then begin

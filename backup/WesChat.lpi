@@ -49,9 +49,8 @@
         <UnitName Value="Test"/>
       </Unit>
       <Unit>
-        <Filename Value="tokenize.pas"/>
+        <Filename Value="Tokenize.pas"/>
         <IsPartOfProject Value="True"/>
-        <UnitName Value="Tokenize"/>
       </Unit>
       <Unit>
         <Filename Value="Embed.pas"/>

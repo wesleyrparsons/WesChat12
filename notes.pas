@@ -59,30 +59,12 @@ Vocabulary structure
 These describe the symbol table itself and help you understand how your merges
 shaped the final vocabulary.
 
-Total vocabulary size — number of symbols.
-
-Base (unmerged) symbols — usually 256 byte tokens.
-
-Merged symbols — symbols with length > 1.
-
 Merged-symbol length distribution — histogram of symbol lengths (e.g., how many 2‑byte merges, 3‑byte merges, etc.).
-
-Average merged‑symbol length — mean length of all merged symbols.
-
-Longest symbol length — maximum length of any merged token.
-
-Vocabulary compression ratio — merged symbols ÷ total symbols.
-
-These tell you whether your vocabulary is too shallow (few merges) or too bloated (many long merges that rarely appear).
 
 Corpus tokenization statistics
 These describe how the tokenizer actually behaved on the corpus.
 
 Total token count — number of tokens in the tokenized corpus.
-
-Merged token instances — count of tokens whose symbol length > 1.
-
-Unmerged token instances — count of tokens whose symbol length = 1.
 
 Merged‑instance ratio — merged instances ÷ total instances.
 

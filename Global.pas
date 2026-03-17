@@ -19,7 +19,7 @@ var
   VeryVerbose: Boolean = False;
   VerboseTokenize: Boolean = True;
   VerboseTransform: Boolean = False;
-  ShowTokenWork: Boolean = False;
+  ShowTokenWork: Boolean = True;
   ShowMergeWork: Boolean = True;
   ShowVerification: Boolean = True;
   ShowEachByteRead: Boolean = False;

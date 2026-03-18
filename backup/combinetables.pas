@@ -1,6 +1,9 @@
 unit CombineTables;
 
-{$mode ObjFPC}{$H+}
+{$mode ObjFPC}{$H+}{$I proprietary.txt}
+
+{ WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wespar.com.}
+
 interface
 
 uses

@@ -10,7 +10,7 @@ General
   type
     TModel = record
       Embedding : TEmbeddingMatrix;
-      Wq : TMatrix;
+      Wq : TMatrix; Actually tensor.
       Wk : TMatrix;
       Wv : TMatrix;
       Wo : TMatrix;
@@ -18,13 +18,18 @@ General
     end;
 
 2. In main program: Read Corpus, Read Files (vocab and merge), Tokenize, Embed, Transform.
-One proc: display merge/token info. One proc: display transform/embed info. Move keypressed to global.
+One proc: display merge/token info. One proc: display transform/embed info.
 
-LoadCorpus    FileName          Corpus
-LoadTables    Corpus            Symbol & Merge
-Embed         Symbol & Merge    Sequence
-Tokenize      Sequence          TokCorpus
-RunForward    UserInput         Output
+Proc          Input                      Output
+LoadCorpus    CorpusFileName             Corpus
+Symbolize     SymbolFileName             SymbolTable
+Wes Tokenize  SymbolTable                TokenizedCorpus
+GPT Tokenize  SymbolTable                TokenizedCorpus
+              MergeTable/MergeFileName
+Embed         TokenizedCorpus            Sequence, Embeddings
+Transform     Sequence                   Embeddings
+              Embeddings
+RunForward    UserInput                  Output
 
 Tokenize.
 
@@ -41,7 +46,7 @@ You do: else begin
 end; But your symbol table already stores merged symbols at their true token IDs:
 That code should likely just be: Write(SymbolTable[t]);
 
-4. Corpus array of byte. Use RawByteString.
+4. Corpus array of byte. Use RawByteString. Done, but check.
 
 5. Drop linked lists. So if you later optimize training hard, use
 Tok[i], Prev[i], Next[i], Alive[i].
@@ -53,36 +58,9 @@ If the symbol table is fixed, build the trie once after loading. ??
 
 8. Add a regex pretokenizer. Nope, not necessary.
 
+9. Separate into Symbolize and Tokenize.
+
 Tokenize.
-
-Vocabulary structure
-These describe the symbol table itself and help you understand how your merges
-shaped the final vocabulary.
-
-Merged-symbol length distribution — histogram of symbol lengths (e.g., how many 2‑byte merges, 3‑byte merges, etc.).
-
-
-Vocabulary compression ratio — merged symbols ÷ total symbols.
-
-These tell you whether your vocabulary is too shallow (few merges) or too bloated (many long merges that rarely appear).
-
-Corpus tokenization statistics
-These describe how the tokenizer actually behaved on the corpus.
-
-Total token count — number of tokens in the tokenized corpus.
-
-Merged token instances — count of tokens whose symbol length > 1.
-
-Unmerged token instances — count of tokens whose symbol length = 1.
-
-Merged‑instance ratio — merged instances ÷ total instances.
-
-Average token length in characters — mean length of the symbol for each token instance.
-
-Compression ratio (characters ÷ tokens) — how many characters per token on average.
-
-This tells you how much compression your merges achieved and whether
-the tokenizer is efficient on real text.
 
 Frequency‑based insights
 These help you understand which merges matter and which are dead weight.
@@ -98,12 +76,10 @@ Coverage of top merges — e.g., top 100 merges account for X% of merged instanc
 Embed.
 
 The name RunEmbed understates what it does. It seems to:
-initialize embeddings
-initialize transformer
-create training windows
-build input and targets
-run transformer blocks
+initialize embeddings, initialize transformer, create training windows, b
+uild input and targets, and run transformer blocks.
 That is more like: RunTrainingWindows or RunEmbeddingAndTransform.
+
 Transform.
 
 1. Many models reuse the embedding matrix for output projection:
@@ -118,12 +94,11 @@ In Tokenize, add maxheap with a hash table to speed up tokenization.
 🔹 Store attention softmax outputs
 Do I need them intact for backprop through softmax.
 
+3. Put Hidden on the heap; make it a dynamically allocated variable. No. cblas will not work.
+
 Matrix
 
-Use Welford addition. No, not with sgemm.
-In tokenize, add longest token, and 20 most common tokens. No, too much trouble. Remove.
-Put Hidden on the heap; make it a dynamically allocated variable.
-  No. cblas will not work.
+1. Use Welford addition. No, not with sgemm.
 
 Work Flow.
                         X

@@ -732,6 +732,7 @@ begin
 
   Write(DateTimeToStr(Now), '  X = Exit program. B = Break out of merge loop. V = toggle Verbose mode.');
   Writeln('  P = Program information. M = Merging information. S = maximum Symbols. Merging...');
+  Writeln;
 
   if ShowMergeWork then
     Writeln('--- List of Merges (Hash) ---');
@@ -852,7 +853,6 @@ begin
       end;
       if (i > 0) and (i mod 100 = 99) then Pause;
     end;
-  writeln;
   writeln('Symbol table length = ', Length(SymbolTable));
   writeln;
 end;
@@ -1017,9 +1017,8 @@ end;
 // Count the number of occurrences of each symbol.
 procedure CountSymbols(const SymbolTable: TSymbolTable);
 var
-  Counts: TIVector;
+  Counts, Index: TIVector;
   i, j, k, N, TmpIndex: Integer;
-  Index: TIVector;
 begin
   // Allocate and zero Counts.
   SetLength(Counts, Length(SymbolTable));
@@ -1057,7 +1056,7 @@ begin
       writeln;
   end;
 
-  pause;
+  Pause;
 end;
 
 { Report Statistics }
@@ -1107,7 +1106,6 @@ end;
 // Report BPE statistics.
 procedure ReportBPEStatistics;
 begin
-  writeln;
   Writeln('--- BPE Statistics ---');
   if not FromSymbolTable then begin
     Writeln('Elapsed time applying merges: ', MHours, ' hours, ', Mmins, ' min ', Msecs: 4: 4, ' sec');
@@ -1126,7 +1124,6 @@ begin
   CalculateSymbolCount;
   CalculateTimeStatistics;
 
-  ReportInfo;
   ReportBasicStatistics;
   if VerboseTokenize and (TextRec(Output).Handle = StdOutputHandle) then
     Pause;
@@ -1485,10 +1482,8 @@ begin
 
   nSymbols := Length(SymbolTable);
   // Display symbol table.
-  if VerboseTokenize then begin
-    writeln;
+  if VerboseTokenize then
     DisplaySymbolTable;
-  end;
   nVocab := nSymbols;
 
   // Create the tokenized corpus.
@@ -1524,7 +1519,6 @@ begin
     ChDir('..');
   end;
 
-  writeln('nSymbols = ', nSymbols);
   writeln('End of tokenization.');
   Pause;
   //nTokens := nTokenizedCorpus;    // For embedding, need nTokens.

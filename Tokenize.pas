@@ -732,6 +732,7 @@ begin
 
   Write(DateTimeToStr(Now), '  X = Exit program. B = Break out of merge loop. V = toggle Verbose mode.');
   Writeln('  P = Program information. M = Merging information. S = maximum Symbols. Merging...');
+  Writeln;
 
   if ShowMergeWork then
     Writeln('--- List of Merges (Hash) ---');
@@ -852,7 +853,6 @@ begin
       end;
       if (i > 0) and (i mod 100 = 99) then Pause;
     end;
-  writeln;
   writeln('Symbol table length = ', Length(SymbolTable));
   writeln;
 end;
@@ -1106,7 +1106,6 @@ end;
 // Report BPE statistics.
 procedure ReportBPEStatistics;
 begin
-  writeln;
   Writeln('--- BPE Statistics ---');
   if not FromSymbolTable then begin
     Writeln('Elapsed time applying merges: ', MHours, ' hours, ', Mmins, ' min ', Msecs: 4: 4, ' sec');
@@ -1125,7 +1124,6 @@ begin
   CalculateSymbolCount;
   CalculateTimeStatistics;
 
-  ReportInfo;
   ReportBasicStatistics;
   if VerboseTokenize and (TextRec(Output).Handle = StdOutputHandle) then
     Pause;
@@ -1484,10 +1482,8 @@ begin
 
   nSymbols := Length(SymbolTable);
   // Display symbol table.
-  if VerboseTokenize then begin
-    writeln;
+  if VerboseTokenize then
     DisplaySymbolTable;
-  end;
   nVocab := nSymbols;
 
   // Create the tokenized corpus.
@@ -1523,13 +1519,12 @@ begin
     ChDir('..');
   end;
 
-  writeln('nSymbols = ', nSymbols);
   writeln('End of tokenization.');
   Pause;
   //nTokens := nTokenizedCorpus;    // For embedding, need nTokens.
 
   if VerboseTokenize then Begin
-    writeln('First 150 token of tokenized corpus');
+    writeln('First 150 tokens of tokenized corpus:');
     for i := 0 to 149 do
       write(TokenizedCorpus[i], ' ');
     writeln;

@@ -35,8 +35,8 @@
         <IsPartOfProject Value="True"/>
         <IsVisibleTab Value="True"/>
         <EditorIndex Value="4"/>
-        <TopLine Value="994"/>
-        <CursorPos X="19" Y="1021"/>
+        <TopLine Value="1457"/>
+        <CursorPos X="30" Y="1483"/>
         <UsageCount Value="210"/>
         <Loaded Value="True"/>
       </Unit>
@@ -141,10 +141,6 @@
       </Unit>
     </Units>
     <JumpHistory HistoryIndex="29">
-      <Position>
-        <Filename Value="Tokenize.pas"/>
-        <Caret Line="452" Column="12" TopLine="406"/>
-      </Position>
       <Position>
         <Filename Value="Tokenize.pas"/>
         <Caret Line="457" Column="12" TopLine="411"/>
@@ -259,6 +255,10 @@
       <Position>
         <Filename Value="Tokenize.pas"/>
         <Caret Line="1088" TopLine="1043"/>
+      </Position>
+      <Position>
+        <Filename Value="Tokenize.pas"/>
+        <Caret Line="1021" Column="19" TopLine="994"/>
       </Position>
     </JumpHistory>
     <RunParams>

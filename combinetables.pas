@@ -88,10 +88,6 @@ var
   FilesRead: TSVector;
   Tables: array of TSymbolTable;
 begin
-
-  //LoadOneSymbolTable('Nam0.sym', Tables[0]);
-  //LoadOneSymbolTable('Nam1.sym', Tables[1]);
-
   write('Enter name of file list: ');
     readln(ListFile);
     if not FileExists(ListFile) then begin

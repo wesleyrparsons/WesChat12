@@ -98,13 +98,13 @@ type                                                                           /
     Value, Grad:  TScoresMatrix;
   end;
 
-  TBooleanVector = array of Boolean;        // Array of Boolean.
+  TBooleanVector = array of Boolean;   // Array of Boolean.
   TIVector = array of Integer;         // Array of integers for corpuses.
   TBVector = array of Byte;            // Array of integers (UTF-8) for initial corpus.
-  TRBSVector = array of RawByteString;      // Array of raw byte strings for initial corpus.
+  TRBSVector = array of RawByteString; // Array of raw byte strings for initial corpus.
   TFVector = array of Single;          // Array of single for embedding matrix.
   TSVector = array of String;          // Array of string.
-  TEmbeddingMatrix = array[0..DimVocab - 1] of TSeqVector;
+  TEmbeddingMatrix = array[0..DimVocab - 1] of TSeqVector; // Array for embedding matrix.
   TPart = (B, E, F, G);                // Length = VocabSize * Dimension. But only use nSymbols in rows.
 
 var

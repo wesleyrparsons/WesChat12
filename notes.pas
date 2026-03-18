@@ -20,19 +20,19 @@ General
 2. In main program: Read Corpus, Read Files (vocab and merge), Tokenize, Embed, Transform.
 One proc: display merge/token info. One proc: display transform/embed info.
 
-Proc          Input                      Output
-LoadCorpus    CorpusFileName             Corpus
-Symbolize     CorpusFileName             SymbolTable
-              SymbolFileName
-Wes Tokenize  SymbolTable                TokenizedCorpus
-GPT Tokenize  SymbolTable                TokenizedCorpus
-              MergeTable/MergeFileName
-Embed         TokenizedCorpus            Sequence, Embeddings
-Transform     Sequence                   Embeddings
-              Embeddings
-RunForward    UserInput                  Output
+  Proc          Input                      Output
+  LoadCorpus    CorpusFileName             Corpus
+  Symbolize     CorpusFileName             SymbolTable
+                SymbolFileName
+  Wes Tokenize  SymbolTable                TokenizedCorpus
+  GPT Tokenize  SymbolTable                TokenizedCorpus
+                MergeTable/MergeFileName
+  Embed         TokenizedCorpus            Sequence, Embeddings
+  Transform     Sequence                   Embeddings
+                Embeddings
+  RunForward    UserInput                  Output
 
-Tokenize.
+Tokenize
 
 1. Add a max-heap helps for “what is the most frequent pair right now?”
 Instead of scanning all pairs every iteration, keep a heap ordered by count.
@@ -63,16 +63,8 @@ If the symbol table is fixed, build the trie once after loading. ??
 
 Tokenize.
 
-Frequency‑based insights
-These help you understand which merges matter and which are dead weight.
-
-Top N most frequent merged tokens — the merges doing the real work.
-
-Merged tokens that never appear — candidates for pruning.
-
-Merged tokens that appear only once — likely overfitting or noise.
-
-Coverage of top merges — e.g., top 100 merges account for X% of merged instances.
+Divide into Symbolize and Tokenize.
+Use escape/hex codes for displaying control charas.
 
 Embed.
 

@@ -58,7 +58,7 @@ type                                                                           /
   TSeqVocabMatrix = array [0..SeqLen - 1] of TVocabVector;                     // L x MaxVocab
   TFSVector = array[0..SeqLen - 1] of Single;                                  // L
 
-  TSeqTensor = record            // Reduce double typing.
+  TSeqTensor = record
     Value, Grad:  TSeqMatrix;
   end;
   TSeqHeadTensor = record

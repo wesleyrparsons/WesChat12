@@ -20,18 +20,19 @@ General
 2. In main program: Read Corpus, Read Files (vocab and merge), Tokenize, Embed, Transform.
 One proc: display merge/token info. One proc: display transform/embed info.
 
-Proc          Input                      Output
-LoadCorpus    CorpusFileName             Corpus
-Symbolize     SymbolFileName             SymbolTable
-Wes Tokenize  SymbolTable                TokenizedCorpus
-GPT Tokenize  SymbolTable                TokenizedCorpus
-              MergeTable/MergeFileName
-Embed         TokenizedCorpus            Sequence, Embeddings
-Transform     Sequence                   Embeddings
-              Embeddings
-RunForward    UserInput                  Output
+  Proc          Input                      Output
+  LoadCorpus    CorpusFileName             Corpus
+  Symbolize     CorpusFileName             SymbolTable
+                SymbolFileName
+  Wes Tokenize  SymbolTable                TokenizedCorpus
+  GPT Tokenize  SymbolTable                TokenizedCorpus
+                MergeTable/MergeFileName
+  Embed         TokenizedCorpus            Sequence, Embeddings
+  Transform     Sequence                   Embeddings
+                Embeddings
+  RunForward    UserInput                  Output
 
-Tokenize.
+Tokenize
 
 1. Add a max-heap helps for “what is the most frequent pair right now?”
 Instead of scanning all pairs every iteration, keep a heap ordered by count.

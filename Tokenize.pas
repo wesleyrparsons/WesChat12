@@ -64,7 +64,13 @@ type
     TokenID: Integer;                     // -1 if not terminal.
   end;
 
+// Token statistics.
+  TMergedTokenStat = record
+    TokenID: Integer;
+    Count: Integer;
+  end;
 
+    TMergedTokenStats = array of TMergedTokenStat;
 var
   StartSymbol: Integer = 260;                    // UTF-8 0.255, BOS, EOS, PAD, UNK is 259.
   TokenizedCorpus: TIVector;
@@ -1059,9 +1065,142 @@ begin
   Pause;
 end;
 
+// Calculate token statistics.
+// Count token usage.
+procedure CountTokenUsage(const TokenizedCorpus: TIVector; nSymbols: Integer; var Counts: TIVector);
+var
+  i, t: Integer;
+begin
+  SetLength(Counts, nSymbols);
+
+  for i := 0 to nSymbols - 1 do
+    Counts[i] := 0;
+
+  for i := 0 to High(TokenizedCorpus) do begin
+    t := TokenizedCorpus[i];
+    if (t >= 0) and (t < nSymbols) then
+      Inc(Counts[t]);
+  end;
+end;
+
+// Build a list of merged token states.
+procedure BuildMergedTokenStats(const Counts: TIVector; FirstMergedToken: Integer;
+  out Stats: TMergedTokenStats);
+var
+  i, k: Integer;
+begin
+  SetLength(Stats, 0);
+  k := 0;
+
+  for i := FirstMergedToken to High(Counts) do begin
+    SetLength(Stats, k + 1);
+    Stats[k].TokenID := i;
+    Stats[k].Count := Counts[i];
+    Inc(k);
+  end;
+end;
+
+// Sort by descending count.
+procedure SortMergedTokenStatsByCount(var Stats: TMergedTokenStats);
+var
+  i, j: Integer;
+  Temp: TMergedTokenStat;
+begin
+  for i := 0 to High(Stats) - 1 do
+    for j := i + 1 to High(Stats) do
+      if Stats[j].Count > Stats[i].Count then begin
+        Temp := Stats[i];
+        Stats[i] := Stats[j];
+        Stats[j] := Temp;
+      end;
+end;
+
 { Report Statistics }
+// Report N most frequent merged tokens.
+procedure ReportTopMergedTokens(const Stats: TMergedTokenStats;
+  const SymbolTable: TSymbolTable; N: Integer);
+var
+  i, Limit: Integer;
+  S: String;
+begin
+  Writeln('--- Top ', N, ' Most Frequent Merged Tokens ---');
+
+  if Length(Stats) = 0 then Exit;
+
+  Limit := N;
+  if Limit > Length(Stats) then
+    Limit := Length(Stats);
+
+  for i := 0 to Limit - 1 do begin
+    S := SymbolTable[Stats[i].TokenID];
+    Writeln(i + 1:4, '  ID=', Stats[i].TokenID:6, '  Count=',
+      Stats[i].Count:8, '  Symbol="', S, '"');
+  end;
+  Writeln;
+end;
+
+// Report singleton merged tokens.
+procedure ReportSingletonMergedTokens(const Stats: TMergedTokenStats);
+var
+  i, Singletons: Integer;
+begin
+  Singletons := 0;
+
+  for i := 0 to High(Stats) do
+    if Stats[i].Count = 1 then
+      Inc(Singletons);
+
+  Writeln('Merged tokens used only once: ', Singletons);
+end;
+
+// Report merged tokens never used.
+procedure ReportUnusedMergedTokens(const Stats: TMergedTokenStats);
+var
+  i, Unused: Integer;
+begin
+  Unused := 0;
+
+  for i := 0 to High(Stats) do
+    if Stats[i].Count = 0 then
+      Inc(Unused);
+
+  Writeln('Merged tokens never used: ', Unused);
+end;
+
+// Report coverage of top merges.
+procedure ReportTopMergeCoverage(const Stats: TMergedTokenStats; TopN: Integer);
+var
+  i, Limit: Integer;
+  TotalMergedInstances, TopMergedInstances: Integer;
+  Coverage: Single;
+begin
+  TotalMergedInstances := 0;
+  for i := 0 to High(Stats) do
+    Inc(TotalMergedInstances, Stats[i].Count);
+
+  Limit := TopN;
+  if Limit > Length(Stats) then
+    Limit := Length(Stats);
+
+  TopMergedInstances := 0;
+  for i := 0 to Limit - 1 do
+    Inc(TopMergedInstances, Stats[i].Count);
+
+  if TotalMergedInstances > 0 then
+    Coverage := 100.0 * TopMergedInstances / TotalMergedInstances
+  else
+    Coverage := 0.0;
+
+  Writeln('Top ', Limit, ' merged tokens account for ', TopMergedInstances, ' / ', TotalMergedInstances,
+    ' merged-token instances = ', Coverage:0:2, '%');
+end;
+
 // Report token statistics.
-procedure ReportTokenStatistics;
+procedure ReportTokenUsageStatistics;
+var
+  Counts: TIVector;
+  Stats: TMergedTokenStats;
+  FirstMergedToken: Integer;
 begin
   Writeln('--- Token Statistics ---');
   Writeln('Merged token instances: ', MergedInstances);
@@ -1069,6 +1208,14 @@ begin
   Writeln('Mean token length: ', nCorpus / nTokenizedCorpus: 6: 4);
   if not FromSymbolTable then
     Writeln('Number of merges performed: ', MergeCount);
+  CountTokenUsage(TokenizedCorpus, Length(SymbolTable), Counts);
+  BuildMergedTokenStats(Counts, FirstMergedToken, Stats);
+  SortMergedTokenStatsByCount(Stats);
+
+  ReportTopMergedTokens(Stats, SymbolTable, 30);
+  ReportUnusedMergedTokens(Stats);
+  ReportSingletonMergedTokens(Stats);
+  ReportTopMergeCoverage(Stats, 30);
 end;
 
 // Report symbol statistics.
@@ -1129,7 +1276,8 @@ begin
     Pause;
   ReportBPEStatistics;
   ReportSymbolStatistics;
-  ReportTokenStatistics;
+  ReportTokenUsageStatistics;
+  Pause;
 end;
 
 { Save data from tokenization }

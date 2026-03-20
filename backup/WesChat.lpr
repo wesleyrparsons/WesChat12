@@ -12,8 +12,10 @@ uses
   FileUtil,
   Global,
   Transform,
+  Symbolize,
   SysUtils,
   Tokenize,
+  WesTokenize,
   Windows,
   CombineTables;
 
@@ -92,7 +94,6 @@ begin
   while not EOF(F) do begin
     ReadLn(F, Line);
     Line := Trim(Line);
-    CombinedCorpus := '';
     if Line = '' then Continue;         // Skip blank lines.
     if FileExists(Line) then begin
       if Count = 0 then
@@ -164,9 +165,9 @@ begin
   writeln('  1: Tokenize an input single file using WesChat''s byte-level byte-pair encoding, with');
   writeln('     deterministic left-to-right longest-prefix matching and greedy longest-match decoding.');
   writeln('     Write the symbol table and other information to disk.');
-  writeln('  2: Tokenize using WesChat and input set of files listed one per line in a file.');
+  writeln('  2: Tokenize using WesChat an input set of files listed one per line in a file.');
   writeln('     The concatenated token list will appear in the first file.');
-  writeln('  3: Tokenize Locke corpus using Bela symbol table.');
+  writeln('  3: Tokenize input Bela corpus using input Bela symbol table.');
   writeln('  4: Tokenize an input single file, based on an input symbol table, ');
   writeln('     using WesChat''s tokenizer.');
   writeln('  5: Tokenize Bela corpus using ChatGPT''s symbol and merge tables and WesChat''s');
@@ -175,6 +176,7 @@ begin
   writeln('     tokenization routine.');
   writeln('  7: Tokenize an input single file using input symbol and merge tables.');
   writeln('  8: Combine two symbol tables for use with WesChat tokenization.');
+  writeln('  9: Create symbol table from input corpus.');
   writeln('  X: Exit.');
   writeln;
   writeln('Ater tokenization, WesChat will begin training the transformer, which consists');
@@ -216,15 +218,16 @@ begin
       '2': ProcessFileList(ListFile, Corpus);
       '3': begin
         FromSymbolTable := True;
-        if FileExists('Locke.bin') and FileExists('bela.txt') then begin
-          LoadTokenList('Locke.bin');
-          LoadSymbolTable('bela.sym');
-          HardPause;
-          if nSymbols > 0 then
-            RunEmbed(TokenizedCorpus)
+        if FileExists('bela.sym') then begin
+          if nSymbols > 0 then begin
+            LoadSymbolTable(SymbolFileName, SymbolTable);
+            ReadFileBytes('bela.txt', Corpus);
+            RunWesTokenize(Corpus, SymbolTable)
+          end
           else
             writeln('Symbols not found in table.');
-        end;
+          end
+        else writeln('File not found');
       end;
       '4': begin
         // Ask user for input file.
@@ -235,7 +238,7 @@ begin
         if not FileExists(SymbolFileName) then
           Writeln('Symbol table file not found: ', SymbolFileName, '.')
         else begin
-          LoadSymbolTable(SymbolFileName);
+          LoadSymbolTable(SymbolFileName, SymbolTable);
           write('Corpus file name: ');
           Readln(CorpusFileName);
 
@@ -245,6 +248,8 @@ begin
             WorkingName := ChangeFileExt(CorpusFileName, '');
             SetLength(CorpusFileNames, 0);
             CorpusFileNames[0] := CorpusFileName;
+
+            // Use WesToeknize here.
             TokenizeFromSymbolTable(CorpusFileName, Corpus);
             if VerboseTokenize then
               WriteTokenList(B);
@@ -337,6 +342,30 @@ begin
           writeln('File not found: ', FileName, '.');
       end;
       '7': writeln('Not yet implemented');
+      '9': begin
+        // Ask user for input file.
+        Write('Enter input filename: ');
+        Readln(CorpusFileName);
+
+        // Read bytes from file.
+        if FileExists(CorpusFileName) then begin
+          ReadFileBytes(CorpusFileName, Corpus);
+          SetLength(CorpusFileNames, 1);
+          CorpusFileNames[0] := CorpusFileName + '   ' + IntToStr(FileSize(CorpusFileName))
+           + ' bytes   ' + DateTimeToStr(FileDateToDateTime(FileAge(CorpusFileName)));
+
+          FromSymbolTable := False;
+          WorkingName := ChangeFileExt(CorpusFileName, '');
+          RunSymbolize(Corpus);
+          {if nSymbols > 0 then
+            RunEmbed(TokenizedCorpus)
+          else
+            writeln('Symbols not found in table.');}
+          Symbolize.DisplaySymbolTable;
+        end
+        else
+          writeln('File not found: ', FileName, '.');
+      end;
       'X': Exit;
       'H': Help;
       'VTO': VerboseTokenize := True;

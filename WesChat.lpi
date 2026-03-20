@@ -88,6 +88,16 @@
         <IsPartOfProject Value="True"/>
         <UnitName Value="CombineTables"/>
       </Unit>
+      <Unit>
+        <Filename Value="symbolize.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="Symbolize"/>
+      </Unit>
+      <Unit>
+        <Filename Value="westokenize.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="WesTokenize"/>
+      </Unit>
     </Units>
   </ProjectOptions>
   <CompilerOptions>

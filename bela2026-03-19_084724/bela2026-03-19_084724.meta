@@ -1,0 +1,64 @@
+
+--- File Information ---
+Files used in symbol table: 
+bela.txt   1036 bytes   6/25/1993 8:08:26 AM  
+
+--- Time Statistics ---
+Start time: 3/19/2026 8:47:07 AM     End time: 3/19/2026 8:47:09 AM
+Total elapsed time: 0 hours, 0 min 1.6780 sec
+--- BPE Statistics ---
+Elapsed time applying merges: 0 hours, 0 min 1.6610 sec
+Original text size (bytes/tokens): 1036
+Encoded text size (bytes/tokens): 446
+Compression ratio: 2.3229
+Tokens per second: 617.4017
+
+--- Symbol Statistics ---
+Number of symbols: 399
+Number of merged symbols: 143
+Mean merged symbol length: 
+Vocabulary compression ratio (merged symbols ÷ total symbols):  3.5839598997493732E-001
+Number of unmerged symbols: 256
+
+--- Token Statistics ---
+Merged token instances: 278
+Unmerged token instances: 168
+Mean token length: 2.3229
+Number of merges performed: 139
+--- Top 30 Most Frequent Merged Tokens ---
+   1  ID=    32  Count=      14  Symbol=" "
+   2  ID=   111  Count=      12  Symbol="o"
+   3  ID=   101  Count=       8  Symbol="e"
+   4  ID=    99  Count=       8  Symbol="c"
+   5  ID=   115  Count=       8  Symbol="s"
+   6  ID=   264  Count=       8  Symbol="er"
+   7  ID=   267  Count=       8  Symbol="s "
+   8  ID=   116  Count=       7  Symbol="t"
+   9  ID=   260  Count=       7  Symbol="e "
+  10  ID=    97  Count=       7  Symbol="a"
+  11  ID=   265  Count=       7  Symbol="t "
+  12  ID=   104  Count=       7  Symbol="h"
+  13  ID=   108  Count=       6  Symbol="l"
+  14  ID=   103  Count=       6  Symbol="g"
+  15  ID=   117  Count=       5  Symbol="u"
+  16  ID=   105  Count=       5  Symbol="i"
+  17  ID=   262  Count=       5  Symbol="
+"
+  18  ID=   272  Count=       5  Symbol="or"
+  19  ID=   275  Count=       5  Symbol="y "
+  20  ID=   276  Count=       5  Symbol="en"
+  21  ID=   287  Count=       5  Symbol="a "
+  22  ID=   292  Count=       5  Symbol=", "
+  23  ID=   270  Count=       4  Symbol="an"
+  24  ID=   271  Count=       4  Symbol=" the "
+  25  ID=   109  Count=       4  Symbol="m"
+  26  ID=   263  Count=       4  Symbol=" th"
+  27  ID=    34  Count=       4  Symbol="""
+  28  ID=   280  Count=       4  Symbol="on"
+  29  ID=   112  Count=       4  Symbol="p"
+  30  ID=   114  Count=       4  Symbol="r"
+
+Merged tokens never used: 238
+Merged tokens used only once: 33
+Top 30 merged tokens account for 185 / 446 merged-token instances = 41.48%
+Hit <CR> to continue.... 

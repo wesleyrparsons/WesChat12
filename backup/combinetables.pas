@@ -9,6 +9,7 @@ interface
 uses
   Display,
   Global,
+  IOHandler,
   SysUtils;
 
 type
@@ -18,9 +19,6 @@ procedure MergeSymbolTables(var CombinedTable: TSymbolTable);
 
 implementation
 
-var
-  BOS, EOS, PAD, UNK: Integer;                   // Extra symbols for control.
-
 { Helper: compare for descending length, then alphabetical }
 function CompareForGreedy(const a, b: string): Integer;
 begin
@@ -29,55 +27,7 @@ begin
     Result := CompareStr(a, b);                  { stable alpha tie-breaker }
 end;
 
-procedure LoadOneSymbolTable(const FileName: string; var SymbolTable: TSymbolTable);
-var
-  F: file;
-  Magic: array[0..3] of Char;
-  i, Len: Integer;
-  S: string;
-begin
-  Assign(F, FileName);
-  Reset(F, 1);
-
-  // Magic header.
-  BlockRead(F, Magic, SizeOf(Magic));
-  if (Magic[0] <> 'S') or (Magic[1] <> 'Y') or
-     (Magic[2] <> 'M') or (Magic[3] <> 'T') then begin
-    Close(F);
-    writeln('Invalid symbol table file.');
-    Exit;
-  end;
-
-  // Version.
-  BlockRead(F, Version, 16);
-
-  // Symbol count.
-  BlockRead(F, nSymbols, SizeOf(nSymbols));
-  SetLength(SymbolTable, NSymbols);
-
-  // Special token IDs
-  BlockRead(F, BOS, SizeOf(BOS));
-  BlockRead(F, EOS, SizeOf(EOS));
-  BlockRead(F, PAD, SizeOf(PAD));
-  BlockRead(F, UNK, SizeOf(UNK));
-
-  // Read symbols.
-  for i := 0 to nSymbols - 1 do begin
-    BlockRead(F, Len, SizeOf(Len));
-    SetLength(S, Len);
-    if Len > 0 then
-      BlockRead(F, S[1], Len);
-    SymbolTable[i] := S;
-  end;
-
-  Close(F);
-  nSymbols := Length(SymbolTable);
-  nVocab := nSymbols;
-  Writeln('Loaded ', nSymbols, ' symbols from ', FileName);
-end;
-
-{ Merge any number of symbol tables into one:
-   - removes duplicates
+{ Merge any number of symbol tables into one:  - removes duplicates
    - sorts for greedy L->R (longest match first) }
 procedure MergeSymbolTables(var CombinedTable: TSymbolTable);
 var
@@ -88,10 +38,6 @@ var
   FilesRead: TSVector;
   Tables: array of TSymbolTable;
 begin
-
-  //LoadOneSymbolTable('Nam0.sym', Tables[0]);
-  //LoadOneSymbolTable('Nam1.sym', Tables[1]);
-
   write('Enter name of file list: ');
     readln(ListFile);
     if not FileExists(ListFile) then begin
@@ -112,7 +58,7 @@ begin
     if Line = '' then
       Continue;         // Skip blank lines.
     if FileExists(Line) then begin
-      LoadOneSymbolTable(Line, Tables[Count]);
+      LoadSymbolTable(Line, Tables[Count]);
       Writeln('  File processed: ', Line, '; symbol bytes read: ', Length(Tables[Count]));
 
       Inc(Count);

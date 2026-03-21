@@ -1,6 +1,5 @@
 unit IOHandler;
 
-
 {$mode ObjFPC}{$H+}{$I proprietary.txt}
 
 { WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wespar.com.}
@@ -15,9 +14,10 @@ uses
   FileUtil,
   Global;
 
-procedure ReadFileBytes(const FileName: String; var OneCorpus: TBVector);
+procedure ReadFileBytes(const FileName: string; var OneCorpus: TBVector);
 procedure LoadSymbolTable(const FileName: string; var SymbolTable: TSymbolTable);
 procedure SaveSymbolTable(const SymbolFileName: string; const SymbolTable: TSymbolTable);
+procedure SaveTokenList(const TokenFileName: string);
 
 implementation
 
@@ -26,6 +26,7 @@ var
   EOS: Integer = 257;
   PAD: Integer = 258;
   UNK: Integer = 259;
+  Magic: array[0..3] of Char = ('S', 'Y', 'M', 'T');  // For saving symbol table.
 
 procedure ReadFileBytes(const FileName: String; var OneCorpus: TBVector);
 var
@@ -157,14 +158,13 @@ begin
   writeln('File ', SymbolFileName, ' successfully saved.');
 end;
 
-// Load tokenized corpus from a .bin file. IOHandler.
-procedure LoadTokenList(const BinFileName: String; var TokenizedCorpus: TIVector);
+// Load tokenized corpus from a token file.
+procedure LoadTokenList(const TokenFileName: string; var TokenizedCorpus: TIVector);
 var
   F: file of Integer;
-  v: Integer;
-  i, Count: Integer;
+  v, i, Count: Integer;
 begin
-  AssignFile(F, BinFileName);
+  AssignFile(F, TokenFileName);
   Reset(F);
 
   // Determine number of tokens in file.
@@ -181,7 +181,25 @@ begin
 
   CloseFile(F);
   nTokenizedCorpus := Length(TokenizedCorpus);
-  Writeln('Loaded ', Count, ' tokens from ', BinFileName);
+  Writeln('Loaded ', Count, ' tokens from ', TokenFileName);
+end;
+
+// Save the output tokenized corpus to a token file.
+procedure SaveTokenList(const TokenFileName: String);
+var
+  F: file of Integer;
+  v, i: Integer;
+begin
+  AssignFile(F, TokenFileName);
+  Rewrite(F);
+
+  for i := 0 to High(TokenizedCorpus) do begin
+    v := TokenizedCorpus[i];
+    Write(F, v);
+  end;
+
+  CloseFile(F);
+  writeln('File ', TokenFileName, ' successfully saved.');
 end;
 
 end.

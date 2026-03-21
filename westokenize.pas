@@ -3,6 +3,7 @@ unit WesTokenize;
 {$mode ObjFPC}{$H+}{$I proprietary.txt}
 
 { WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wespar.com.}
+{ Note: Edited 3/21/2026 5:07 pm }
 
 interface
 
@@ -60,7 +61,8 @@ function MatchLongest(root: PTrieNode; const text: TBVector; startPos: Integer;
   out tokenID, matchLen: Integer): Boolean;
 procedure DetokenizeToDisplay(const TokenizedCorpus: TIVector; const Part: TPart = B);
 procedure ReportStatistics;
-procedure RunWesTokenize(var Corpus: TBVector; const SymbolTable: TSymbolTable);
+procedure RunWesTokenize(var Corpus: TBVector; const SymbolTable: TSymbolTable;
+  var TokenizedCorpus: TIVector);
 
 implementation
 
@@ -529,25 +531,6 @@ begin
   Pause
 end;
 
-// Save the output tokenized corpus to a .bin file.
-procedure SaveTokenList(const BinFileName: String);
-var
-  F: file of Int32;
-  v: Int32;
-  i: Integer;
-begin
-  AssignFile(F, BinFileName);
-  Rewrite(F);
-
-  for i := 0 to High(TokenizedCorpus) do begin
-    v := TokenizedCorpus[i];
-    Write(F, v);
-  end;
-
-  CloseFile(F);
-  writeln('File ', BinFileName, ' successfully saved.');
-end;
-
 // Detokenize tokenized corpus to text.
 procedure DetokenizeToDisplay(const TokenizedCorpus: TIVector; const Part: TPart = B);
 var
@@ -585,7 +568,8 @@ begin
 end;
 
 // Run the tokenizer.
-procedure RunWesTokenize(var Corpus: TBVector; const SymbolTable: TSymbolTable);
+procedure RunWesTokenize(var Corpus: TBVector; const SymbolTable: TSymbolTable;
+  var TokenizedCorpus: TIVector);
 begin
   // Timing.
   t0 := Now;       // Start of timing for entire tokenization;
@@ -619,13 +603,16 @@ begin
     Pause;
   end;
 
-  // Create new directory and stamps for saving files.
-  Stamp := FormatDateTime('yyyy-mm-dd_hhnnss', Now);
-  CreateDir(WorkingName + Stamp);
-  ChDir(WorkingName + Stamp);
+  If SaveFiles then begin
+    // Create new directory and stamps for saving files.
+    Stamp := FormatDateTime('yyyy-mm-dd_hhnnss', Now);
+    CreateDir(WorkingName + Stamp);
+    ChDir(WorkingName + Stamp);
 
-
-  //save tc?
+    // Save TokenizedCorpus.
+    SaveTokenList(TokenizedCorpus, WorkingName + Stamp + '.tok');
+    ChDir('..');
+  end;
 
   // Verify by reconstructing.
   if ShowVerification and VerboseTokenize and DisplayCorpus then begin

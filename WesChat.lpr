@@ -250,7 +250,7 @@ begin
             TokenizeFromSymbolTable(CorpusFileName, Corpus);
             if VerboseTokenize then
               WriteTokenList(B);
-            DisplaySymbolTable;
+            DisplaySymbolTable(SymbolTable);
             Pause;
             DetokenizeToDisplay(TokenizedCorpus);
             ReportStatistics;

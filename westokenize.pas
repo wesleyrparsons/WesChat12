@@ -56,7 +56,7 @@ procedure ReadFileBytes(const FileName: String; var OneCorpus: TBVector);
 procedure WriteTokenList(const Part: TPart = B);
 procedure LoadTokenList(const BinFileName: String);
 procedure LoadSymbolTable(const FileName: string; var SymbolTable: TSymbolTable);
-procedure DisplaySymbolTable;
+procedure DisplaySymbolTable(const SymbolTable: TSymbolTable);
 procedure TokenizeFromSymbolTable(const TextFileName: string; var Corpus: TBVector);
 procedure BuildTrie(const SymbolTable: TRBSVector; out Root: PTrieNode);
 function MatchLongest(root: PTrieNode; const text: TBVector; startPos: Integer;
@@ -68,7 +68,7 @@ procedure RunWesTokenize(var Corpus: TBVector; const SymbolTable: TSymbolTable);
 implementation
 
 { Load the Corpus }
-// Read the corpus as a stream of binary.
+// Read the corpus as a stream of binary. IOHandler.
 procedure ReadFileBytes(const FileName: String; var OneCorpus: TBVector);
 var
   F: File;
@@ -108,9 +108,7 @@ begin
   Writeln('Read ', Size, ' bytes from ', FileName);
 end;
 
-{ Construct the token linked list }
-{ PIPELINE 2: Use existing symbol table }
-// Load the symbol table from file.
+// Load the symbol table from file. IOHandler.
 procedure LoadSymbolTable(const FileName: string; var SymbolTable: TSymbolTable);
 var
   F: file;
@@ -160,8 +158,7 @@ begin
   Writeln('Loaded ', nSymbols, ' symbols from ', FileName);
 end;
 
-// Trie procedures.
-// Call Once.
+// Trie procedures: Insert trie symbol.
 procedure InsertTrieSymbol(root: PTrieNode; const s: string; id: Integer);
 var
   node: PTrieNode;
@@ -185,7 +182,7 @@ begin
   node^.TokenID := id;  // mark terminal
 end;
 
-// Build trie.
+// Trie procedure: Build trie.
 procedure BuildTrie(const SymbolTable: TRBSVector; out Root: PTrieNode);
 var
   i: Integer;
@@ -203,6 +200,7 @@ begin
   end;
 end;
 
+// Trie procedure: Match longest.
 function MatchLongest(root: PTrieNode;
   const text: TBVector;
   startPos: Integer;
@@ -254,8 +252,8 @@ begin
     ReadFileBytes(TextFileName, Corpus);
 
   nCorpus := Length(Corpus);
-  SetLength(TokenizedCorpus, 0);
-
+  SetLength(TokenizedCorpus, 1);
+  TokenizedCorpus[0] := 256;
   i := 0;
 
   BuildTrie(SymbolTable, TrieHead);
@@ -274,6 +272,9 @@ begin
     end;
   end;
 
+  SetLength(TokenizedCorpus, Length(TokenizedCorpus) + 1);
+  TokenizedCorpus[Length(TokenizedCorpus) - 1] := 257;
+
   nTokenizedCorpus := Length(TokenizedCorpus);
 
   writeln('Created ', nTokenizedCorpus, ' tokens from ', TextFileName);
@@ -290,35 +291,27 @@ begin
   writeln('End of tokenization. Press <CR> to continue.');
 end;
 
-{ Create the tokenized corpus from linked list }
 { Display routines }
 // Display the symbol table.
-procedure DisplaySymbolTable;
+procedure DisplaySymbolTable(const SymbolTable: TSymbolTable);
 var
-  i, j: Integer;
-  Disp: String;
+  i: Integer;
 begin
-  Writeln('--- Symbol Table ---');           // Chr(183) is non-display char.
-  for i := 0 to High(SymbolTable) do         // Loop thru each symbol in table.
-    if SymbolTable[i] <> '' then begin
-      Disp := SymbolTable[i];                // Use Disp so Table is not changed.
-      for j := 1 to Length(SymbolTable[i]) do
-        if (Ord(Disp[j]) < 32) or (Ord(Disp[j]) = 127) then Disp[j] := Chr(183);
-      if Length(Disp) < 12 then begin
-        write(i: 8, Disp: 15);
-        if (i mod 5) = 4 then writeln;
-      end
-      else begin
-        if not (i mod 5) = 4 then writeln;
-        Writeln(i: 8, '     ', Disp);
-      end;
-      if (i > 0) and (i mod 100 = 99) then Pause;
+  Writeln('--- Symbol Table ---');
+  for i := 0 to High(SymbolTable) do begin  // Loop thru each symbol in table.
+    case i of
+      7, 8, 9, 10, 11, 12, 13, 127:
+        write(i: 8, ' ': 15)     // Placeholder for dangerous characters.
+      else
+        write(i: 8, '"' + SymbolTable[i] + '"': 15);
     end;
+    if (i mod 5) = 4 then writeln;
+    if (i > 0) and (i mod 100 = 99) then Pause;
+  end;
   writeln('Symbol table length = ', Length(SymbolTable));
   writeln;
 end;
 
-{ Reconstruction check }
 { Computations and reports }
 // Calculate time statistics.
 procedure CalculateTimeStatistics;
@@ -330,7 +323,7 @@ begin
   Secs := (ElapsedMS mod 60000) / 1000.0;
 end;
 
-// Calculate number of symbol types and instances.
+// Calculate number of symbol types and token instances.
 procedure CalculateSymbolCount;
 var
   i, T: Integer;
@@ -403,7 +396,6 @@ begin
   Pause;
 end;
 
-// Calculate token statistics.
 // Count token usage.
 procedure CountTokenUsage(const TokenizedCorpus: TIVector; nSymbols: Integer; var Counts: TIVector);
 var
@@ -533,7 +525,7 @@ begin
     ' merged-token instances = ', Coverage:0:2, '%');
 end;
 
-// Report token statistics.
+// Report token usage statistics.
 procedure ReportTokenUsageStatistics;
 var
   Counts: TIVector;
@@ -618,7 +610,7 @@ begin
   writeln;
 end;
 
-// Save the output token list to a .bin file.
+// Display the toeknized corpus.
 procedure WriteTokenList(const Part: TPart = B);
 var
   i, iB, iE: Integer;
@@ -673,7 +665,7 @@ begin
 end;
 
 { Load tables }
-// Load tokenized corpus from a .bin file.
+// Load tokenized corpus from a .bin file. IOHandler.
 procedure LoadTokenList(const BinFileName: String);
 var
   F: file of Int32;
@@ -700,18 +692,22 @@ begin
   Writeln('Loaded ', Count, ' tokens from ', BinFileName);
 end;
 
-// Reconstruct corpus from tokenized corpus.
+// Detokenize tokenized corpus to text.
 procedure DetokenizeToDisplay(const TokenizedCorpus: TIVector; const Part: TPart = B);
 var
-  i, iB, iE, t, symIndex: Integer;
+  i, iB, iE, Cutoff: Integer;
 begin
+  if Length(TokenizedCorpus) < 499 then
+    Cutoff := Length(TokenizedCorpus) - 1
+  else
+    Cutoff := 499;
   Case Part of
     B: begin
       iB := 0;
-      iE := 499;
+      iE := Cutoff;  // or smaller length``
     end;
     E: begin
-      iB := High(TokenizedCorpus) - 499;
+      iB := High(TokenizedCorpus) - Cutoff;
       iE := High(TokenizedCorpus);
     end;
     F: begin
@@ -727,11 +723,10 @@ begin
     F: write('All bytes: ');
   end;
   writeln;
-  Pause;
   for i := iB to iE do begin
-    t := TokenizedCorpus[i];
+    write(SymbolTable[TokenizedCorpus[i]]);
 
-    if t < 256 then begin
+{    if t < 256 then begin
       // Raw byte.
       Write(Char(t));
     end
@@ -746,19 +741,20 @@ begin
     end
     else begin
       // Symbol table entry.
-      symIndex := t - 260;
-      Write(SymbolTable[symIndex]);   // Or just SymbolTable[t]?? Says ChaptGPT.
-    end;
+      // symIndex := t - 260;
+      //Write(SymbolTable[symIndex]);   // Or just
+      write(SymbolTable[t]); // ?? Says ChaptGPT.
+    end; }
   end;
 
   writeln;
 end;
 
-function CompareByLength(List: TStringList; Index1, Index2: Integer): Integer;
+{function CompareByLength(List: TStringList; Index1, Index2: Integer): Integer;
 begin
   // Sort longest first
   Result := Length(List[Index2]) - Length(List[Index1]);
-end;
+end;}
 
 // Run the tokenizer.
 procedure RunWesTokenize(var Corpus: TBVector; const SymbolTable: TSymbolTable);
@@ -767,10 +763,12 @@ begin
   t0 := Now;       // Start of timing for entire tokenization;
   StopTime := 0;   // Time to subtract from timing.
 
-  // Create the TokenList.
+  // Display stats.
   writeln('Maximum symbols = ', MaxVocab, '. Maximum merges = ', MaxMerges, '. Maximum pair counts = ', MaxPairCount, '. Tokenizing...');
   writeln('X = Exit program. B = Break out of merge loop. V = toggle Verbose mode. P = Program information. M = Merging information. Merging...');
-  //BuildTokenListFromCorpus(Corpus);
+
+  DisplaySymbolTable(SymbolTable);
+  Pause;
 
   // Create the tokenized corpus.
   TokenizeFromSymbolTable(FileName, Corpus);
@@ -802,6 +800,7 @@ begin
   if ShowVerification and VerboseTokenize and DisplayCorpus then begin
     writeln('--- Reconstructed Corpus ---');
   DetokenizeToDisplay(TokenizedCorpus, B);
+  writeln;
 end;
 
   writeln('End of tokenization.');

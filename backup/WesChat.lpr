@@ -219,13 +219,10 @@ begin
       '3': begin
         FromSymbolTable := True;
         if FileExists('bela.sym') then begin
-          if nSymbols > 0 then begin
+            SymbolFileName := 'bela.sym';
             LoadSymbolTable(SymbolFileName, SymbolTable);
             ReadFileBytes('bela.txt', Corpus);
             RunWesTokenize(Corpus, SymbolTable)
-          end
-          else
-            writeln('Symbols not found in table.');
           end
         else writeln('File not found');
       end;

@@ -17,7 +17,7 @@ uses
 procedure ReadFileBytes(const FileName: string; var OneCorpus: TBVector);
 procedure LoadSymbolTable(const FileName: string; var SymbolTable: TSymbolTable);
 procedure SaveSymbolTable(const SymbolFileName: string; const SymbolTable: TSymbolTable);
-procedure SaveTokenList(const TokenFileName: string);
+procedure SaveTokenList(const TokenizedCorpus: TIVector; const TokenFileName: String);
 
 implementation
 
@@ -27,6 +27,8 @@ var
   PAD: Integer = 258;
   UNK: Integer = 259;
   Magic: array[0..3] of Char = ('S', 'Y', 'M', 'T');  // For saving symbol table.
+  MinSymbols: Integer = 50;
+  MinTokens: Integer = 50;
 
 procedure ReadFileBytes(const FileName: String; var OneCorpus: TBVector);
 var
@@ -185,7 +187,7 @@ begin
 end;
 
 // Save the output tokenized corpus to a token file.
-procedure SaveTokenList(const TokenFileName: String);
+procedure SaveTokenList(const TokenizedCorpus: TIVector; const TokenFileName: String);
 var
   F: file of Integer;
   v, i: Integer;

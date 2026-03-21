@@ -3,7 +3,7 @@ program WesChat;
 {$mode ObjFPC}{$H+}{$I proprietary.txt}
 
 { WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wespar.com.}
-
+{ Note: Edited 3/21/2026 6:07 pm }
 uses
   CombineTables,
   Crt,
@@ -26,6 +26,9 @@ var
   OldLen: Integer;
   Ch, CorpusFileName, SymbolFileName, ListFile: string;
   CombinedSymbolTable: TSymbolTable;
+  MinSymbols: Integer = 50;       // Minimum for loading.
+  MinTokens: Integer = 50;
+  MinCorpus: Integer = 50;
 
 // Read a file of file names, and sends each to tokenizer.
 procedure ProcessFileList(var ListFile: string; Corpus: TBVector);
@@ -195,8 +198,8 @@ begin
           Writeln('Symbol table file not found: ', SymbolFileName, '. Aborting...')
         else begin
           LoadSymbolTable(SymbolFileName, SymbolTable);
-          if Length(SymbolTable) < 2 then
-            writeln('Too few symbols (< 2) found. Aborting...')
+          if Length(SymbolTable) < MinSymbols then
+            writeln('Too few symbols found. Aborting...')
           else begin
             // Use WesTokenize here.
             RunWesTokenize(Corpus, SymbolTable, TokenizedCorpus);
@@ -231,8 +234,8 @@ begin
           Writeln('Symbol table file not found: ', SymbolFileName, '. Aborting...')
         else begin
           LoadSymbolTable(SymbolFileName, SymbolTable);
-          if Length(SymbolTable) < 2 then
-            writeln('Too few symbols (< 2) found. Aborting...')
+          if Length(SymbolTable) < MinSymbol then
+            writeln('Too few symbols found. Aborting...')
           else begin
             write('Input Corpus file name: ');
             Readln(CorpusFileName);

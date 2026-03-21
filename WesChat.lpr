@@ -3,7 +3,7 @@ program WesChat;
 {$mode ObjFPC}{$H+}{$I proprietary.txt}
 
 { WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wespar.com.}
-{ Note: Edited 3/21/2026 5:07 pm }
+{ Note: Edited 3/21/2026 6:07 pm }
 uses
   CombineTables,
   Crt,
@@ -26,6 +26,9 @@ var
   OldLen: Integer;
   Ch, CorpusFileName, SymbolFileName, ListFile: string;
   CombinedSymbolTable: TSymbolTable;
+  MinSymbols: Integer = 50;       // Minimum for loading.
+  MinTokens: Integer = 50;
+  MinCorpus: Integer = 50;
 
 // Read a file of file names, and sends each to tokenizer.
 procedure ProcessFileList(var ListFile: string; Corpus: TBVector);
@@ -64,6 +67,10 @@ begin
       SetLength(CorpusFileNames, Count + 1);
       CorpusFileNames[Count] := Line;
       Writeln('  File processed: ', Line, '; corpus bytes read: ', Length(Corpus));
+      if Length(Corpus) < MinCorpus then begin
+        writeln('Too small of a corpus. Aborting...');
+        Continue;
+      end;
 
       OldLen := Length(CombinedCorpus);
       SetLength(CombinedCorpus, OldLen + Length(Corpus));
@@ -167,6 +174,11 @@ begin
         // Read bytes from file.
         if FileExists(CorpusFileName) then begin
           ReadFileBytes(CorpusFileName, Corpus);
+          if Length(Corpus) < MinCorpus then begin
+            writeln('Too small of a corpus. Aborting...');
+            Continue;
+          end;
+
           SetLength(CorpusFileNames, 1);
           CorpusFileNames[0] := CorpusFileName + '   ' + IntToStr(FileSize(CorpusFileName))
            + ' bytes   ' + DateTimeToStr(FileDateToDateTime(FileAge(CorpusFileName)));
@@ -195,8 +207,8 @@ begin
           Writeln('Symbol table file not found: ', SymbolFileName, '. Aborting...')
         else begin
           LoadSymbolTable(SymbolFileName, SymbolTable);
-          if Length(SymbolTable) < 2 then
-            writeln('Too few symbols (< 2) found. Aborting...')
+          if Length(SymbolTable) < MinSymbols then
+            writeln('Too few symbols found. Aborting...')
           else begin
             // Use WesTokenize here.
             RunWesTokenize(Corpus, SymbolTable, TokenizedCorpus);
@@ -231,14 +243,19 @@ begin
           Writeln('Symbol table file not found: ', SymbolFileName, '. Aborting...')
         else begin
           LoadSymbolTable(SymbolFileName, SymbolTable);
-          if Length(SymbolTable) < 2 then
-            writeln('Too few symbols (< 2) found. Aborting...')
+          if Length(SymbolTable) < MinSymbols then
+            writeln('Too few symbols found. Aborting...')
           else begin
             write('Input Corpus file name: ');
             Readln(CorpusFileName);
 
             if not FileExists(CorpusFileName) then
               Writeln('Corpus file not found: ', CorpusFileName, '. Aborting...')
+              if Length(Corpus) < MinCorpus then begin
+                writeln('Too small of a corpus. Aborting...');
+                Continue;
+              end;
+
             else begin
               ReadFileBytes(CorpusFileName, Corpus);
               WorkingName := ChangeFileExt(CorpusFileName, '');
@@ -263,6 +280,11 @@ begin
 
         // Read bytes from file.
         if not FileExists(CorpusFileName) then begin
+          if Length(Corpus) < MinCorpus then begin
+            writeln('Too small of a corpus. Aborting...');
+            Continue;
+          end;
+
           SetLength(CorpusFileNames, 0);
           CorpusFileNames[0] := 'bela.txt';
           WorkingName := ChangeFileExt(CorpusFileName, '');
@@ -292,6 +314,11 @@ begin
 
         // Read bytes from file.
         if FileExists(CorpusFileName) then begin
+          if Length(Corpus) < MinCorpus then begin
+            writeln('Too small of a corpus. Aborting...');
+            Continue;
+          end;
+
           SetLength(CorpusFileNames, 0);
           WorkingName := ChangeFileExt(CorpusFileName, '');
           CorpusFileNames[0] := CorpusFileName;
@@ -325,6 +352,11 @@ begin
 
         // Read bytes from file.
         if FileExists(CorpusFileName) then begin
+          if Length(Corpus) < MinCorpus then begin
+            writeln('Too small of a corpus. Aborting...');
+            Continue;
+          end;
+
           ReadFileBytes(CorpusFileName, Corpus);
           SetLength(CorpusFileNames, 1);
           CorpusFileNames[0] := CorpusFileName + '   ' + IntToStr(FileSize(CorpusFileName))

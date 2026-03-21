@@ -1,53 +1,0 @@
-
---- File Information ---
-Files used in symbol table: 
-
---- Time Statistics ---
-Start time: 3/20/2026 7:31:45 AM     End time: 3/20/2026 7:31:45 AM
-Total elapsed time: 0 hours, 0 min 0.0120 sec
---- BPE Statistics ---
-Original text size (bytes/tokens): 1036
-Encoded text size (bytes/tokens): 2
-Compression ratio: 518.0000
-
---- Token Statistics ---
-Merged token instances: 0
-Unmerged token instances: 0
-Mean token length: 518.0000
---- Top 30 Most Frequent Merged Tokens ---
-   1  ID=   256  Count=       1  Symbol="<BOS>"
-   2  ID=   257  Count=       1  Symbol="<EOS>"
-   3  ID=     2  Count=       0  Symbol=""
-   4  ID=     3  Count=       0  Symbol=""
-   5  ID=     4  Count=       0  Symbol=""
-   6  ID=     5  Count=       0  Symbol=""
-   7  ID=     6  Count=       0  Symbol=""
-   8  ID=     7  Count=       0  Symbol=""
-   9  ID=     8  Count=       0  Symbol=""
-  10  ID=     9  Count=       0  Symbol="	"
-  11  ID=    10  Count=       0  Symbol="
-"
-  12  ID=    11  Count=       0  Symbol=""
-  13  ID=    12  Count=       0  Symbol=""
-  14  ID=    13  Count=       0  Symbol=""
-  15  ID=    14  Count=       0  Symbol=""
-  16  ID=    15  Count=       0  Symbol=""
-  17  ID=    16  Count=       0  Symbol=""
-  18  ID=    17  Count=       0  Symbol=""
-  19  ID=    18  Count=       0  Symbol=""
-  20  ID=    19  Count=       0  Symbol=""
-  21  ID=    20  Count=       0  Symbol=""
-  22  ID=    21  Count=       0  Symbol=""
-  23  ID=    22  Count=       0  Symbol=""
-  24  ID=    23  Count=       0  Symbol=""
-  25  ID=    24  Count=       0  Symbol=""
-  26  ID=    25  Count=       0  Symbol=""
-  27  ID=    26  Count=       0  Symbol=""
-  28  ID=    27  Count=       0  Symbol=""
-  29  ID=    28  Count=       0  Symbol=""
-  30  ID=    29  Count=       0  Symbol=""
-
-Merged tokens never used: 394
-Merged tokens used only once: 2
-Top 30 merged tokens account for 2 / 2 merged-token instances = 100.00%
-Hit <CR> to continue.... 

@@ -11,6 +11,7 @@ uses
   Embed,
   FileUtil,
   Global,
+  IOHandler,
   Transform,
   Symbolize,
   SysUtils,
@@ -25,45 +26,6 @@ var
   Corpus: TBVector;           // Vector of byte.
   TokenizedCorpus: TIVector;  // Make this one big dimensioned vector at start.
   // Allocate size of corpus, make nTC count the size.
-
-procedure ReadFileBytes(const FileName: String; var OneCorpus: TBVector);
-var
-  F: File;
-  Size, i: Integer;
-  B: Byte;
-begin
-  AssignFile(F, FileName);
-  Reset(F, 1);     // Open in binary mode.
-  Size := FileSize(F);
-  SetLength(OneCorpus, Size);
-
-  // Write the Corpus as it is read.
-  if VeryVerbose and VerboseTokenize then
-    writeln('--- Original Corpus ---');
-  for i := 0 to Size - 1 do begin
-    BlockRead(F, B, 1);
-    OneCorpus[i] := B;
-
-    if VeryVerbose and VerboseTokenize then
-      if ShowEachByteRead then
-        if B < 32 then
-          Write('<', B, '>')
-        else
-          Write(Chr(B));
-  end;
-  CloseFile(F);
-  if VeryVerbose and VerboseTokenize then begin
-    writeln('ReadByteFile: ');
-    for i := 0 to 150 do
-      write(OneCorpus[i], ' ');
-    Readln;
-  end;
-  if VeryVerbose and VerboseTokenize then
-    writeln;
-
-  // Display initial Corpus length.
-  Writeln('Read ', Size, ' bytes from ', FileName);
-end;
 
 // Read a file of file names, and sends each to tokenizer.
 procedure ProcessFileList(var ListFile: string; Corpus: TBVector);
@@ -220,6 +182,8 @@ begin
         FromSymbolTable := True;
         if FileExists('bela.sym') then begin
             SymbolFileName := 'bela.sym';
+            SetLength(CorpusFileNames, 1);     // may not be necessary for multiple input corpuses.
+            CorpusFileNames[0] := SymbolFileName;
             LoadSymbolTable(SymbolFileName, SymbolTable);
             ReadFileBytes('bela.txt', Corpus);
             RunWesTokenize(Corpus, SymbolTable)
@@ -230,35 +194,37 @@ begin
         // Ask user for input file.
         write('Input symbol table file name: ');
         Readln(SymbolFileName);
-        FromSymbolTable := True;
+        FromSymbolTable := True;  // Delete this var at some point.
 
         if not FileExists(SymbolFileName) then
-          Writeln('Symbol table file not found: ', SymbolFileName, '.')
+          Writeln('Symbol table file not found: ', SymbolFileName, '. Aborting...')
         else begin
           LoadSymbolTable(SymbolFileName, SymbolTable);
-          write('Corpus file name: ');
-          Readln(CorpusFileName);
-
-          if not FileExists(CorpusFileName) then
-            Writeln('Corpus file not found: ', CorpusFileName, '.')
+          if Length(SymbolTable) < 2 then
+            writeln('Too few symbols (< 2) found. Aborting...')
           else begin
-            WorkingName := ChangeFileExt(CorpusFileName, '');
-            SetLength(CorpusFileNames, 0);
-            CorpusFileNames[0] := CorpusFileName;
+            write('Input Corpus file name: ');
+            Readln(CorpusFileName);
 
-            // Use WesToeknize here.
-            TokenizeFromSymbolTable(CorpusFileName, Corpus);
-            if VerboseTokenize then
-              WriteTokenList(B);
-            DisplaySymbolTable;
-            Pause;
-            DetokenizeToDisplay(TokenizedCorpus);
-            ReportStatistics;
-            // HardPause;
-            if nSymbols > 0 then
+            if not FileExists(CorpusFileName) then
+              Writeln('Corpus file not found: ', CorpusFileName, '. Aborting...')
+            else begin
+              ReadFileBytes(CorpusFileName, Corpus);
+              WorkingName := ChangeFileExt(CorpusFileName, '');
+              SetLength(CorpusFileNames, 1);     // may not be necessary for multiple input corpuses.
+              CorpusFileNames[0] := CorpusFileName;
+
+              // Use WesTokenize here.
+              RunWesTokenize(Corpus, SymbolTable);
+{              if VerboseTokenize then
+                WriteTokenList(B);
+              DisplaySymbolTable(SymbolTable);
+              Pause;
+              DetokenizeToDisplay(TokenizedCorpus);
+              ReportStatistics;
+              HardPause; }
               RunEmbed(TokenizedCorpus)
-            else
-              writeln('Symbols not found in table.');
+            end;
           end;
         end;
       end;
@@ -353,12 +319,13 @@ begin
 
           FromSymbolTable := False;
           WorkingName := ChangeFileExt(CorpusFileName, '');
+              writeln('in main workingname ', workingname, ' ', stamp); pause;
           RunSymbolize(Corpus);
           {if nSymbols > 0 then
             RunEmbed(TokenizedCorpus)
           else
             writeln('Symbols not found in table.');}
-          Symbolize.DisplaySymbolTable;
+          DisplayByteSymbolTable(SymbolTable);
         end
         else
           writeln('File not found: ', FileName, '.');

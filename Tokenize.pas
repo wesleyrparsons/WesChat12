@@ -13,6 +13,7 @@ uses
   Display,
   FileUtil,
   Global,
+  IOHandler,
   SysUtils;
 
 type
@@ -80,8 +81,7 @@ var
   Head, Tail: PTokenNode;                        // Start and end node of list of tokens.
   MergeCount: Integer;                           // Maximum allowed number of merges and actual number.
   Merges: TMergeArray;                           // Array recording the merges.
-  FileName, WorkingName, Stamp,
-    Reconstructed: String;                       // Saving data.
+  FileName, Reconstructed: String;               // Saving data.
   SymbolTable: TSymbolTable;                     // Table of symbols.
   Magic: array[0..3] of Char = ('S', 'Y', 'M', 'T');  // For saving symbol table.
   TrieHead: PTrieNode = nil;                     // Nodes for Trie.
@@ -92,7 +92,7 @@ var
 procedure ReadFileBytes(const FileName: String; var OneCorpus: TBVector);
 procedure WriteTokenList(const Part: TPart = B);
 procedure LoadTokenList(const BinFileName: String);
-procedure LoadSymbolTable(const FileName: string);
+//procedure LoadSymbolTable(const FileName: string);
 procedure SaveSymbolTable(const SymbolFileName: string; const SymbolTable: TSymbolTable);
 procedure DisplaySymbolTable;
 procedure TokenizeFromSymbolTable(const TextFileName: string; var Corpus: TBVector);
@@ -1219,8 +1219,6 @@ end;
 
 // Report symbol statistics.
 procedure ReportSymbolStatistics;
-var
-  Counts: TIVector;
 begin
   Writeln('--- Symbol Statistics ---');
   Writeln('Number of symbols: ', nSymbols);

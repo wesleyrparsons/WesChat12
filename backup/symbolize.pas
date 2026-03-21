@@ -13,10 +13,10 @@ uses
   Display,
   FileUtil,
   Global,
+  IOHandler,
   SysUtils;
 
 type
-  TSymbolTable = TRBSVector;           // Array of symbols. So index of array is a symbol string.
   PTokenNode = ^TTokenNode;            // Doubly-linked list.
   TTokenNode = record                  // Each node as a token, an integer corresponding to a symbol.
     Tok: Integer;
@@ -52,12 +52,6 @@ type
   end;
   TMergeArray = array of TMerge;       // Array of merges.
 
-{  PTrieNode = ^TTrieNode;
-  TTrieNode = record
-    Children: array[0..255] of PTrieNode; // ASCII.
-    TokenID: Integer;                     // -1 if not terminal.
-  end;}
-
 var
   StartSymbol: Integer = 260;                    // UTF-8 0.255, BOS, EOS, PAD, UNK is 259.
   ElapsedMS, MElapsedMS: Int64;                  // For timing.
@@ -67,14 +61,11 @@ var
   Head, Tail: PTokenNode;                        // Start and end node of list of tokens.
   MergeCount: Integer;                           // Maximum allowed number of merges and actual number.
   Merges: TMergeArray;                           // Array recording the merges.
-  WorkingName, Stamp: String;                       // Saving data.
   SymbolTable: TSymbolTable;                     // Table of symbols.
   Magic: array[0..3] of Char = ('S', 'Y', 'M', 'T');  // For saving symbol table.
   MergedTypes, UnmergedTypes: Integer;
 
 procedure ReadFileBytes(const FileName: String; var OneCorpus: TBVector);
-procedure SaveSymbolTable(const SymbolFileName: string; const SymbolTable: TSymbolTable);
-procedure DisplaySymbolTable;
 procedure ReportStatistics;
 procedure RunSymbolize(const Corpus: TBVector);
 
@@ -497,6 +488,7 @@ begin
 
     // Stop if hash table got too full.
     if H.Used > MaxPairCount then begin
+      writeln;
       Writeln('Stopping: pair table exceeded ', MaxPairCount, ' entries.');
       Break;
     end;
@@ -505,12 +497,14 @@ begin
 
     // Stop if no useful merges remain.
     if BestCount < 2 then begin
+      writeln;
       Writeln('Stopping: no more valid merges at iteration ', m, '.');
       Break;
     end;
 
     // Stop if symbol table is full.
     if Length(SymbolTable) >= MaxVocab then begin
+      writeln;
       Writeln('Stopping: symbol table reached ', MaxVocab, ' entries.');
       Break;
     end;
@@ -538,32 +532,6 @@ begin
 end;
 
 { Display routines }
-// Display the symbol table.
-procedure DisplaySymbolTable;
-var
-  i, j: Integer;
-  Disp: String;
-begin
-  Writeln('--- Symbol Table ---');           // Chr(183) is non-display char.
-  for i := 0 to High(SymbolTable) do         // Loop thru each symbol in table.
-    if SymbolTable[i] <> '' then begin
-      Disp := SymbolTable[i];                // Use Disp so Table is not changed.
-      for j := 1 to Length(SymbolTable[i]) do
-        if (Ord(Disp[j]) < 32) or (Ord(Disp[j]) = 127) then Disp[j] := Chr(183);
-      if Length(Disp) < 12 then begin
-        write(i: 8, Disp: 15);
-        if (i mod 5) = 4 then writeln;
-      end
-      else begin
-        if not (i mod 5) = 4 then writeln;
-        Writeln(i: 8, '     ', Disp);
-      end;
-      if (i > 0) and (i mod 100 = 99) then Pause;
-    end;
-  writeln('Symbol table length = ', Length(SymbolTable));
-  writeln;
-end;
-
 // Display all symbols in the Corpus with their frequency.
 {procedure DisplayAllTokenFrequencies(const Corpus: TBVector);
 var
@@ -682,10 +650,6 @@ var
 begin
   Writeln('--- Symbol Statistics ---');
   Writeln('Number of symbols: ', nSymbols);
-  // Writeln('Vocabulary size: ', nVocab);
-  Writeln('Number of merged symbols: ', MergedTypes);
-  Writeln('Mean merged symbol length: ');
-  Writeln('Number of unmerged symbols: ', UnmergedTypes);
   writeln;
 end;
 
@@ -775,47 +739,9 @@ begin
   writeln('File ', MergeFileName, ' successfully saved.');
 end;
 
-// Save symbol table.
-procedure SaveSymbolTable(const SymbolFileName: string; const SymbolTable: TSymbolTable);
-var
-  F: file;
-  NumSymbols: Integer;
-  i, Len: Integer;
-begin
-  Assign(F, SymbolFileName);
-  Rewrite(F, 1);
-
-  // Magic.
-  BlockWrite(F, Magic, SizeOf(Magic));
-
-  // Version.
-  BlockWrite(F, Version, 16);
-
-  // Symbol count.
-  NumSymbols := Length(SymbolTable);
-  BlockWrite(F, NumSymbols, SizeOf(NumSymbols));
-
-  // Special token IDs.
-  BlockWrite(F, BOS, SizeOf(BOS));
-  BlockWrite(F, EOS, SizeOf(EOS));
-  BlockWrite(F, PAD, SizeOf(PAD));
-  BlockWrite(F, UNK, SizeOf(UNK));
-
-  // Write each symbol.
-  for i := 0 to NumSymbols - 1 do begin
-    Len := Length(SymbolTable[i]);
-    BlockWrite(F, Len, SizeOf(Len));
-    if Len > 0 then
-      BlockWrite(F, SymbolTable[i][1], Len);
-  end;
-
-  Close(F);
-  writeln('File ', SymbolFileName, ' successfully saved.');
-end;
-
 // Run the tokenizer.
 procedure RunSymbolize(const Corpus: TBVector);
-begin
+begin    writeln('tsart runsym workingname ', workingname, ' ', stamp); pause;
   // Timing.
   t0 := Now;       // Start of timing for entire tokenization;
   StopTime := 0;   // Time to subtract from timing.
@@ -841,23 +767,21 @@ begin
   nSymbols := Length(SymbolTable);
   // Display symbol table.
   if VerboseTokenize then
-    DisplaySymbolTable;
+    DisplayByteSymbolTable(SymbolTable);
   nVocab := nSymbols;
 
   // Report statistics.
   if VerboseTokenize then begin
     ReportStatistics;
-    Pause;
   end;
 
   // Create new directory and stamps for saving files.
-  Stamp := FormatDateTime('yyyy-mm-dd_hhnnss', Now);
+  Stamp := FormatDateTime('yyyy-mm-dd_hhnnss', Now);                writeln('workingname ', workingname, ' ', stamp); pause;
   CreateDir(WorkingName + Stamp);
   ChDir(WorkingName + Stamp);
 
   // Save various files.
   if SaveFiles then begin
-    writeln;
     writeln('--- Saving Files ---');
     SaveSymbolTable(WorkingName + Stamp + '.sym', SymbolTable);
     SaveMetaData(WorkingName + Stamp + '.meta');

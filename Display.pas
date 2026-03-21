@@ -12,6 +12,7 @@ uses
 procedure HardPause;
 procedure Pause;
 function CheckForControlKey: Char;
+procedure DisplayByteSymbolTable(const SymbolTable: TSymbolTable);
 procedure DisplayVector(const V: TIVector);
 procedure DisplayX(const X: TSeqMatrix; const Part: TPart = B); overload;
 procedure DisplayX(const X: TSeqHeadMatrix; const Part: TPart = B); overload;
@@ -81,6 +82,30 @@ begin
   writeln('Trainable Parameters: Wq, Wk, Wv, W0, W1, b1, W2, b2, gamma1, beta1, beta2, gamma2');
   writeln('Maximum Vocabulary (MaxVocab): ', MaxVocab);
   writeln('Number of Vocabulary (nVocab): ', nVocab);
+end;
+
+// Display the symbol table.
+procedure DisplayByteSymbolTable(const SymbolTable: TSymbolTable);
+var
+  i: Integer;
+begin
+  Writeln('--- Symbol Table ---');
+  for i := 0 to High(SymbolTable) do begin  // Loop thru each symbol in table.
+{    case i of
+      7, 8, 9, 10, 11, 12, 13, 127:
+        write(i: 8, ' ': 15)     // Placeholder for dangerous characters.
+      else
+        write(i: 8, '"' + SymbolTable[i] + '"': 15);
+    end;}
+    if (i in [0..31]) or (i in [127..255]) then
+      write(i: 8, IntToHex(i, 2): 15)       // Hex for non-ASCII characters.
+    else
+      write(i: 8, '"' + SymbolTable[i] + '"': 15);
+    if (i mod 5) = 4 then writeln;
+    if (i > 0) and (i mod 100 = 99) then Pause;
+  end;
+  writeln('Symbol table length = ', Length(SymbolTable));
+  writeln;
 end;
 
 // Display a vector, character by character, then pause.

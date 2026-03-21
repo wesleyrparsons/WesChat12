@@ -98,6 +98,11 @@
         <IsPartOfProject Value="True"/>
         <UnitName Value="WesTokenize"/>
       </Unit>
+      <Unit>
+        <Filename Value="iohandler.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="IOHandler"/>
+      </Unit>
     </Units>
   </ProjectOptions>
   <CompilerOptions>

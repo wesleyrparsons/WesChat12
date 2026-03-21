@@ -13,6 +13,7 @@ uses
   Display,
   FileUtil,
   Global,
+  IOHandler,
   SysUtils;
 
 type
@@ -23,13 +24,14 @@ type
   end;
   TTokenCounts = array of TTokenCount; // Array of token counts.
 
+// Use in Trie.
   PTrieNode = ^TTrieNode;
   TTrieNode = record
     Children: array[0..255] of PTrieNode; // ASCII.
     TokenID: Integer;                     // -1 if not terminal.
   end;
 
-// Token statistics.
+// Use in token statistics.
   TMergedTokenStat = record
     TokenID: Integer;
     Count: Integer;
@@ -44,19 +46,14 @@ var
   ElapsedMS: Int64;                              // For timing.
   Hours, Mins: Int64;                            // For timing.
   Secs, MSecs: Double;                           // For timing.
-  FileName, WorkingName, Stamp,
-    Reconstructed: String;                       // Saving data.
+  FileName, Reconstructed: String;               // Saving data.
   Magic: array[0..3] of Char = ('S', 'Y', 'M', 'T');  // For saving symbol table.
   TrieHead: PTrieNode = nil;                     // Nodes for Trie.
   MergedTypes, UnmergedTypes: Integer;
   MergedInstances, UnmergedInstances: Integer;
   i: Integer;
 
-procedure ReadFileBytes(const FileName: String; var OneCorpus: TBVector);
 procedure WriteTokenList(const Part: TPart = B);
-procedure LoadTokenList(const BinFileName: String);
-procedure LoadSymbolTable(const FileName: string; var SymbolTable: TSymbolTable);
-procedure DisplaySymbolTable(const SymbolTable: TSymbolTable);
 procedure TokenizeFromSymbolTable(const TextFileName: string; var Corpus: TBVector);
 procedure BuildTrie(const SymbolTable: TRBSVector; out Root: PTrieNode);
 function MatchLongest(root: PTrieNode; const text: TBVector; startPos: Integer;
@@ -66,97 +63,6 @@ procedure ReportStatistics;
 procedure RunWesTokenize(var Corpus: TBVector; const SymbolTable: TSymbolTable);
 
 implementation
-
-{ Load the Corpus }
-// Read the corpus as a stream of binary. IOHandler.
-procedure ReadFileBytes(const FileName: String; var OneCorpus: TBVector);
-var
-  F: File;
-  Size, i: Integer;
-  B: Byte;
-begin
-  AssignFile(F, FileName);
-  Reset(F, 1);     // Open in binary mode.
-  Size := FileSize(F);
-  SetLength(OneCorpus, Size);
-
-  // Write the Corpus as it is read.
-  if VeryVerbose and VerboseTokenize then
-    writeln('--- Original Corpus ---');
-  for i := 0 to Size - 1 do begin
-    BlockRead(F, B, 1);
-    OneCorpus[i] := B;
-
-    if VeryVerbose and VerboseTokenize then
-      if ShowEachByteRead then
-        if B < 32 then
-          Write('<', B, '>')
-        else
-          Write(Chr(B));
-  end;
-  CloseFile(F);
-  if VeryVerbose and VerboseTokenize then begin
-    writeln('ReadByteFile: ');
-    for i := 0 to 150 do
-      write(OneCorpus[i], ' ');
-    Pause;
-  end;
-  if VeryVerbose and VerboseTokenize then
-    writeln;
-
-  // Display initial Corpus length.
-  Writeln('Read ', Size, ' bytes from ', FileName);
-end;
-
-// Load the symbol table from file. IOHandler.
-procedure LoadSymbolTable(const FileName: string; var SymbolTable: TSymbolTable);
-var
-  F: file;
-  Magic: array[0..3] of Char;
-  i, Len: Integer;
-  S: string;
-
-begin
-  Assign(F, FileName);
-  Reset(F, 1);
-
-  // Magic header.
-  BlockRead(F, Magic, SizeOf(Magic));
-  if (Magic[0] <> 'S') or (Magic[1] <> 'Y') or
-     (Magic[2] <> 'M') or (Magic[3] <> 'T') then begin
-    Close(F);
-    writeln('Invalid symbol table file.');
-    Pause;
-    Exit;
-  end;
-
-  // Version.
-  BlockRead(F, Version, 16);
-
-  // Symbol count.
-  BlockRead(F, nSymbols, SizeOf(nSymbols));
-  SetLength(SymbolTable, NSymbols);
-
-  // Special token IDs
-  BlockRead(F, BOS, SizeOf(BOS));
-  BlockRead(F, EOS, SizeOf(EOS));
-  BlockRead(F, PAD, SizeOf(PAD));
-  BlockRead(F, UNK, SizeOf(UNK));
-
-  // Read symbols.
-  for i := 0 to nSymbols - 1 do begin
-    BlockRead(F, Len, SizeOf(Len));
-    SetLength(S, Len);
-    if Len > 0 then
-      BlockRead(F, S[1], Len);
-    SymbolTable[i] := S;
-  end;
-
-  Close(F);
-  nSymbols := Length(SymbolTable);
-  nVocab := nSymbols;
-  Writeln('Loaded ', nSymbols, ' symbols from ', FileName);
-end;
 
 // Trie procedures: Insert trie symbol.
 procedure InsertTrieSymbol(root: PTrieNode; const s: string; id: Integer);
@@ -289,27 +195,6 @@ begin
 
   nVocab := nSymbols;
   writeln('End of tokenization. Press <CR> to continue.');
-end;
-
-{ Display routines }
-// Display the symbol table.
-procedure DisplaySymbolTable(const SymbolTable: TSymbolTable);
-var
-  i: Integer;
-begin
-  Writeln('--- Symbol Table ---');
-  for i := 0 to High(SymbolTable) do begin  // Loop thru each symbol in table.
-    case i of
-      7, 8, 9, 10, 11, 12, 13, 127:
-        write(i: 8, ' ': 15)     // Placeholder for dangerous characters.
-      else
-        write(i: 8, '"' + SymbolTable[i] + '"': 15);
-    end;
-    if (i mod 5) = 4 then writeln;
-    if (i > 0) and (i mod 100 = 99) then Pause;
-  end;
-  writeln('Symbol table length = ', Length(SymbolTable));
-  writeln;
 end;
 
 { Computations and reports }
@@ -469,20 +354,6 @@ begin
   Writeln;
 end;
 
-// Report singleton merged tokens.
-procedure ReportSingletonMergedTokens(const Stats: TMergedTokenStats);
-var
-  i, Singletons: Integer;
-begin
-  Singletons := 0;
-
-  for i := 0 to High(Stats) do
-    if Stats[i].Count = 1 then
-      Inc(Singletons);
-
-  Writeln('Merged tokens used only once: ', Singletons);
-end;
-
 // Report merged tokens never used.
 procedure ReportUnusedMergedTokens(const Stats: TMergedTokenStats);
 var
@@ -495,6 +366,20 @@ begin
       Inc(Unused);
 
   Writeln('Merged tokens never used: ', Unused);
+end;
+
+// Report singleton merged tokens.
+procedure ReportSingletonMergedTokens(const Stats: TMergedTokenStats);
+var
+  i, Singletons: Integer;
+begin
+  Singletons := 0;
+
+  for i := 0 to High(Stats) do
+    if Stats[i].Count = 1 then
+      Inc(Singletons);
+
+  Writeln('Merged tokens used only once: ', Singletons);
 end;
 
 // Report coverage of top merges.
@@ -584,7 +469,6 @@ begin
     Pause;
   ReportBPEStatistics;
   ReportTokenUsageStatistics;
-  Pause;
 end;
 
 { Save data from tokenization }
@@ -664,34 +548,6 @@ begin
   writeln('File ', BinFileName, ' successfully saved.');
 end;
 
-{ Load tables }
-// Load tokenized corpus from a .bin file. IOHandler.
-procedure LoadTokenList(const BinFileName: String);
-var
-  F: file of Int32;
-  v: Int32;
-  i, Count: Integer;
-begin
-  AssignFile(F, BinFileName);
-  Reset(F);
-
-  // Determine number of tokens in file.
-  Count := FileSize(F);
-
-  // Allocate TokenizedCorpus.
-  SetLength(TokenizedCorpus, Count);
-
-  // Read them back.
-  for i := 0 to Count - 1 do begin
-    Read(F, v);
-    TokenizedCorpus[i] := v;
-  end;
-
-  CloseFile(F);
-  nTokenizedCorpus := Length(TokenizedCorpus);
-  Writeln('Loaded ', Count, ' tokens from ', BinFileName);
-end;
-
 // Detokenize tokenized corpus to text.
 procedure DetokenizeToDisplay(const TokenizedCorpus: TIVector; const Part: TPart = B);
 var
@@ -723,38 +579,10 @@ begin
     F: write('All bytes: ');
   end;
   writeln;
-  for i := iB to iE do begin
+  for i := iB to iE do
     write(SymbolTable[TokenizedCorpus[i]]);
-
-{    if t < 256 then begin
-      // Raw byte.
-      Write(Char(t));
-    end
-    else if t < 260 then begin
-      // Special tokens.
-      case t of
-        256: Write('<BOS>');
-        257: Write('<EOS>');
-        258: Write('<UNK>');
-        259: Write('<PAD>');
-      end;
-    end
-    else begin
-      // Symbol table entry.
-      // symIndex := t - 260;
-      //Write(SymbolTable[symIndex]);   // Or just
-      write(SymbolTable[t]); // ?? Says ChaptGPT.
-    end; }
-  end;
-
   writeln;
 end;
-
-{function CompareByLength(List: TStringList; Index1, Index2: Integer): Integer;
-begin
-  // Sort longest first
-  Result := Length(List[Index2]) - Length(List[Index1]);
-end;}
 
 // Run the tokenizer.
 procedure RunWesTokenize(var Corpus: TBVector; const SymbolTable: TSymbolTable);
@@ -767,7 +595,7 @@ begin
   writeln('Maximum symbols = ', MaxVocab, '. Maximum merges = ', MaxMerges, '. Maximum pair counts = ', MaxPairCount, '. Tokenizing...');
   writeln('X = Exit program. B = Break out of merge loop. V = toggle Verbose mode. P = Program information. M = Merging information. Merging...');
 
-  DisplaySymbolTable(SymbolTable);
+  DisplayByteSymbolTable(SymbolTable);
   Pause;
 
   // Create the tokenized corpus.
@@ -795,6 +623,9 @@ begin
   Stamp := FormatDateTime('yyyy-mm-dd_hhnnss', Now);
   CreateDir(WorkingName + Stamp);
   ChDir(WorkingName + Stamp);
+
+
+  //save tc?
 
   // Verify by reconstructing.
   if ShowVerification and VerboseTokenize and DisplayCorpus then begin

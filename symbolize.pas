@@ -483,7 +483,7 @@ begin
     // Optional: save partial symbol table.
     if SavePartialSymbolTable then
       if (Length(SymbolTable) mod PartialSymbolTableTrigger) = 0 then
-        SaveSymbolTable(WorkingName + FormatDateTime('yyyy-mm-dd_hhnnss' + '.sym', Now), SymbolTable);
+        SaveSymbolTable(WorkingDir + FormatDateTime('yyyy-mm-dd_hhnnss' + '.sym', Now), SymbolTable);
 
     // Stop if hash table got too full.
     if H.Used > MaxPairCount then begin
@@ -774,22 +774,18 @@ begin
     ReportStatistics;
   end;
 
-  // Create new directory and stamps for saving files.
-  Stamp := FormatDateTime('yyyy-mm-dd_hhnnss', Now);                writeln('workingname ', workingname, ' ', stamp); pause;
-  CreateDir(WorkingName + Stamp);
-  ChDir(WorkingName + Stamp);
-
   // Save various files.
   if SaveFiles then begin
+    ChDir(WorkingDir);
     writeln('--- Saving Files ---');
-    SaveSymbolTable(WorkingName + Stamp + '.sym', SymbolTable);
-    SaveMetaData(WorkingName + Stamp + '.meta');
+    SaveSymbolTable(WorkingName + '.sym', SymbolTable);
+    SaveMergeTable(Merges, WorkingName + '.mer');
+    SaveMetaData(WorkingName + '.meta');
     ChDir('..');
   end;
 
-  writeln('End of symbolization.');
+  writeln('End of symbolization procedure.');
   Pause;
-
 end;
 
 end.

@@ -111,8 +111,8 @@ type                                                                           /
 var
   CorpusFileNames: TSVector;
   SymbolTable: TSymbolTable;
-  Stamp, WorkingName: string;                    // Saving data.
-  CorpusFileInfo: string;
+  WorkingName, WorkingDir: string;               // Saving data.
+  CorpusFileInfo: string;                        // Saving lon string of info on corpus.
   nCorpus: Integer;                              // Length of original corpus, and final output.
   nSymbols: Integer;                             // Number of symbols = Length(SymbolTable);
   nTokenizedCorpus: Integer;                     // Length of tokenized corpus.

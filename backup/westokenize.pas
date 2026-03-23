@@ -567,9 +567,6 @@ end;
 procedure RunWesTokenize(const Corpus: TBVector; var TokenizedCorpus: TIVector);
 begin
   // Timing.
-
-  writeln('in runwesto leng corp ', length(corpus)); readln;
-  writeln('in runwesto leng symtab ', length(global.symboltable)); readln;   //``symtab here is zero
   t0 := Now;       // Start of timing for entire tokenization;
   StopTime := 0;   // Time to subtract from timing.
 
@@ -582,13 +579,12 @@ begin
 
   // Create the tokenized corpus.
   TokenizeFromSymbolTable(FileName, Corpus);
-  //procedure TokenizeFromSymbolTable(const TextFileName: string; var Corpus: TBVector);
 
   // Timing.
   t1 := Now;
 
   if ShowTokenWork and VerboseTokenize then begin
-    Writeln('---  Token Frequencies ---');
+    Writeln('---  Token Frequencies ---');         // Also to log file?
     CountSymbols;
   end;
 
@@ -596,19 +592,13 @@ begin
   nVocab := nSymbols;
 
   // Report statistics.
-  if VerboseTokenize then begin
-    ReportStatistics;
-    Pause;
-  end;
+  if VerboseTokenize then
+    ReportStatistics;                             // Also to log file?
 
-  If SaveFiles then begin
-    // Create new directory and stamps for saving files.
-    Stamp := FormatDateTime('yyyy-mm-dd_hhnnss', Now);
-    CreateDir(WorkingName + Stamp);
-    ChDir(WorkingName + Stamp);
-
-    // Save TokenizedCorpus.
-    SaveTokenList(TokenizedCorpus, WorkingName + Stamp + '.tok');
+  // Save TokenizedCorpus.
+  if SaveFiles then begin
+    ChDir(WorkingDir);
+    SaveTokenList(TokenizedCorpus, WorkingName + '.tok');
     ChDir('..');
   end;
 

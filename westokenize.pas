@@ -579,13 +579,12 @@ begin
 
   // Create the tokenized corpus.
   TokenizeFromSymbolTable(FileName, Corpus);
-  //procedure TokenizeFromSymbolTable(const TextFileName: string; var Corpus: TBVector);
 
   // Timing.
   t1 := Now;
 
   if ShowTokenWork and VerboseTokenize then begin
-    Writeln('---  Token Frequencies ---');
+    Writeln('---  Token Frequencies ---');         // Also to log file?
     CountSymbols;
   end;
 
@@ -593,19 +592,13 @@ begin
   nVocab := nSymbols;
 
   // Report statistics.
-  if VerboseTokenize then begin
-    ReportStatistics;
-    Pause;
-  end;
+  if VerboseTokenize then
+    ReportStatistics;                             // Also to log file?
 
-  If SaveFiles then begin
-    // Create new directory and stamps for saving files.
-    Stamp := FormatDateTime('yyyy-mm-dd_hhnnss', Now);
-    CreateDir(WorkingName + Stamp);
-    ChDir(WorkingName + Stamp);
-
-    // Save TokenizedCorpus.
-    SaveTokenList(TokenizedCorpus, WorkingName + Stamp + '.tok');
+  // Save TokenizedCorpus.
+  if SaveFiles then begin
+    ChDir(WorkingDir);
+    SaveTokenList(TokenizedCorpus, WorkingName + '.tok');
     ChDir('..');
   end;
 
@@ -627,6 +620,10 @@ end;
     writeln;
     Pause;
   end;
+
+  writeln('End of tokenization procedure.');
+  Pause;
+
 end;
 
 end.

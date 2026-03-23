@@ -60,7 +60,7 @@ begin
     if Line = '' then Continue;         // Skip blank lines.
     if FileExists(Line) then begin
       if Count = 0 then
-        WorkingName := 'Mult' + ChangeFileExt(Line, '');
+        WorkingName := 'Mult' + WorkingDir + ChangeFileExt(ListFile, '');
       ReadFileBytes(Line, OneCorpus);
       SetLength(CorpusFileNames, Count + 1);
       CorpusFileNames[Count] := Line;
@@ -108,6 +108,27 @@ begin
   writeln;
 end;
 
+Procedure LogFile;
+var
+  SaveOut: Text;
+begin
+  WorkingDir := FormatDateTime('yyyy-mm-dd_hhnnss', Now);
+  CreateDir(WorkingDir);
+  ChDir(WorkingDir);
+  // Save current Output.
+  SaveOut := Output;
+
+  // Redirect Output to F.
+  Assign(Output, WorkingDir + '.log');
+  Rewrite(Output);
+  ReportInfo;
+
+  // Restore Output to console.
+  Close(Output);
+  Output := SaveOut;
+  ChDir('..');
+ end;
+
 function QueryEmbed: Boolean;
 begin
   Write('Do you wish to prceed to training? (y/n) ');
@@ -127,6 +148,8 @@ begin
   SetConsoleOutputCP(CP_UTF8);
   SetConsoleCP(CP_UTF8);
 
+  if SaveFiles then
+    LogFile;
   MultipleCorpus := False;
   writeln('WesChat, Version 1.2, begun January 19, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wespar.com.');
   writeln;
@@ -177,7 +200,8 @@ begin
            + ' bytes   ' + DateTimeToStr(FileDateToDateTime(FileAge(CorpusFileName)));
 
           FromSymbolTable := False;
-          WorkingName := ChangeFileExt(CorpusFileName, '');
+          if SaveFiles then
+            WorkingName := WorkingDir + ChangeFileExt(CorpusFileName, '');
 
           RunSymbolize(Corpus);
           RunWesTokenize(Corpus, TokenizedCorpus);
@@ -201,15 +225,11 @@ begin
         if not FileExists(SymbolFileName) then
           Writeln('Symbol table file not found: ', SymbolFileName, '. Aborting...')
         else begin
-          LoadSymbolTable(SymbolFileName, global.SymbolTable);
-          if Length(global.SymbolTable) < MinSymbols then
+          LoadSymbolTable(SymbolFileName, SymbolTable);
+          if Length(SymbolTable) < MinSymbols then
             writeln('Too few symbols found. Aborting...')
           else begin
-            writeln('In opt 2. after loading symtable');
-            writeln('leng corp', length(corpus));
-            writeln('leng symtab', length(global.symboltable));
-            DisplayByteSymbolTable(global.SymbolTable);
-
+            DisplayByteSymbolTable(SymbolTable);
             RunWesTokenize(Corpus, TokenizedCorpus);
             if nSymbols < MinSymbols then
               If QueryEmbed then
@@ -223,14 +243,16 @@ begin
       '3': begin
         FromSymbolTable := True;
         if FileExists('bela.sym') then begin
-            SymbolFileName := 'bela.sym';
-            SetLength(CorpusFileNames, 1);     // may not be necessary for multiple input corpuses.
-            CorpusFileNames[0] := SymbolFileName;
-            LoadSymbolTable(SymbolFileName, SymbolTable); //'' check global symtab
-            ReadFileBytes('bela.txt', Corpus);
-            RunWesTokenize(Corpus, TokenizedCorpus)
-          end
-        else writeln('File not found');
+          SymbolFileName := 'bela.sym';
+          SetLength(CorpusFileNames, 1);     // may not be necessary for multiple input corpuses.
+          CorpusFileNames[0] := SymbolFileName;
+          LoadSymbolTable(SymbolFileName, SymbolTable); //'' check global symtab
+          ReadFileBytes('bela.txt', Corpus);
+          WorkingName := WorkingDir + ChangeFileExt(CorpusFileName, '');
+          RunWesTokenize(Corpus, TokenizedCorpus);
+        end
+        else
+          writeln('File not found');
       end;
       '4': begin
         // Ask user for input file.
@@ -257,7 +279,7 @@ begin
             end
             else begin
               ReadFileBytes(CorpusFileName, Corpus);
-              WorkingName := ChangeFileExt(CorpusFileName, '');
+              WorkingName := WorkingDir + ChangeFileExt(CorpusFileName, '');
               SetLength(CorpusFileNames, 1);     // may not be necessary for multiple input corpuses.
               CorpusFileNames[0] := CorpusFileName;
 
@@ -286,7 +308,7 @@ begin
 
           SetLength(CorpusFileNames, 0);
           CorpusFileNames[0] := 'bela.txt';
-          WorkingName := ChangeFileExt(CorpusFileName, '');
+          WorkingName := WorkingDir + ChangeFileExt(CorpusFileName, '');
           CorpusFileName := 'bela.txt';
           writeln('File not found. Using bela.txt.');
         end
@@ -319,7 +341,7 @@ begin
           end;
 
           SetLength(CorpusFileNames, 0);
-          WorkingName := ChangeFileExt(CorpusFileName, '');
+          WorkingName := WorkingDir + ChangeFileExt(CorpusFileName, '');
           CorpusFileNames[0] := CorpusFileName;
           RunGPT2Tokenize(CorpusFileName, TokenizedCorpus);
           writeln('First 200 token of tokenized corpus: ');
@@ -362,7 +384,7 @@ begin
            + ' bytes   ' + DateTimeToStr(FileDateToDateTime(FileAge(CorpusFileName)));
 
           FromSymbolTable := False;
-          WorkingName := ChangeFileExt(CorpusFileName, '');
+          WorkingName := WorkingDir + ChangeFileExt(CorpusFileName, '');
 
           RunSymbolize(Corpus);
           if nSymbols < MinSymbols then

@@ -1640,11 +1640,6 @@ begin
     Pause;
   end;
 
-  // Create new directory and stamps for saving files.
-  Stamp := FormatDateTime('yyyy-mm-dd_hhnnss', Now);
-  CreateDir(WorkingName + Stamp);
-  ChDir(WorkingName + Stamp);
-
   // Verify by reconstructing.
   if ShowVerification and VerboseTokenize and DisplayCorpus then begin
     writeln('--- Reconstructed Corpus ---');
@@ -1655,12 +1650,13 @@ begin
   // Save various files.
   if SaveFiles then begin
     writeln;
+    ChDir(WorkingDir);
     writeln('--- Saving Files ---');
-    SaveTokenList(WorkingName + Stamp + '.bin');
-    SaveSymbolTable(WorkingName + Stamp + '.sym', SymbolTable);
-    SaveMergeTable(Merges, WorkingName + Stamp + '.mer');
-    SaveMetaData(WorkingName + Stamp + '.meta');
-    ReconstructToFile(Head, SymbolTable, WorkingName + Stamp + '.rcn');
+    SaveTokenList(WorkingName + '.tok');
+    SaveSymbolTable(WorkingName + '.sym', SymbolTable);
+    SaveMergeTable(Merges, WorkingName + '.mer');
+    SaveMetaData(WorkingName + '.meta');
+    ReconstructToFile(Head, SymbolTable, WorkingName + '.rcn');
     ChDir('..');
   end;
 

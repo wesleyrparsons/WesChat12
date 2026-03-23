@@ -82,7 +82,7 @@ var
   MergeCount: Integer;                           // Maximum allowed number of merges and actual number.
   Merges: TMergeArray;                           // Array recording the merges.
   FileName, Reconstructed: String;               // Saving data.
-  SymbolTable: TSymbolTable;                     // Table of symbols.
+  //SymbolTable: TSymbolTable;                     // Table of symbols.
   Magic: array[0..3] of Char = ('S', 'Y', 'M', 'T');  // For saving symbol table.
   TrieHead: PTrieNode = nil;                     // Nodes for Trie.
   MergedTypes, UnmergedTypes: Integer;
@@ -1639,11 +1639,6 @@ begin
     ReportStatistics;
     Pause;
   end;
-
-  // Create new directory and stamps for saving files.
-  Stamp := FormatDateTime('yyyy-mm-dd_hhnnss', Now);
-  CreateDir(WorkingName + Stamp);
-  ChDir(WorkingName + Stamp);
 
   // Verify by reconstructing.
   if ShowVerification and VerboseTokenize and DisplayCorpus then begin

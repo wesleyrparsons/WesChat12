@@ -23,7 +23,6 @@ procedure RunEmbed(const TokenizedCorpus: TIVector);
 implementation
 
 const
-  //MaxSeq = 128;            // Need maximum size of sequence to dimension array.
   Scale = Sqrt(ModelDim);    // Optional transformer-style embedding scaling by sqrt(d_model).
 
 var

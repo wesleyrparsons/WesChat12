@@ -767,7 +767,6 @@ begin
   // Display symbol table.
   if VerboseTokenize then
     DisplayByteSymbolTable(SymbolTable);
-  nVocab := nSymbols;
 
   // Report statistics.
   if VerboseTokenize then begin

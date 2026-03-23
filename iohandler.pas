@@ -116,7 +116,6 @@ begin
 
   Close(F);
   nSymbols := Length(SymbolTable);
-  nVocab := nSymbols;
   Writeln('Loaded ', nSymbols, ' symbols from ', FileName);
 end;
 

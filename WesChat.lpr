@@ -65,7 +65,7 @@ begin
       SetLength(CorpusFileNames, Count + 1);
       CorpusFileNames[Count] := Line;
       Writeln('  File processed: ', Line, '; corpus bytes read: ', Length(OneCorpus));
-      if Length(OneCorpus) > MinCorpus then begin
+      if Length(OneCorpus) < MinCorpus then begin
         writeln('Corpus too small. Aborting...');
         Continue;
       end;
@@ -190,7 +190,7 @@ begin
         // Read bytes from file.
         if FileExists(CorpusFileName) then begin
           ReadFileBytes(CorpusFileName, Corpus);
-          if Length(Corpus) > MinCorpus then begin
+          if Length(Corpus) < MinCorpus then begin
             writeln('Corpus too small. Aborting...');
             Continue;
           end;
@@ -205,7 +205,7 @@ begin
 
           RunSymbolize(Corpus);
           RunWesTokenize(Corpus, TokenizedCorpus);
-          if nSymbols > MinSymbols then
+          if nSymbols < MinSymbols then
             If QueryEmbed then
               RunEmbed(TokenizedCorpus)
             else
@@ -226,12 +226,12 @@ begin
           Writeln('Symbol table file not found: ', SymbolFileName, '. Aborting...')
         else begin
           LoadSymbolTable(SymbolFileName, SymbolTable);
-          if Length(SymbolTable) > MinSymbols then
+          if Length(SymbolTable) < MinSymbols then
             writeln('Too few symbols found. Aborting...')
           else begin
             DisplayByteSymbolTable(SymbolTable);
             RunWesTokenize(Corpus, TokenizedCorpus);
-            if nSymbols > MinSymbols then
+            if nSymbols < MinSymbols then
               If QueryEmbed then
                 RunEmbed(TokenizedCorpus)
               else
@@ -246,7 +246,7 @@ begin
           SymbolFileName := 'bela.sym';
           SetLength(CorpusFileNames, 1);     // may not be necessary for multiple input corpuses.
           CorpusFileNames[0] := SymbolFileName;
-          LoadSymbolTable(SymbolFileName, SymbolTable); //'' check global symtab
+          LoadSymbolTable(SymbolFileName, SymbolTable);
           ReadFileBytes('bela.txt', Corpus);
           WorkingName := WorkingDir + ChangeFileExt(CorpusFileName, '');
           RunWesTokenize(Corpus, TokenizedCorpus);

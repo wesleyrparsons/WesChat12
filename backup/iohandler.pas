@@ -15,8 +15,8 @@ uses
   Global;
 
 procedure ReadFileBytes(const FileName: string; var OneCorpus: TBVector);
-procedure LoadSymbolTable(const FileName: string);
-procedure SaveSymbolTable(const SymbolFileName: string);
+procedure LoadSymbolTable(const FileName: string; var SymbolTable: TSymbolTable);
+procedure SaveSymbolTable(const SymbolFileName: string; const SymbolTable: TSymbolTable);
 procedure SaveTokenList(const TokenizedCorpus: TIVector; const TokenFileName: String);
 
 implementation
@@ -68,7 +68,7 @@ begin
 end;
 
 // Load the symbol table from file. IOHandler.
-procedure LoadSymbolTable(const FileName: string);
+procedure LoadSymbolTable(const FileName: string; var SymbolTable: TSymbolTable);
 var
   F: file;
   Magic: array[0..3] of Char;
@@ -121,7 +121,7 @@ begin
 end;
 
 // Save symbol table.
-procedure SaveSymbolTable(const SymbolFileName: string);
+procedure SaveSymbolTable(const SymbolFileName: string; const SymbolTable: TSymbolTable);
 var
   F: file;
   NumSymbols: Integer;

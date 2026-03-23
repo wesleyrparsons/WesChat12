@@ -784,9 +784,8 @@ begin
     ChDir('..');
   end;
 
-  writeln('End of symbolization.');
+  writeln('End of symbolization procedure.');
   Pause;
-
 end;
 
 end.

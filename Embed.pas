@@ -180,7 +180,7 @@ begin
     Start := Start + Stride;
   end;
 
-  nVocab := nSymbols;    // I have two names for this variable.
+  nVocab := nSymbols;    // Need nVocab (second name for variable) for Transform.
   writeln('End of training. Press <CR> to continue.');
   Readln;
 end;

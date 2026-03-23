@@ -190,9 +190,6 @@ begin
     writeln;
     Pause;
   end;
-
-  nVocab := nSymbols;
-  writeln('End of tokenization. Press <CR> to continue.');
 end;
 
 { Computations and reports }
@@ -605,13 +602,9 @@ begin
   // Verify by reconstructing.
   if ShowVerification and VerboseTokenize and DisplayCorpus then begin
     writeln('--- Reconstructed Corpus ---');
-  DetokenizeToDisplay(TokenizedCorpus, B);
-  writeln;
-end;
-
-  writeln('End of tokenization.');
-  Pause;
-  //nTokens := nTokenizedCorpus;    // For embedding, need nTokens.
+    DetokenizeToDisplay(TokenizedCorpus, B);
+    writeln;
+  end;
 
   if VerboseTokenize then Begin
     writeln('First 150 tokens of tokenized corpus:');
@@ -620,6 +613,10 @@ end;
     writeln;
     Pause;
   end;
+
+  writeln('End of tokenization procedure.');
+  Pause;
+
 end;
 
 end.

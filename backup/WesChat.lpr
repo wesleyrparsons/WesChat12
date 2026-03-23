@@ -387,7 +387,7 @@ begin
           WorkingName := WorkingDir + ChangeFileExt(CorpusFileName, '');
 
           RunSymbolize(Corpus);
-          if nSymbols < MinSymbols then
+          if nSymbols > MinSymbols then
             RunEmbed(TokenizedCorpus)
           else
             writeln('Symbols not found in table.');

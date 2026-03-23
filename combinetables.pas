@@ -13,10 +13,7 @@ uses
   IOHandler,
   SysUtils;
 
-type
-  TSymbolTable = array of string;
-
-procedure MergeSymbolTables(var CombinedTable: TSymbolTable);
+procedure MergeSymbolTables(out CombinedTable: TSymbolTable);
 
 implementation
 
@@ -30,7 +27,7 @@ end;
 
 { Merge any number of symbol tables into one:  - removes duplicates
    - sorts for greedy L->R (longest match first) }
-procedure MergeSymbolTables(var CombinedTable: TSymbolTable);
+procedure MergeSymbolTables(out CombinedTable: TSymbolTable);
 var
   i, j, k, Total, Count: Integer;
   s, Temp, Line, ListFile: string;

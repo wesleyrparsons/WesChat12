@@ -61,7 +61,6 @@ var
   Head, Tail: PTokenNode;                        // Start and end node of list of tokens.
   MergeCount: Integer;                           // Maximum allowed number of merges and actual number.
   Merges: TMergeArray;                           // Array recording the merges.
-  SymbolTable: TSymbolTable;                     // Table of symbols.
   Magic: array[0..3] of Char = ('S', 'Y', 'M', 'T');  // For saving symbol table.
   MergedTypes, UnmergedTypes: Integer;
 
@@ -741,7 +740,7 @@ end;
 
 // Run the tokenizer.
 procedure RunSymbolize(const Corpus: TBVector);
-begin    writeln('tsart runsym workingname ', workingname, ' ', stamp); pause;
+begin
   // Timing.
   t0 := Now;       // Start of timing for entire tokenization;
   StopTime := 0;   // Time to subtract from timing.

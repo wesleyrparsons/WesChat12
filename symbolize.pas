@@ -61,7 +61,6 @@ var
   Head, Tail: PTokenNode;                        // Start and end node of list of tokens.
   MergeCount: Integer;                           // Maximum allowed number of merges and actual number.
   Merges: TMergeArray;                           // Array recording the merges.
-  SymbolTable: TSymbolTable;                     // Table of symbols.
   Magic: array[0..3] of Char = ('S', 'Y', 'M', 'T');  // For saving symbol table.
   MergedTypes, UnmergedTypes: Integer;
 
@@ -611,7 +610,7 @@ begin
 end;
 
 // Calculate and report statistics on the symbol table.
-procedure ReportSymbolLengths(const SymbolTable: TSymbolTable);
+procedure ReportSymbolLengths;
 var
   i, MaxLen, MaxIndex, SumLen: Integer;
   SymbolLengths: array[1..10] of Integer;

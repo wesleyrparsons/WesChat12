@@ -3,19 +3,17 @@ unit CombineTables;
 {$mode ObjFPC}{$H+}{$I proprietary.txt}
 
 { WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wespar.com.}
+{ Note: Edited 3/21/2026 5:07 pm }
 
 interface
 
-uses
+{uses
   Display,
   Global,
   IOHandler,
   SysUtils;
 
-type
-  TSymbolTable = array of string;
-
-procedure MergeSymbolTables(var CombinedTable: TSymbolTable);
+procedure MergeSymbolTables(out CombinedTable: TSymbolTable);
 
 implementation
 
@@ -29,7 +27,7 @@ end;
 
 { Merge any number of symbol tables into one:  - removes duplicates
    - sorts for greedy L->R (longest match first) }
-procedure MergeSymbolTables(var CombinedTable: TSymbolTable);
+procedure MergeSymbolTables(out CombinedTable: TSymbolTable);
 var
   i, j, k, Total, Count: Integer;
   s, Temp, Line, ListFile: string;
@@ -108,7 +106,7 @@ begin
         CombinedTable[j] := Temp;
       end;
 end;
-
+ } implementation
 end.
 
 

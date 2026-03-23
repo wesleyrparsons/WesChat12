@@ -82,7 +82,7 @@ var
   MergeCount: Integer;                           // Maximum allowed number of merges and actual number.
   Merges: TMergeArray;                           // Array recording the merges.
   FileName, Reconstructed: String;               // Saving data.
-  SymbolTable: TSymbolTable;                     // Table of symbols.
+  //SymbolTable: TSymbolTable;                     // Table of symbols.
   Magic: array[0..3] of Char = ('S', 'Y', 'M', 'T');  // For saving symbol table.
   TrieHead: PTrieNode = nil;                     // Nodes for Trie.
   MergedTypes, UnmergedTypes: Integer;

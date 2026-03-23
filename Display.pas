@@ -12,6 +12,7 @@ uses
 procedure HardPause;
 procedure Pause;
 function CheckForControlKey: Char;
+function CleanUpSymbol(const x: RawByteString): RawByteString;
 procedure DisplayByteSymbolTable(const SymbolTable: TSymbolTable);
 procedure DisplayVector(const V: TIVector);
 procedure DisplayX(const X: TSeqMatrix; const Part: TPart = B); overload;
@@ -84,6 +85,26 @@ begin
   writeln('Number of Vocabulary (nVocab): ', nVocab);
 end;
 
+// Replace unprintable symbols with space.
+function CleanUpSymbol(const x: RawByteString): RawByteString;
+var
+  j, L: Integer;
+  ch: Char;
+begin
+  L := Length(x);
+  SetLength(Result, L);   // Allocate output string
+
+  for j := 1 to L do
+  begin
+    ch := x[j];
+
+    if Ord(ch) in [1..31, 127..255] then
+      Result[j] := ' '
+    else
+      Result[j] := ch;
+  end;
+end;
+
 // Display the symbol table.
 procedure DisplayByteSymbolTable(const SymbolTable: TSymbolTable);
 var
@@ -91,12 +112,6 @@ var
 begin
   Writeln('--- Symbol Table ---');
   for i := 0 to High(SymbolTable) do begin  // Loop thru each symbol in table.
-{    case i of
-      7, 8, 9, 10, 11, 12, 13, 127:
-        write(i: 8, ' ': 15)     // Placeholder for dangerous characters.
-      else
-        write(i: 8, '"' + SymbolTable[i] + '"': 15);
-    end;}
     if (i in [0..31]) or (i in [127..255]) then
       write(i: 8, IntToHex(i, 2): 15)       // Hex for non-ASCII characters.
     else
@@ -104,6 +119,7 @@ begin
     if (i mod 5) = 4 then writeln;
     if (i > 0) and (i mod 100 = 99) then Pause;
   end;
+  writeln;
   writeln('Symbol table length = ', Length(SymbolTable));
   writeln;
 end;

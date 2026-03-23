@@ -15,8 +15,8 @@ uses
   Global;
 
 procedure ReadFileBytes(const FileName: string; var OneCorpus: TBVector);
-procedure LoadSymbolTable(const FileName: string; var SymbolTable: TSymbolTable);
-procedure SaveSymbolTable(const SymbolFileName: string; const SymbolTable: TSymbolTable);
+procedure LoadSymbolTable(const FileName: string);
+procedure SaveSymbolTable(const SymbolFileName: string);
 procedure SaveTokenList(const TokenizedCorpus: TIVector; const TokenFileName: String);
 
 implementation
@@ -27,8 +27,6 @@ var
   PAD: Integer = 258;
   UNK: Integer = 259;
   Magic: array[0..3] of Char = ('S', 'Y', 'M', 'T');  // For saving symbol table.
-  MinSymbols: Integer = 50;
-  MinTokens: Integer = 50;
 
 procedure ReadFileBytes(const FileName: String; var OneCorpus: TBVector);
 var
@@ -70,7 +68,7 @@ begin
 end;
 
 // Load the symbol table from file. IOHandler.
-procedure LoadSymbolTable(const FileName: string; var SymbolTable: TSymbolTable);
+procedure LoadSymbolTable(const FileName: string);
 var
   F: file;
   Magic: array[0..3] of Char;
@@ -123,7 +121,7 @@ begin
 end;
 
 // Save symbol table.
-procedure SaveSymbolTable(const SymbolFileName: string; const SymbolTable: TSymbolTable);
+procedure SaveSymbolTable(const SymbolFileName: string);
 var
   F: file;
   NumSymbols: Integer;

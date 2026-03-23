@@ -8,8 +8,8 @@
       <Unit>
         <Filename Value="WesChat.lpr"/>
         <IsPartOfProject Value="True"/>
-        <IsVisibleTab Value="True"/>
-        <CursorPos X="23" Y="5"/>
+        <TopLine Value="353"/>
+        <CursorPos X="27" Y="368"/>
         <UsageCount Value="233"/>
         <Loaded Value="True"/>
       </Unit>
@@ -34,9 +34,10 @@
       <Unit>
         <Filename Value="Tokenize.pas"/>
         <IsPartOfProject Value="True"/>
+        <IsVisibleTab Value="True"/>
         <EditorIndex Value="7"/>
-        <TopLine Value="1177"/>
-        <CursorPos Y="1215"/>
+        <TopLine Value="58"/>
+        <CursorPos X="5" Y="85"/>
         <UsageCount Value="210"/>
         <Loaded Value="True"/>
       </Unit>
@@ -45,7 +46,7 @@
         <IsPartOfProject Value="True"/>
         <EditorIndex Value="8"/>
         <TopLine Value="21"/>
-        <CursorPos Y="190"/>
+        <CursorPos X="63" Y="22"/>
         <UsageCount Value="210"/>
         <Loaded Value="True"/>
       </Unit>
@@ -71,7 +72,8 @@
         <Filename Value="Display.pas"/>
         <IsPartOfProject Value="True"/>
         <EditorIndex Value="11"/>
-        <CursorPos X="31" Y="5"/>
+        <TopLine Value="467"/>
+        <CursorPos X="38" Y="480"/>
         <UsageCount Value="218"/>
         <Loaded Value="True"/>
       </Unit>
@@ -106,7 +108,8 @@
         <IsPartOfProject Value="True"/>
         <UnitName Value="CombineTables"/>
         <EditorIndex Value="1"/>
-        <CursorPos X="8" Y="10"/>
+        <TopLine Value="13"/>
+        <CursorPos X="14" Y="59"/>
         <UsageCount Value="206"/>
         <Loaded Value="True"/>
       </Unit>
@@ -115,9 +118,9 @@
         <IsPartOfProject Value="True"/>
         <UnitName Value="Symbolize"/>
         <EditorIndex Value="3"/>
-        <TopLine Value="702"/>
-        <CursorPos Y="718"/>
-        <UsageCount Value="29"/>
+        <TopLine Value="48"/>
+        <CursorPos X="25" Y="54"/>
+        <UsageCount Value="55"/>
         <Loaded Value="True"/>
       </Unit>
       <Unit>
@@ -125,8 +128,9 @@
         <IsPartOfProject Value="True"/>
         <UnitName Value="WesTokenize"/>
         <EditorIndex Value="2"/>
-        <CursorPos Y="7"/>
-        <UsageCount Value="29"/>
+        <TopLine Value="219"/>
+        <CursorPos X="19" Y="220"/>
+        <UsageCount Value="55"/>
         <Loaded Value="True"/>
       </Unit>
       <Unit>
@@ -134,9 +138,8 @@
         <IsPartOfProject Value="True"/>
         <UnitName Value="IOHandler"/>
         <EditorIndex Value="4"/>
-        <TopLine Value="10"/>
-        <CursorPos Y="30"/>
-        <UsageCount Value="29"/>
+        <CursorPos X="18" Y="18"/>
+        <UsageCount Value="55"/>
         <Loaded Value="True"/>
       </Unit>
       <Unit>
@@ -145,20 +148,20 @@
         <EditorIndex Value="-1"/>
         <TopLine Value="991"/>
         <CursorPos Y="1012"/>
-        <UsageCount Value="135"/>
+        <UsageCount Value="132"/>
       </Unit>
       <Unit>
         <Filename Value="unit1.pas"/>
         <UnitName Value="Unit1"/>
         <EditorIndex Value="-1"/>
         <CursorPos X="24" Y="16"/>
-        <UsageCount Value="57"/>
+        <UsageCount Value="54"/>
       </Unit>
       <Unit>
         <Filename Value="Global.pas"/>
         <EditorIndex Value="6"/>
-        <TopLine Value="46"/>
-        <CursorPos X="59" Y="66"/>
+        <TopLine Value="67"/>
+        <CursorPos X="17" Y="113"/>
         <UsageCount Value="118"/>
         <Loaded Value="True"/>
       </Unit>
@@ -171,126 +174,122 @@
         <DefaultSyntaxHighlighter Value="Text"/>
       </Unit>
     </Units>
-    <JumpHistory HistoryIndex="29">
+    <JumpHistory HistoryIndex="28">
       <Position>
-        <Filename Value="WesChat.lpr"/>
-        <Caret Line="257" TopLine="230"/>
-      </Position>
-      <Position>
-        <Filename Value="WesChat.lpr"/>
-        <Caret Line="261" Column="21" TopLine="255"/>
-      </Position>
-      <Position>
-        <Filename Value="WesChat.lpr"/>
-        <Caret Line="279" Column="21" TopLine="255"/>
-      </Position>
-      <Position>
-        <Filename Value="WesChat.lpr"/>
-        <Caret Line="311" Column="19" TopLine="285"/>
-      </Position>
-      <Position>
-        <Filename Value="WesChat.lpr"/>
-        <Caret Line="330" Column="21" TopLine="306"/>
-      </Position>
-      <Position>
-        <Filename Value="WesChat.lpr"/>
-        <Caret Line="357" Column="52" TopLine="331"/>
-      </Position>
-      <Position>
-        <Filename Value="WesChat.lpr"/>
-        <Caret Line="11" Column="8"/>
-      </Position>
-      <Position>
-        <Filename Value="WesChat.lpr"/>
-        <Caret Column="21"/>
-      </Position>
-      <Position>
-        <Filename Value="WesChat.lpr"/>
-        <Caret Line="46" Column="9" TopLine="20"/>
-      </Position>
-      <Position>
-        <Filename Value="WesChat.lpr"/>
-        <Caret Line="149" Column="21" TopLine="124"/>
-      </Position>
-      <Position>
-        <Filename Value="WesChat.lpr"/>
-        <Caret Line="362" Column="16" TopLine="337"/>
-      </Position>
-      <Position>
-        <Filename Value="WesChat.lpr"/>
-        <Caret Line="186" Column="39" TopLine="158"/>
-      </Position>
-      <Position>
-        <Filename Value="combinetables.pas"/>
-        <Caret Line="23" Column="5" TopLine="5"/>
-      </Position>
-      <Position>
-        <Filename Value="iohandler.pas"/>
-        <Caret Line="205" TopLine="177"/>
-      </Position>
-      <Position>
-        <Filename Value="iohandler.pas"/>
-        <Caret Line="19" Column="16" TopLine="5"/>
+        <Filename Value="symbolize.pas"/>
+        <Caret Line="357" Column="24" TopLine="326"/>
       </Position>
       <Position>
         <Filename Value="symbolize.pas"/>
-        <Caret Line="778" Column="19" TopLine="768"/>
+        <Caret Line="384" Column="19" TopLine="378"/>
+      </Position>
+      <Position>
+        <Filename Value="symbolize.pas"/>
+        <Caret Line="405" Column="23" TopLine="378"/>
+      </Position>
+      <Position>
+        <Filename Value="symbolize.pas"/>
+        <Caret Line="484" Column="30" TopLine="455"/>
+      </Position>
+      <Position>
+        <Filename Value="symbolize.pas"/>
+        <Caret Line="485" Column="53" TopLine="455"/>
+      </Position>
+      <Position>
+        <Filename Value="symbolize.pas"/>
+        <Caret Line="486" Column="101" TopLine="455"/>
+      </Position>
+      <Position>
+        <Filename Value="symbolize.pas"/>
+        <Caret Line="526" Column="23" TopLine="500"/>
+      </Position>
+      <Position>
+        <Filename Value="symbolize.pas"/>
+        <Caret Line="598" Column="14" TopLine="564"/>
+      </Position>
+      <Position>
+        <Filename Value="symbolize.pas"/>
+        <Caret Line="613" Column="31" TopLine="587"/>
+      </Position>
+      <Position>
+        <Filename Value="symbolize.pas"/>
+        <Caret Line="623" Column="33" TopLine="587"/>
+      </Position>
+      <Position>
+        <Filename Value="symbolize.pas"/>
+        <Caret Line="634" Column="26" TopLine="587"/>
+      </Position>
+      <Position>
+        <Filename Value="symbolize.pas"/>
+        <Caret Line="644" Column="38" TopLine="593"/>
+      </Position>
+      <Position>
+        <Filename Value="symbolize.pas"/>
+        <Caret Line="679" Column="25" TopLine="630"/>
+      </Position>
+      <Position>
+        <Filename Value="symbolize.pas"/>
+        <Caret Line="682" Column="25" TopLine="634"/>
+      </Position>
+      <Position>
+        <Filename Value="symbolize.pas"/>
+        <Caret Line="758" Column="18" TopLine="710"/>
+      </Position>
+      <Position>
+        <Filename Value="symbolize.pas"/>
+        <Caret Line="784" Column="33" TopLine="731"/>
+      </Position>
+      <Position>
+        <Filename Value="symbolize.pas"/>
+        <Caret Line="786" Column="20" TopLine="739"/>
       </Position>
       <Position>
         <Filename Value="WesChat.lpr"/>
-        <Caret Line="318" Column="32" TopLine="293"/>
+        <Caret Line="17" Column="11"/>
+      </Position>
+      <Position>
+        <Filename Value="westokenize.pas"/>
+        <Caret Line="563" Column="27" TopLine="554"/>
+      </Position>
+      <Position>
+        <Filename Value="westokenize.pas"/>
+        <Caret Line="300" Column="70" TopLine="273"/>
+      </Position>
+      <Position>
+        <Filename Value="westokenize.pas"/>
+        <Caret Line="308" Column="25" TopLine="273"/>
+      </Position>
+      <Position>
+        <Filename Value="westokenize.pas"/>
+        <Caret Line="415" Column="16" TopLine="369"/>
+      </Position>
+      <Position>
+        <Filename Value="westokenize.pas"/>
+        <Caret Line="422" Column="43" TopLine="376"/>
       </Position>
       <Position>
         <Filename Value="WesChat.lpr"/>
-        <Caret Line="9" Column="3"/>
+        <Caret Line="371" Column="53" TopLine="233"/>
       </Position>
       <Position>
         <Filename Value="WesChat.lpr"/>
-        <Caret Line="21" Column="11" TopLine="8"/>
+        <Caret Line="247" Column="23" TopLine="221"/>
       </Position>
       <Position>
-        <Filename Value="WesChat.lpr"/>
-        <Caret Line="28" Column="37"/>
+        <Filename Value="iohandler.pas"/>
+        <Caret Line="15" Column="39" TopLine="2"/>
       </Position>
       <Position>
-        <Filename Value="WesChat.lpr"/>
-        <Caret Line="314" Column="41" TopLine="300"/>
+        <Filename Value="iohandler.pas"/>
+        <Caret Line="18" Column="18" TopLine="2"/>
       </Position>
       <Position>
-        <Filename Value="WesChat.lpr"/>
-        <Caret Line="34" Column="27" TopLine="34"/>
+        <Filename Value="iohandler.pas"/>
+        <Caret Line="71" Column="18" TopLine="25"/>
       </Position>
       <Position>
-        <Filename Value="WesChat.lpr"/>
-        <Caret Line="135" Column="32" TopLine="110"/>
-      </Position>
-      <Position>
-        <Filename Value="WesChat.lpr"/>
-        <Caret Line="147" Column="15" TopLine="119"/>
-      </Position>
-      <Position>
-        <Filename Value="WesChat.lpr"/>
-        <Caret Line="170" Column="41" TopLine="142"/>
-      </Position>
-      <Position>
-        <Filename Value="WesChat.lpr"/>
-        <Caret Line="193" Column="9" TopLine="166"/>
-      </Position>
-      <Position>
-        <Filename Value="WesChat.lpr"/>
-        <Caret Line="202" Column="37" TopLine="177"/>
-      </Position>
-      <Position>
-        <Filename Value="WesChat.lpr"/>
-        <Caret Line="238" Column="37" TopLine="213"/>
-      </Position>
-      <Position>
-        <Filename Value="WesChat.lpr"/>
-        <Caret Line="282" Column="16" TopLine="256"/>
-      </Position>
-      <Position>
-        <Filename Value="WesChat.lpr"/>
-        <Caret Line="303" Column="18" TopLine="277"/>
+        <Filename Value="combinetables.pas"/>
+        <Caret Line="16" Column="14" TopLine="10"/>
       </Position>
     </JumpHistory>
     <RunParams>

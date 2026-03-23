@@ -3,6 +3,7 @@ unit WesTokenize;
 {$mode ObjFPC}{$H+}{$I proprietary.txt}
 
 { WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wespar.com.}
+{ Note: Edited 3/21/2026 5:07 pm }
 
 interface
 
@@ -17,7 +18,6 @@ uses
   SysUtils;
 
 type
-  TSymbolTable = TRBSVector;           // Array of symbols. So index of array is a symbol string.
   TTokenCount = record                 // Records count of tokens.
     Symbol: Integer;                   // Symbol for token.
     Count: Integer;                    // Number of times it occurs.
@@ -41,7 +41,6 @@ type
 var
   StartSymbol: Integer = 260;                    // UTF-8 0.255, BOS, EOS, PAD, UNK is 259.
   TokenizedCorpus: TIVector;
-  SymbolTable: TSymbolTable;
   BOS, EOS, PAD, UNK: Integer;                   // Extra symbols for control.
   ElapsedMS: Int64;                              // For timing.
   Hours, Mins: Int64;                            // For timing.
@@ -54,14 +53,12 @@ var
   i: Integer;
 
 procedure WriteTokenList(const Part: TPart = B);
-procedure TokenizeFromSymbolTable(const TextFileName: string; var Corpus: TBVector);
-procedure BuildTrie(const SymbolTable: TRBSVector; out Root: PTrieNode);
+procedure BuildTrie(out Root: PTrieNode);
 function MatchLongest(root: PTrieNode; const text: TBVector; startPos: Integer;
   out tokenID, matchLen: Integer): Boolean;
 procedure DetokenizeToDisplay(const TokenizedCorpus: TIVector; const Part: TPart = B);
 procedure ReportStatistics;
-procedure RunWesTokenize(var Corpus: TBVector; const SymbolTable: TSymbolTable;
-  var TokenizedCorpus: TIVector);
+procedure RunWesTokenize(const Corpus: TBVector; var TokenizedCorpus: TIVector);
 
 implementation
 
@@ -90,7 +87,7 @@ begin
 end;
 
 // Trie procedure: Build trie.
-procedure BuildTrie(const SymbolTable: TRBSVector; out Root: PTrieNode);
+procedure BuildTrie(out Root: PTrieNode);
 var
   i: Integer;
 begin
@@ -151,19 +148,19 @@ begin
 end;
 
 // Tokenize Corpus from SymbolTable loaded by program.
-procedure TokenizeFromSymbolTable(const TextFileName: string; var Corpus: TBVector);
+procedure TokenizeFromSymbolTable(const TextFileName: string; const Corpus: TBVector);
 var
   i, BestSym, BestLen: Integer;
 begin
-  if FileExists(TextFileName) then
-    ReadFileBytes(TextFileName, Corpus);
+//  if FileExists(TextFileName) then      ```don't read again!!
+  //  ReadFileBytes(TextFileName, Corpus);
 
   nCorpus := Length(Corpus);
   SetLength(TokenizedCorpus, 1);
   TokenizedCorpus[0] := 256;
   i := 0;
 
-  BuildTrie(SymbolTable, TrieHead);
+  BuildTrie(TrieHead);
 
   while i < nCorpus do begin
     if MatchLongest(TrieHead, Corpus, i, BestSym, BestLen) then begin
@@ -238,14 +235,14 @@ begin
 end;
 
 // Count the number of occurrences of each symbol.
-procedure CountSymbols(const SymbolTable: TSymbolTable);
+procedure CountSymbols;
 var
   Counts, Index: TIVector;
   i, j, k, N, TmpIndex: Integer;
 begin
   // Allocate and zero Counts.
   SetLength(Counts, Length(SymbolTable));
-  FillChar(Counts[0], SizeOf(Counts[0]), 0);
+  FillChar(Counts[0], Length(Counts) * SizeOf(Counts[0]), 0);
 
   // Count occurrences.
   for i := 0 to High(TokenizedCorpus) do
@@ -333,8 +330,7 @@ end;
 
 { Report Statistics }
 // Report N most frequent merged tokens.
-procedure ReportTopMergedTokens(const Stats: TMergedTokenStats;
-  const SymbolTable: TSymbolTable; N: Integer);
+procedure ReportTopMergedTokens(const Stats: TMergedTokenStats; N: Integer);
 var
   i, Limit: Integer;
   S: String;
@@ -348,7 +344,7 @@ begin
     Limit := Length(Stats);
 
   for i := 0 to Limit - 1 do begin
-    S := SymbolTable[Stats[i].TokenID];
+    S := CleanUpSymbol(SymbolTable[Stats[i].TokenID]);
     Writeln(i + 1:4, '  ID=', Stats[i].TokenID:6, '  Count=',
       Stats[i].Count:8, '  Symbol="', S, '"');
   end;
@@ -423,10 +419,11 @@ begin
   Writeln('Unmerged token instances: ', UnmergedInstances);
   Writeln('Mean token length: ', nCorpus / nTokenizedCorpus: 6: 4);
   CountTokenUsage(TokenizedCorpus, Length(SymbolTable), Counts);
+  FirstMergedToken := StartSymbol;  // 260
   BuildMergedTokenStats(Counts, FirstMergedToken, Stats);
   SortMergedTokenStatsByCount(Stats);
 
-  ReportTopMergedTokens(Stats, SymbolTable, 30);
+  ReportTopMergedTokens(Stats, 30);
   ReportUnusedMergedTokens(Stats);
   ReportSingletonMergedTokens(Stats);
   ReportTopMergeCoverage(Stats, 30);
@@ -542,7 +539,7 @@ begin
   Case Part of
     B: begin
       iB := 0;
-      iE := Cutoff;  // or smaller length``
+      iE := Cutoff;
     end;
     E: begin
       iB := High(TokenizedCorpus) - Cutoff;
@@ -567,17 +564,19 @@ begin
 end;
 
 // Run the tokenizer.
-procedure RunWesTokenize(var Corpus: TBVector; const SymbolTable: TSymbolTable;
-  var TokenizedCorpus: TIVector);
+procedure RunWesTokenize(const Corpus: TBVector; var TokenizedCorpus: TIVector);
 begin
   // Timing.
+
+  writeln('in runwesto leng corp ', length(corpus)); readln;
+  writeln('in runwesto leng symtab ', length(global.symboltable)); readln;   //``symtab here is zero
   t0 := Now;       // Start of timing for entire tokenization;
   StopTime := 0;   // Time to subtract from timing.
 
   // Display stats.
   writeln('Maximum symbols = ', MaxVocab, '. Maximum merges = ', MaxMerges, '. Maximum pair counts = ', MaxPairCount, '. Tokenizing...');
   writeln('X = Exit program. B = Break out of merge loop. V = toggle Verbose mode. P = Program information. M = Merging information. Merging...');
-
+   // ''symboltable from opt 2 is zero
   DisplayByteSymbolTable(SymbolTable);
   Pause;
 
@@ -590,7 +589,7 @@ begin
 
   if ShowTokenWork and VerboseTokenize then begin
     Writeln('---  Token Frequencies ---');
-    CountSymbols(SymbolTable);
+    CountSymbols;
   end;
 
   nSymbols := Length(SymbolTable);

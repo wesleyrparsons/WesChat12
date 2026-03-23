@@ -1219,8 +1219,6 @@ end;
 
 // Report symbol statistics.
 procedure ReportSymbolStatistics;
-var
-  Counts: TIVector;
 begin
   Writeln('--- Symbol Statistics ---');
   Writeln('Number of symbols: ', nSymbols);

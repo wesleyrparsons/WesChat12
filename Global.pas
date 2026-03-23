@@ -110,6 +110,7 @@ type                                                                           /
 
 var
   CorpusFileNames: TSVector;
+  SymbolTable: TSymbolTable;
   Stamp, WorkingName: string;                    // Saving data.
   CorpusFileInfo: string;
   nCorpus: Integer;                              // Length of original corpus, and final output.

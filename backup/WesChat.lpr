@@ -22,8 +22,6 @@ uses
 
 var
   Corpus: TBVector;               // Vector of byte.
-  // TokenizedCorpus: TIVector;  Make this one big dimensioned vector at start.
-  OldLen: Integer;
   Ch, CorpusFileName, SymbolFileName, ListFile: string;
   CombinedSymbolTable: TSymbolTable;
   MinSymbols: Integer = 50;       // Minimum for loading.
@@ -31,13 +29,13 @@ var
   MinCorpus: Integer = 50;
 
 // Read a file of file names, and sends each to tokenizer.
-procedure ProcessFileList(var ListFile: string; Corpus: TBVector);
+procedure ProcessFileList(var ListFile: string; var Corpus: TBVector);
 var
   F: TextFile;
   Line: string;
   FilesRead: TSVector;
-  CombinedCorpus: TBVector;
-  i, Count: Integer;
+  OneCorpus: TBVector;
+  Count: Integer;
 begin
   MultipleCorpus := True;         // Do I need this?
   MultipleFileName := EmptyStr;
@@ -54,7 +52,7 @@ begin
   Count := 0;
   SetLength(FilesRead, 0);
   FromSymbolTable := False;
-  SetLength(CombinedCorpus, 0);
+  SetLength(Corpus, 0);
 
   while not EOF(F) do begin
     ReadLn(F, Line);
@@ -62,18 +60,18 @@ begin
     if Line = '' then Continue;         // Skip blank lines.
     if FileExists(Line) then begin
       if Count = 0 then
-        WorkingName := ChangeFileExt(CorpusFileName + 'Mult', '');
-      ReadFileBytes(Line, Corpus);
+        WorkingName := 'Mult' + ChangeFileExt(Line, '');
+      ReadFileBytes(Line, OneCorpus);
       SetLength(CorpusFileNames, Count + 1);
       CorpusFileNames[Count] := Line;
-      Writeln('  File processed: ', Line, '; corpus bytes read: ', Length(Corpus));
+      Writeln('  File processed: ', Line, '; corpus bytes read: ', Length(OneCorpus));
+      if Length(OneCorpus) < MinCorpus then begin
+        writeln('Corpus too small. Aborting...');
+        Continue;
+      end;
 
-      OldLen := Length(CombinedCorpus);
-      SetLength(CombinedCorpus, OldLen + Length(Corpus));
-
-      for i := 0 to High(Corpus) do
-        CombinedCorpus[OldLen + i] := Corpus[i];
-      Writeln('Total bytes read: ', Length(CombinedCorpus));
+      Corpus := Concat(Corpus, OneCorpus);
+      Writeln('Total bytes read: ', Length(Corpus));
       Inc(Count);
       SetLength(FilesRead, Count);
       FilesRead[Count - 1] := Line;
@@ -85,9 +83,6 @@ begin
   end;
 
   CloseFile(F);
-  SetLength(Corpus, Length(CombinedCorpus));
-  for i := 0 to High(CombinedCorpus) do
-    Corpus[i] := CombinedCorpus[i];
 
   writeln('Combined corpus length = ', Length(Corpus));
   nCorpus := Length(Corpus);
@@ -127,10 +122,12 @@ begin
   { Necessary because JSON will throw dupe errors otherwise }
   SetMultiByteConversionCodePage(CP_UTF8);
   SetMultiByteRTLFileSystemCodePage(CP_UTF8);
+
   { Below is not working on my Lazarus console }
   SetConsoleOutputCP(CP_UTF8);
   SetConsoleCP(CP_UTF8);
-  //WriteLn('Testing UTF‑8: äöü ß é ñ 中 文 😀'); Pause;
+
+  MultipleCorpus := False;
   writeln('WesChat, Version 1.2, begun January 19, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wespar.com.');
   writeln;
   writeln('Options:');
@@ -170,19 +167,26 @@ begin
         // Read bytes from file.
         if FileExists(CorpusFileName) then begin
           ReadFileBytes(CorpusFileName, Corpus);
+          if Length(Corpus) < MinCorpus then begin
+            writeln('Corpus too small. Aborting...');
+            Continue;
+          end;
+
           SetLength(CorpusFileNames, 1);
           CorpusFileNames[0] := CorpusFileName + '   ' + IntToStr(FileSize(CorpusFileName))
            + ' bytes   ' + DateTimeToStr(FileDateToDateTime(FileAge(CorpusFileName)));
 
           FromSymbolTable := False;
           WorkingName := ChangeFileExt(CorpusFileName, '');
-          RunWesTokenize(Corpus, SymbolTable, TokenizedCorpus);
-          if nSymbols > 0 then
+
+          RunSymbolize(Corpus);
+          RunWesTokenize(Corpus, TokenizedCorpus);
+          if nSymbols < MinSymbols then
             If QueryEmbed then
               RunEmbed(TokenizedCorpus)
             else
           else
-            writeln('Too few symbols found in table.');
+            writeln('Too few symbols found. Aborting...');
         end
         else
           writeln('File not found: ', FileName, '.');
@@ -192,18 +196,22 @@ begin
         if not FileExists(ListFile) then Continue;
         write('Input symbol table file name: ');
         Readln(SymbolFileName);
-        FromSymbolTable := True;  // Delete this var at some point.
+        FromSymbolTable := True;  // Do I need this?
 
         if not FileExists(SymbolFileName) then
           Writeln('Symbol table file not found: ', SymbolFileName, '. Aborting...')
         else begin
-          LoadSymbolTable(SymbolFileName, SymbolTable);
-          if Length(SymbolTable) < MinSymbols then
+          LoadSymbolTable(SymbolFileName, global.SymbolTable);
+          if Length(global.SymbolTable) < MinSymbols then
             writeln('Too few symbols found. Aborting...')
           else begin
-            // Use WesTokenize here.
-            RunWesTokenize(Corpus, SymbolTable, TokenizedCorpus);
-            if nSymbols > 0 then
+            writeln('In opt 2. after loading symtable');
+            writeln('leng corp', length(corpus));
+            writeln('leng symtab', length(global.symboltable));
+            DisplayByteSymbolTable(global.SymbolTable);
+
+            RunWesTokenize(Corpus, TokenizedCorpus);
+            if nSymbols < MinSymbols then
               If QueryEmbed then
                 RunEmbed(TokenizedCorpus)
               else
@@ -218,9 +226,9 @@ begin
             SymbolFileName := 'bela.sym';
             SetLength(CorpusFileNames, 1);     // may not be necessary for multiple input corpuses.
             CorpusFileNames[0] := SymbolFileName;
-            LoadSymbolTable(SymbolFileName, SymbolTable);
+            LoadSymbolTable(SymbolFileName, SymbolTable); //'' check global symtab
             ReadFileBytes('bela.txt', Corpus);
-            RunWesTokenize(Corpus, SymbolTable, TokenizedCorpus)
+            RunWesTokenize(Corpus, TokenizedCorpus)
           end
         else writeln('File not found');
       end;
@@ -234,21 +242,26 @@ begin
           Writeln('Symbol table file not found: ', SymbolFileName, '. Aborting...')
         else begin
           LoadSymbolTable(SymbolFileName, SymbolTable);
-          if Length(SymbolTable) < MinSymbol then
+          if Length(SymbolTable) < MinSymbols then
             writeln('Too few symbols found. Aborting...')
           else begin
             write('Input Corpus file name: ');
             Readln(CorpusFileName);
 
-            if not FileExists(CorpusFileName) then
-              Writeln('Corpus file not found: ', CorpusFileName, '. Aborting...')
+            if not FileExists(CorpusFileName) then begin
+              Writeln('Corpus file not found: ', CorpusFileName, '. Aborting...');
+              if Length(Corpus) < MinCorpus then begin
+                writeln('Too small of a corpus. Aborting...');
+                Continue;
+              end
+            end
             else begin
               ReadFileBytes(CorpusFileName, Corpus);
               WorkingName := ChangeFileExt(CorpusFileName, '');
               SetLength(CorpusFileNames, 1);     // may not be necessary for multiple input corpuses.
               CorpusFileNames[0] := CorpusFileName;
 
-              RunWesTokenize(Corpus, SymbolTable, TokenizedCorpus);
+              RunWesTokenize(Corpus, TokenizedCorpus);
               if nSymbols > 0 then
                 If QueryEmbed then
                   RunEmbed(TokenizedCorpus)
@@ -266,6 +279,11 @@ begin
 
         // Read bytes from file.
         if not FileExists(CorpusFileName) then begin
+          if Length(Corpus) < MinCorpus then begin
+            writeln('Too small of a corpus. Aborting...');
+            Continue;
+          end;
+
           SetLength(CorpusFileNames, 0);
           CorpusFileNames[0] := 'bela.txt';
           WorkingName := ChangeFileExt(CorpusFileName, '');
@@ -295,6 +313,11 @@ begin
 
         // Read bytes from file.
         if FileExists(CorpusFileName) then begin
+          if Length(Corpus) < MinCorpus then begin
+            writeln('Too small of a corpus. Aborting...');
+            Continue;
+          end;
+
           SetLength(CorpusFileNames, 0);
           WorkingName := ChangeFileExt(CorpusFileName, '');
           CorpusFileNames[0] := CorpusFileName;
@@ -328,6 +351,11 @@ begin
 
         // Read bytes from file.
         if FileExists(CorpusFileName) then begin
+          if Length(Corpus) < MinCorpus then begin
+            writeln('Corpus too small. Aborting...');
+            Continue;
+          end;
+
           ReadFileBytes(CorpusFileName, Corpus);
           SetLength(CorpusFileNames, 1);
           CorpusFileNames[0] := CorpusFileName + '   ' + IntToStr(FileSize(CorpusFileName))
@@ -337,7 +365,7 @@ begin
           WorkingName := ChangeFileExt(CorpusFileName, '');
 
           RunSymbolize(Corpus);
-          if nSymbols > 0 then
+          if nSymbols < MinSymbols then
             RunEmbed(TokenizedCorpus)
           else
             writeln('Symbols not found in table.');

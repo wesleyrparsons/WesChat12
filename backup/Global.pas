@@ -110,7 +110,7 @@ type                                                                           /
 
 var
   CorpusFileNames: TSVector;
-  WorkingName: string;                           // Saving data.
+  Stamp, WorkingName: string;                    // Saving data.
   CorpusFileInfo: string;
   nCorpus: Integer;                              // Length of original corpus, and final output.
   nSymbols: Integer;                             // Number of symbols = Length(SymbolTable);

@@ -609,7 +609,85 @@ begin
   MSecs := (MElapsedMS mod 60000) / 1000.0;
 end;
 
-// Calculate and report statistics on the symbol table.
+// Calculate and symbols statistics.
+procedure SymbolStats;
+var
+  n, i, j, L, MinLen, MaxLen, SumLen: Integer;
+  Lengths, Histogram: TIVector;
+  MaxPossibleLen: Integer;
+  Median: Single;
+begin
+  n := Length(SymbolTable);
+  if n = 0 then begin
+    WriteLn('Symbol table is empty.');
+    Exit;
+  end;
+
+  writeln('--- Symbols Statistics ---');
+  writeln('Number of raw byte symbols: ', 256);
+  writeln('Number of special symbols: ', 4);
+  writeln('Number of merged symbols: ', nSymbols - 260);
+
+  { --- First pass: compute lengths, min, max, sum --- }
+  SetLength(Lengths, n);
+
+  MinLen := MaxInt;
+  MaxLen := 0;
+  SumLen := 0;
+
+  for i := 0 to n - 1 do begin
+    L := Length(SymbolTable[i]);  // Byte length.
+    Lengths[i] := L;
+
+    if L < MinLen then MinLen := L;
+    if L > MaxLen then MaxLen := L;
+
+    SumLen := SumLen + L;
+  end;
+
+  // Min / Max.
+  WriteLn('Minimum symbol length: ', MinLen);
+  WriteLn('Maximum symbol length: ', MaxLen);
+
+  // Histogram.
+  MaxPossibleLen := MaxLen;
+  SetLength(Histogram, MaxPossibleLen + 1);
+  for i := 0 to MaxPossibleLen do
+    Histogram[i] := 0;
+
+  for i := 0 to n - 1 do
+    Inc(Histogram[Lengths[i]]);
+
+  WriteLn;
+  WriteLn('Histogram of symbol lengths:');
+  for i := 0 to MaxPossibleLen do
+    if Histogram[i] > 0 then
+      WriteLn('Length ', i: 2, ': ', Histogram[i]);
+
+  // --- Median ---
+  // Sort the Lengths array
+  for i := 1 to n - 1 do begin
+    L := Lengths[i];
+    j := i - 1;
+    while (j >= 0) and (Lengths[j] > L) do begin
+      Lengths[j + 1] := Lengths[j];
+      Dec(j);
+    end;
+    Lengths[j + 1] := L;
+  end;
+
+  if (n mod 2) = 1 then
+    Median := Lengths[n div 2]
+  else
+    Median := 0.5 * (Lengths[n div 2 - 1] + Lengths[n div 2]);
+
+  WriteLn;
+  WriteLn('Mean symbol length: ', SumLen / n: 0: 4);
+  WriteLn('Median symbol length: ', Median: 0: 4);
+  writeln('Mean tokens per symbol (compression): ', nCorpus / nSymbols);
+end;
+
+// Calculate and report longest symbols.
 procedure ReportSymbolLengths;
 var
   i, MaxLen, MaxIndex, SumLen: Integer;
@@ -637,21 +715,10 @@ begin
     writeln('  Index: ', maxIndex);
     writeln('  Length: ', maxLen);
     writeln('  Value: "', SymbolTable[maxIndex], '"');
-    writeln('Mean symbol length: ', SumLen / Length(SymbolTable): 6: 4);
   end;
 end;
 
 { Report Statistics }
-// Report symbol statistics.
-procedure ReportSymbolStatistics;
-var
-  Counts: TIVector;
-begin
-  Writeln('--- Symbol Statistics ---');
-  Writeln('Number of symbols: ', nSymbols);
-  writeln;
-end;
-
 // Report basic statistics (time, file names).
 procedure ReportBasicStatistics;
 var
@@ -667,12 +734,7 @@ begin
   Writeln('--- Time Statistics ---');
   writeln('Start time: ', DateTimetoStr(t0), '     End time: ', DateTimeToStr(t1));
   Writeln('Total elapsed time: ', Hours, ' hours, ', Mins, ' min ', Secs: 4: 4, ' sec');
-end;
-
-// Report BPE statistics.
-procedure ReportBPEStatistics;
-begin
-  Writeln('--- BPE Statistics ---');
+  Writeln('Number of symbols: ', nSymbols);
   if not FromSymbolTable then begin
     Writeln('Elapsed time applying merges: ', MHours, ' hours, ', Mmins, ' min ', Msecs: 4: 4, ' sec');
   end;
@@ -680,17 +742,17 @@ begin
   if not FromSymbolTable then
     Writeln('Tokens per second: ', nCorpus / (ElapsedMS / 1000): 6: 4);
   writeln;
-  end;
+end;
 
 // Report all statistics.
 procedure ReportStatistics;
 begin
   CalculateTimeStatistics;
   ReportBasicStatistics;
+  SymbolStats;
+  ReportSymbolLengths;
   if VerboseTokenize and (TextRec(Output).Handle = StdOutputHandle) then
     Pause;
-  ReportBPEStatistics;
-  ReportSymbolStatistics;
 end;
 
 { Save data from tokenization }
@@ -769,9 +831,8 @@ begin
     DisplayByteSymbolTable(SymbolTable);
 
   // Report statistics.
-  if VerboseTokenize then begin
+  if VerboseTokenize then
     ReportStatistics;
-  end;
 
   // Save various files.
   if SaveFiles then begin

@@ -63,16 +63,8 @@ If the symbol table is fixed, build the trie once after loading. ??
 
 Tokenize.
 
-Frequency‑based insights
-These help you understand which merges matter and which are dead weight.
-
-Top N most frequent merged tokens — the merges doing the real work.
-
-Merged tokens that never appear — candidates for pruning.
-
-Merged tokens that appear only once — likely overfitting or noise.
-
-Coverage of top merges — e.g., top 100 merges account for X% of merged instances.
+Divide into Symbolize and Tokenize.
+Use escape/hex codes for displaying control charas.
 
 Embed.
 

@@ -57,7 +57,7 @@ procedure BuildTrie(out Root: PTrieNode);
 function MatchLongest(root: PTrieNode; const text: TBVector; startPos: Integer;
   out tokenID, matchLen: Integer): Boolean;
 procedure DetokenizeToDisplay(const TokenizedCorpus: TIVector; const Part: TPart = B);
-procedure ReportStatistics;
+//procedure ReportStatistics;
 procedure RunWesTokenize(const Corpus: TBVector; var TokenizedCorpus: TIVector);
 
 implementation
@@ -467,29 +467,7 @@ begin
 end;
 
 { Save data from tokenization }
-// Save metadata.
-procedure SaveMetaData(const MetaFileName: String);
-var
-  SaveOut: Text;
-begin
-  // Save current Output.
-  SaveOut := Output;
-
-  // Redirect Output to F.
-  Assign(Output, MetaFileName);
-  Rewrite(Output);
-
-  ReportStatistics;
-
-  // Restore Output to console.
-  Close(Output);
-  Output := SaveOut;
-
-  writeln('File ', MetaFileName, ' successfully saved.');
-  writeln;
-end;
-
-// Display the toeknized corpus.
+// Display the tokenized corpus.
 procedure WriteTokenList(const Part: TPart = B);
 var
   i, iB, iE: Integer;
@@ -562,6 +540,8 @@ end;
 
 // Run the tokenizer.
 procedure RunWesTokenize(const Corpus: TBVector; var TokenizedCorpus: TIVector);
+var
+  SaveOut: Text;
 begin
   // Timing.
   t0 := Now;       // Start of timing for entire tokenization;
@@ -591,10 +571,25 @@ begin
   if VerboseTokenize then
     ReportStatistics;                             // Also to log file?
 
-  // Save TokenizedCorpus.
+  // Save TokenizedCorpus and other data.
   if SaveFiles then begin
     ChDir(WorkingDir);
     SaveTokenList(TokenizedCorpus, WorkingName + '.tok');
+
+
+    // Save current Output.
+    SaveOut := Output;
+
+    // Redirect Output to F.
+    Assign(Output, WorkingName + '.log');
+    Append(Output);
+
+    ReportStatistics;
+
+    // Restore Output to console.
+    Close(Output);
+    Output := SaveOut;
+
     ChDir('..');
   end;
 

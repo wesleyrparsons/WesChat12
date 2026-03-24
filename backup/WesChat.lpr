@@ -194,10 +194,6 @@ begin
 
         // Read bytes from file.
         if FileExists(CorpusFileName) then begin
-
-
-          writeln(getcurrentdir);
-          writeln(Corpusfilename, ' lencorp = ', filesize(CorpusFilename)); pause;
           if FileSize(CorpusFileName) < MinCorpus then begin
             writeln('Corpus too small. Aborting...');
             Continue;

@@ -3,7 +3,7 @@ program WesChat;
 {$mode ObjFPC}{$H+}{$I proprietary.txt}
 
 { WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wespar.com.}
-{ Note: Edited 3/21/2026 6:07 pm }
+{ Note: Edited 3/24/2026 7:59 pm }
 uses
   CombineTables,
   Crt,

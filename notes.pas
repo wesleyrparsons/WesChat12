@@ -64,6 +64,7 @@ If the symbol table is fixed, build the trie once after loading. ??
 Symbolize.
 
 Should I use clean-up symbols in DisplayByteSymbolTable?
+Lengthen tabs in printouts like most frequent symbols.array[ or symboltable...1] of Type = ();
 
 Embed.
 

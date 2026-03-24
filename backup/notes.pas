@@ -61,10 +61,9 @@ If the symbol table is fixed, build the trie once after loading. ??
 
 9. Separate into Symbolize and Tokenize.
 
-Tokenize.
+Symbolize.
 
-Divide into Symbolize and Tokenize.
-Use escape/hex codes for displaying control charas.
+Should I use clean-up symbols in DisplayByteSymbolTable?
 
 Embed.
 

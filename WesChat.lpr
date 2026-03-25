@@ -60,7 +60,6 @@ var
   OneCorpus: TBVector;
   Count: Integer;
 begin
-  MultipleCorpus := True;         // Do I need this?
   MultipleFileName := EmptyStr;
   write('Enter name of file list: ');
   readln(ListFile);
@@ -151,19 +150,18 @@ begin
   SetConsoleOutputCP(CP_UTF8);
   SetConsoleCP(CP_UTF8);
 
-  MultipleCorpus := False;
   writeln('WesChat, Version 1.2, begun January 19, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wespar.com.');
   writeln;
   writeln('Options:');
-  writeln('  1: Tokenize a single input corpus from a file using WesChat''s byte-level byte-pair encoding, with');
+  writeln('  1: Tokenize an input corpus from a file using WesChat''s byte-level byte-pair encoding, with');
   writeln('     deterministic left-to-right longest-prefix matching and greedy longest-match decoding.');
-  writeln('  2: Tokenize using WesChat an input set of corpuses listed one per line in a file,');
+  writeln('  2: Tokenize an input set of corpuses listed one per line in a file,using WesChat,');
   writeln('     creating a concatenated token list.');
   writeln('  3: Tokenize Bela corpus using WesChat''s Bela symbol table.');
-  writeln('  4: Tokenize a single input corpus, based on an input symbol table, using WesChat''s tokenizer.');
-  writeln('  5: Tokenize Bela corpus using ChatGPT''s symbol and merge tables and WesChat''s');
+  writeln('  4: Tokenize an input corpus, based on an input symbol table, using WesChat''s tokenizer.');
+  writeln('  5: Tokenize an corpus using ChatGPT''s symbol and merge tables and WesChat''s');
   writeln('     tokenization routine.');
-  writeln('  6: Tokenize  single input corpus using ChatGPT''s symbol and merge tables and WesChat''s');
+  writeln('  6: Tokenize an input corpus using ChatGPT''s symbol and merge tables and WesChat''s');
   writeln('     tokenization routine.');
   writeln('  7: Input a token list to be used in training.');
   writeln('  8: Combine two symbol tables for use with WesChat''s tokenization.');
@@ -260,10 +258,12 @@ begin
         // Ask user for input file.
         write('Input symbol table file name: ');
         Readln(SymbolFileName);
-        FromSymbolTable := True;  // Delete this var at some point.
+        FromSymbolTable := True;  // Do I need this var. Length(ST) = 0.
 
-        if not FileExists(SymbolFileName) then
-          Writeln('Symbol table file not found: ', SymbolFileName, '. Aborting...')
+        if not FileExists(SymbolFileName) then begin
+          Writeln('Symbol table file not found: ', SymbolFileName, '. Aborting...');
+          Continue;
+        end
         else begin
           LoadSymbolTable(SymbolFileName, SymbolTable);
           if Length(SymbolTable) < MinSymbols then
@@ -304,21 +304,8 @@ begin
 
         // Read bytes from file.
         if not FileExists(CorpusFileName) then begin
-          if Length(Corpus) < MinCorpus then begin
-            writeln('Too small of a corpus. Aborting...');
-            Continue;
-          end;
-
-          SetLength(CorpusFileNames, 0);
-          CorpusFileNames[0] := 'bela.txt';
-          if SaveFiles then
-            LogFile(CorpusFileName);
-          CorpusFileName := 'bela.txt';
-          writeln('File not found. Using bela.txt.');
-        end
-        else begin
-          SetLength(CorpusFileNames, 0);
-          CorpusFileNames[0] := CorpusFileName;
+          writeln('File not found.');
+          Continue;
         end;
 
         RunGPT2Tokenize(CorpusFileName, TokenizedCorpus);

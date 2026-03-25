@@ -1,10 +1,8 @@
 unit GPT2Tokenize;
-// Aim here is to replace pretokenize/gptchunk and use encode byte to unicode
-// to systematically remap 1-32, 127-255 to plus 255.
-// Then read raw bytes, remap, and use NextWord before tokenization.
-// March 9, 2026, 3:00 pm. Seems to be mostly working.
 
-{$mode objfpc}{$H+}
+{$mode objfpc}{$H+}{$I proprietary.txt}
+
+{ WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wespar.com.}
 
 interface
 

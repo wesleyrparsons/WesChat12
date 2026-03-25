@@ -635,8 +635,8 @@ begin
   for i := 0 to 99 do
     Write(DisplayToken(UTF8Decode(Vocab[TokenizedCorpus[i]])));
   writeln;
-  writeln('Decoded Last 300 TokenizedCorpus:');
-  for i := High(TokenizedCorpus) - 300 to High(TokenizedCorpus) do
+  writeln('Decoded Last 100 TokenizedCorpus:');
+  for i := High(TokenizedCorpus) - 100 to High(TokenizedCorpus) do
     Write(DisplayToken(UTF8Decode(Vocab[TokenizedCorpus[i]])));
   writeln;
   Pause;

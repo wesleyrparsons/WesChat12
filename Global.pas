@@ -122,7 +122,6 @@ var
   Mt0, Mt1, t0, t1, StopTime: TDateTime;         // For timing.
   Version: ShortString = '1.2';                  // Version 1.2.
   FromSymbolTable: Boolean = False;              // Operating from input Symbol Table rather than from tokenization.
-  MultipleCorpus: Boolean = False;               // Using mutiple corpuses in tokenization.
   MultipleFileName: String;                      // Using multiple corpuses and outputting single file name.
   XSize: Integer = SeqLen * ModelDim;            // Size of X matrices.
   HiddenSize: Integer = SeqLen * ModelDimProj;   // Size of Hidden matrices.

@@ -60,7 +60,6 @@ var
   OneCorpus: TBVector;
   Count: Integer;
 begin
-  MultipleCorpus := True;         // Do I need this?
   MultipleFileName := EmptyStr;
   write('Enter name of file list: ');
   readln(ListFile);
@@ -82,25 +81,20 @@ begin
     Line := Trim(Line);
     if Line = '' then Continue;         // Skip blank lines.
     if FileExists(Line) then begin
-      if Count = 0 then
-        if SaveFiles then begin
+      if (Count = 0) and SaveFiles then
           LogFile('Mult' + ListFile);
-{          RenameFile(WorkingDir, 'Mult' + WorkingDir);
-          WorkingDir := 'Mult' + WorkingDir;
-          WorkingName := WorkingDir;}
-        end;
 
       ReadFileBytes(Line, OneCorpus);
       SetLength(CorpusFileNames, Count + 1);
       CorpusFileNames[Count] := Line;
       Writeln('  File processed: ', Line, '; corpus bytes read: ', Length(OneCorpus));
-      if FileSize(OneCorpus) < MinCorpus then begin
+      if Length(OneCorpus) < MinCorpus then begin
         writeln('Corpus too small. Aborting...');
         Continue;
       end;
 
       Corpus := Concat(Corpus, OneCorpus);
-      Writeln('Total bytes read: ', FileSize(Corpus));
+      Writeln('Total bytes read: ', Length(Corpus));
       Inc(Count);
       SetLength(FilesRead, Count);
       FilesRead[Count - 1] := Line;
@@ -113,7 +107,7 @@ begin
 
   CloseFile(F);
 
-  writeln('Combined corpus length = ', FileSize(Corpus));
+  writeln('Combined corpus length = ', Length(Corpus));
   nCorpus := Length(Corpus);
   Pause;
 end;
@@ -156,19 +150,18 @@ begin
   SetConsoleOutputCP(CP_UTF8);
   SetConsoleCP(CP_UTF8);
 
-  MultipleCorpus := False;
   writeln('WesChat, Version 1.2, begun January 19, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wespar.com.');
   writeln;
   writeln('Options:');
-  writeln('  1: Tokenize a single input corpus from a file using WesChat''s byte-level byte-pair encoding, with');
+  writeln('  1: Tokenize an input corpus from a file using WesChat''s byte-level byte-pair encoding, with');
   writeln('     deterministic left-to-right longest-prefix matching and greedy longest-match decoding.');
-  writeln('  2: Tokenize using WesChat an input set of corpuses listed one per line in a file,');
+  writeln('  2: Tokenize an input set of corpuses listed one per line in a file,using WesChat,');
   writeln('     creating a concatenated token list.');
   writeln('  3: Tokenize Bela corpus using WesChat''s Bela symbol table.');
-  writeln('  4: Tokenize a single input corpus, based on an input symbol table, using WesChat''s tokenizer.');
-  writeln('  5: Tokenize Bela corpus using ChatGPT''s symbol and merge tables and WesChat''s');
+  writeln('  4: Tokenize an input corpus, based on an input symbol table, using WesChat''s tokenizer.');
+  writeln('  5: Tokenize an corpus using ChatGPT''s symbol and merge tables and WesChat''s');
   writeln('     tokenization routine.');
-  writeln('  6: Tokenize  single input corpus using ChatGPT''s symbol and merge tables and WesChat''s');
+  writeln('  6: Tokenize an input corpus using ChatGPT''s symbol and merge tables and WesChat''s');
   writeln('     tokenization routine.');
   writeln('  7: Input a token list to be used in training.');
   writeln('  8: Combine two symbol tables for use with WesChat''s tokenization.');
@@ -265,10 +258,12 @@ begin
         // Ask user for input file.
         write('Input symbol table file name: ');
         Readln(SymbolFileName);
-        FromSymbolTable := True;  // Delete this var at some point.
+        FromSymbolTable := True;  // Do I need this var. Length(ST) = 0.
 
-        if not FileExists(SymbolFileName) then
-          Writeln('Symbol table file not found: ', SymbolFileName, '. Aborting...')
+        if not FileExists(SymbolFileName) then begin
+          Writeln('Symbol table file not found: ', SymbolFileName, '. Aborting...');
+          Continue;
+        end
         else begin
           LoadSymbolTable(SymbolFileName, SymbolTable);
           if Length(SymbolTable) < MinSymbols then

@@ -564,7 +564,7 @@ begin
 
   // Save TokenizedCorpus and other data.
   if SaveFiles then begin
-    writeln('this is current dir ', getcurrentdir, ' workingdir ', workingdir); pause;
+    writeln('this is current dir ',  ' workingdir ', workingname); pause;
     ChDir(WorkingDir);
     SaveTokenList(TokenizedCorpus, WorkingName + '.tok');
 
@@ -573,7 +573,7 @@ begin
 
     // Redirect Output to F.
     Assign(Output, WorkingName + '.log');
-    writeln('this is current dir ', getcurrentdir, ' workingdir ', workingdir, ' workingfile ', workingfile); pause;
+    writeln('this is current dir ',  ' workingdir ', workingdir, ' workingfile ', workingname); pause;
     Append(Output);
 
     ReportStatistics;

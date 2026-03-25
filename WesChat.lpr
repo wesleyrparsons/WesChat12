@@ -22,7 +22,7 @@ uses
 
 var
   Corpus: TBVector;               // Vector of byte.
-  Ch, CorpusFileName, SymbolFileName, ListFile: string;
+  Ch, CorpusFileName, SymbolFileName, TokenFileName, ListFile: string;
   CombinedSymbolTable: TSymbolTable;
   MinSymbols: Integer = 50;       // Minimum for loading.
   MinTokens: Integer = 50;
@@ -82,13 +82,8 @@ begin
     Line := Trim(Line);
     if Line = '' then Continue;         // Skip blank lines.
     if FileExists(Line) then begin
-      if Count = 0 then
-        if SaveFiles then begin
+      if (Count = 0) and SaveFiles then
           LogFile('Mult' + ListFile);
-{          RenameFile(WorkingDir, 'Mult' + WorkingDir);
-          WorkingDir := 'Mult' + WorkingDir;
-          WorkingName := WorkingDir;}
-        end;
 
       ReadFileBytes(Line, OneCorpus);
       SetLength(CorpusFileNames, Count + 1);
@@ -345,7 +340,7 @@ begin
         // Read bytes from file.
         if FileExists(CorpusFileName) then begin
           if Length(Corpus) < MinCorpus then begin
-            writeln('Too small of a corpus. Aborting...');
+            writeln('Corpus too small. Aborting...');
             Continue;
           end;
 
@@ -367,7 +362,20 @@ begin
         else
           writeln('File not found: ', FileName, '.');
       end;
-      '7': writeln('Not yet implemented');  // Use MinTokens.
+      '7': begin
+        // Ask user for input file.
+        Write('Enter input token filename: ');
+        Readln(TokenFileName);
+        if FileExists(TokenFileName) then begin
+          IOHandler.LoadTokenList(TokenFileName, TokenizedCorpus);
+          if Length(TokenizedCorpus) > MinTokens then
+            RunEmbed(TokenizedCorpus)
+          else
+            writeln('Token list too small. Aborting...');
+        end
+        else
+          writeln('File not found: ', FileName, '.');
+      end;
       '8': begin
         MergeSymbolTables(CombinedSymbolTable);
         Write('Output symbol table name:');
@@ -384,7 +392,7 @@ begin
 
         // Read bytes from file.
         if FileExists(CorpusFileName) then begin
-          if Length(Corpus) < MinCorpus then begin
+          if FileSize(CorpusFileName) < MinCorpus then begin
             writeln('Corpus too small. Aborting...');
             Continue;
           end;

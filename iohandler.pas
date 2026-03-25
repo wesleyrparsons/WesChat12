@@ -16,6 +16,7 @@ uses
 
 procedure ReadFileBytes(const FileName: string; var OneCorpus: TBVector);
 procedure LoadSymbolTable(const FileName: string; var SymbolTable: TSymbolTable);
+procedure LoadTokenList(const TokenFileName: string; var TokenizedCorpus: TIVector);
 procedure SaveSymbolTable(const SymbolFileName: string; const SymbolTable: TSymbolTable);
 procedure SaveTokenList(const TokenizedCorpus: TIVector; const TokenFileName: String);
 

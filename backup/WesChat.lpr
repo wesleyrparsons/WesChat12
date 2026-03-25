@@ -22,7 +22,7 @@ uses
 
 var
   Corpus: TBVector;               // Vector of byte.
-  Ch, CorpusFileName, SymbolFileName, ListFile: string;
+  Ch, CorpusFileName, SymbolFileName, TokenFileName, ListFile: string;
   CombinedSymbolTable: TSymbolTable;
   MinSymbols: Integer = 50;       // Minimum for loading.
   MinTokens: Integer = 50;
@@ -34,7 +34,7 @@ var
   SaveOut: Text;
 begin
   WorkingDir := ChangeFileExt(Eponym, '') + FormatDateTime('yyyy-mm-dd_hhnnss', Now);
-  WorkingName := ChangeFileExt(Eponym, '');
+  WorkingName := WorkingDir;
   CreateDir(WorkingDir);
   ChDir(WorkingDir);
   // Save current Output.
@@ -94,13 +94,13 @@ begin
       SetLength(CorpusFileNames, Count + 1);
       CorpusFileNames[Count] := Line;
       Writeln('  File processed: ', Line, '; corpus bytes read: ', Length(OneCorpus));
-      if Length(OneCorpus) < MinCorpus then begin
+      if FileSize(OneCorpus) < MinCorpus then begin
         writeln('Corpus too small. Aborting...');
         Continue;
       end;
 
       Corpus := Concat(Corpus, OneCorpus);
-      Writeln('Total bytes read: ', Length(Corpus));
+      Writeln('Total bytes read: ', FileSize(Corpus));
       Inc(Count);
       SetLength(FilesRead, Count);
       FilesRead[Count - 1] := Line;
@@ -113,7 +113,7 @@ begin
 
   CloseFile(F);
 
-  writeln('Combined corpus length = ', Length(Corpus));
+  writeln('Combined corpus length = ', FileSize(Corpus));
   nCorpus := Length(Corpus);
   Pause;
 end;
@@ -345,7 +345,7 @@ begin
         // Read bytes from file.
         if FileExists(CorpusFileName) then begin
           if Length(Corpus) < MinCorpus then begin
-            writeln('Too small of a corpus. Aborting...');
+            writeln('Corpus too small. Aborting...');
             Continue;
           end;
 
@@ -367,7 +367,20 @@ begin
         else
           writeln('File not found: ', FileName, '.');
       end;
-      '7': writeln('Not yet implemented');  // Use MinTokens.
+      '7': begin
+        // Ask user for input file.
+        Write('Enter input token filename: ');
+        Readln(TokenFileName);
+        if FileExists(TokenFileName) then begin
+          IOHandler.LoadTokenList(TokenFileName, TokenizedCorpus);
+          if Length(TokenizedCorpus) > MinTokens then
+            RunEmbed(TokenizedCorpus)
+          else
+            writeln('Token list too small. Aborting...');
+        end
+        else
+          writeln('File not found: ', FileName, '.');
+      end;
       '8': begin
         MergeSymbolTables(CombinedSymbolTable);
         Write('Output symbol table name:');
@@ -384,7 +397,7 @@ begin
 
         // Read bytes from file.
         if FileExists(CorpusFileName) then begin
-          if Length(Corpus) < MinCorpus then begin
+          if FileSize(CorpusFileName) < MinCorpus then begin
             writeln('Corpus too small. Aborting...');
             Continue;
           end;

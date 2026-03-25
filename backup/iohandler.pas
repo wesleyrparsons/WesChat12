@@ -199,6 +199,7 @@ begin
 
   CloseFile(F);
   writeln('File ', TokenFileName, ' successfully saved.');
+  writeln;
 end;
 
 end.

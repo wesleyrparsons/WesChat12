@@ -33,7 +33,7 @@ const
   ModelDimProj = ModelDim * Proj; // Dimension of model of projected X matrix.
   SeqLen = 128;                   // Sequence length for X.
   nHead = 8;                      // Number of heads for multi-headed attention.
-  HeadLen = 16;                   // Length of one head.
+  HeadLen = SeqLen div nHead;                   // Length of one head.
   nBlock = 4;                     // Number of blocks in transformer.
   ADropout = 0.1;                 // Probability of attention dropout.
   RDropout = 0.1;                 // Probability of residual dropout.
@@ -111,7 +111,7 @@ type                                                                           /
 var
   CorpusFileNames: TSVector;
   SymbolTable: TSymbolTable;
-  WorkingName: string;                           // Saving data.
+  WorkingName, WorkingDir: string;               // Saving data.
   CorpusFileInfo: string;                        // Saving lon string of info on corpus.
   nCorpus: Integer;                              // Length of original corpus, and final output.
   nSymbols: Integer;                             // Number of symbols = Length(SymbolTable);

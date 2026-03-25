@@ -495,7 +495,7 @@ begin
     // 1C. Partition X1 into X1Head[1], etc.
     // Equation: X1Head[1], etc. := VerticalPartitionX(X1).
     for h := 0 to nHead - 1 do begin
-      VerticalPartitionX(X1.Value, h, X1Head[h].Value);
+      VerticalPartitionX(X1.Value, h, X1Head[h].Value, SeqLen, HeadLen);
       ApplyRoPE(X1Head[h].Value, InvFreq, SeqLen, HeadLen);
     end;
 
@@ -633,7 +633,7 @@ begin
     // Concatenate XHead[1], etc. into X2.
     // Equation: X2 := VerticalConcatX(X1).
     for h := 0 to nHead - 1 do
-      VerticalConcatX(X1Head[h].Value, h, X2.Value);
+      VerticalConcatX(X1Head[h].Value, h, X2.Value, SeqLen, HeadLen);
 
     // Display X2 matrix.
     if VerboseTransform then begin
@@ -925,7 +925,7 @@ begin
     // Partition X2 into X1Head[1], etc.
     // Equation: X1Head[2], etc. := VerticalPartitionX(X2).
     for h := 0 to nHead - 1 do
-      VerticalPartitionX(X2.Value, h, X1Head[h].Value);
+      VerticalPartitionX(X2.Value, h, X1Head[h].Value, SeqLen, HeadLen);
 
     // Backprop Create VHead Grad from X2Head Grad: Input ScoresHead2ᵀ.Value, X2Head.Grad. Output: VHead.Grad.
     // Equations: VHead.Grad = ScoresHead2ᵀ.Value · X2Head.Grad. VHead.Grad is R^{L x D}. ScoresHead2ᵀ.Value is R^{L x L}. X2Head.Grad is R^{L x D}.
@@ -1069,7 +1069,7 @@ begin
   Optimization;
 
   // Place X1 in X for next block.
-  CopyXMatrix(X1.Value, X, SeqLenModelDim);
+  CopyXMatrix(X1.Value, X, SeqLen, ModelDim);
   If VerboseTransform then begin
     writeln('End of tranformer block.');
     Pause;

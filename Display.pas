@@ -51,13 +51,6 @@ begin
   end;
 end;
 
-// Pause, and waits for key press.
-procedure xPauseProcIfKeyPressed;
-begin
-  writeln;
-  Pause;   // Waits for the key.
-end;
-
 // Returns key pressed.
 function CheckForControlKey: Char;
 begin

@@ -3,7 +3,7 @@ program WesChat;
 {$mode ObjFPC}{$H+}{$I proprietary.txt}
 
 { WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wespar.com.}
-{ Note: Edited 3/21/2026 6:07 pm }
+{ Note: Edited 3/24/2026 7:59 pm }
 uses
   CombineTables,
   Crt,
@@ -40,8 +40,8 @@ begin
   // Save current Output.
   SaveOut := Output;
 
-  // Redirect Output to F.
-  Assign(Output, WorkingName + '.log');
+  // Redirect Output.
+  Assign(Output, WorkingName + '.log');    // porblem here change name when muting
   Rewrite(Output);
   ReportInfo;
 
@@ -84,9 +84,10 @@ begin
     if FileExists(Line) then begin
       if Count = 0 then
         if SaveFiles then begin
-          LogFile(CorpusFileName);
+          LogFile('Mult' + ListFile);
+{          RenameFile(WorkingDir, 'Mult' + WorkingDir);
           WorkingDir := 'Mult' + WorkingDir;
-          WorkingName := 'Mult' + WorkingDir;
+          WorkingName := WorkingDir;}
         end;
 
       ReadFileBytes(Line, OneCorpus);
@@ -210,7 +211,7 @@ begin
 
           RunSymbolize(Corpus);
           RunWesTokenize(Corpus, TokenizedCorpus);
-          if nSymbols < MinSymbols then
+          if nSymbols > MinSymbols then
             If QueryEmbed then
               RunEmbed(TokenizedCorpus)
             else
@@ -236,7 +237,7 @@ begin
           else begin
             DisplayByteSymbolTable(SymbolTable);
             RunWesTokenize(Corpus, TokenizedCorpus);
-            if nSymbols < MinSymbols then
+            if nSymbols > MinSymbols then
               If QueryEmbed then
                 RunEmbed(TokenizedCorpus)
               else
@@ -291,7 +292,7 @@ begin
               CorpusFileNames[0] := CorpusFileName;
 
               RunWesTokenize(Corpus, TokenizedCorpus);
-              if nSymbols > 0 then
+              if nSymbols > MinSymbols then
                 If QueryEmbed then
                   RunEmbed(TokenizedCorpus)
                 else
@@ -331,7 +332,7 @@ begin
           write(TokenizedCorpus[i], ' ');
         writeln;
         Pause;
-        if nSymbols > 0 then
+        if nSymbols > MinSymbols then
           RunEmbed(TokenizedCorpus)
         else
           writeln('Symbols not found in table.');

@@ -26,8 +26,8 @@ procedure MatMulNN(const A, B: PSingle; C: PSingle; M, N, K: Integer);
 procedure MatMulNT(const A, B: PSingle; C: PSingle; M, N, K: Integer);
 procedure MatMulTN(const A, B: PSingle; C: PSingle; M, N, K: Integer);
 procedure MatAdd(const A, B: TSeqMatrix; var C: TSeqMatrix; Rows, Cols: Integer);
-procedure VerticalPartitionX(const X: TSeqMatrix; const h: Integer; var XHead: TSeqHeadMatrix);
-procedure VerticalConcatX(const XHead: array of TSeqHeadMatrix; const h: Integer; var X: TSeqMatrix);
+procedure VerticalPartitionX(const X: TSeqMatrix; const h: Integer; var XHead: TSeqHeadMatrix; const L, HL: Integer);
+procedure VerticalConcatX(const XHead: array of TSeqHeadMatrix; const h: Integer; var X: TSeqMatrix); // Add rows and cols.
 procedure GradSplit(const Upstream: TSeqMatrix; var Left, Right: TSeqMatrix; Rows, Cols: Integer);
 procedure AccumulateGrad(const Src: TSeqMatrix; var Dst: TSeqMatrix; Rows, Cols: Integer);
 procedure MatMulAccNT(const A, B: PSingle; C: PSingle; M, N, K: Integer);
@@ -94,23 +94,20 @@ function cblas_snrm2(
 
 implementation
 
-procedure VerticalPartitionX(const X: TSeqMatrix; const h: Integer; var XHead: TSeqHeadMatrix);
+procedure VerticalPartitionX(const X: TSeqMatrix; const h: Integer; var XHead: TSeqHeadMatrix; const L, HL: Integer);
 var
   i: Integer;
 begin
-//  for h := 0 to nHead - 1 do
-    for i:= 0 to SeqLen - 1 do
-      {for j:= 0 to HeadLen - 1 do
-        XHead[h, i, j] := X[i, h * HeadLen + j];}
-      cblas_scopy(HeadLen, @X[i, h * HeadLen], 1, @XHead[i, 0], 1);
+    for i:= 0 to L - 1 do
+      cblas_scopy(HL, @X[i, h * HL], 1, @XHead[i, 0], 1);
 end;
 
-procedure VerticalConcatX(const XHead: array of TSeqHeadMatrix; const h: Integer; var X: TSeqMatrix);
+procedure VerticalConcatX(const XHead: array of TSeqHeadMatrix; const h: Integer; var X: TSeqMatrix; const L, HL: Integer);
 var
   i: Integer;
 begin
-  for i := 0 to SeqLen - 1 do
-    cblas_scopy(HeadLen, @XHead[h][i, 0], 1, @X[i, h * HeadLen], 1);
+  for i := 0 to L - 1 do
+    cblas_scopy(HL, @XHead[h][i, 0], 1, @X[i, h * HL], 1);
 end;
 
 // Split Gradient into 2 streams, for backprop.

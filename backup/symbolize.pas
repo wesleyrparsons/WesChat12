@@ -684,6 +684,7 @@ begin
   WriteLn;
   WriteLn('Mean symbol length: ', SumLen / n: 0: 4);
   WriteLn('Median symbol length: ', Median: 0: 4);
+  writeln('Mean tokens per symbol (compression): ', nCorpus / nSymbols);
 end;
 
 // Calculate and report longest symbols.

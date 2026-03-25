@@ -684,7 +684,7 @@ begin
   WriteLn;
   WriteLn('Mean symbol length: ', SumLen / n: 0: 4);
   WriteLn('Median symbol length: ', Median: 0: 4);
-  writeln('Mean tokens per symbol (compression): ', nCorpus / nSymbols);
+  writeln('Mean tokens per symbol (compression): ', (nCorpus / nSymbols): 0: 4);
 end;
 
 // Calculate and report longest symbols.
@@ -739,9 +739,11 @@ begin
     Writeln('Elapsed time applying merges: ', MHours, ' hours, ', Mmins, ' min ', Msecs: 4: 4, ' sec');
   end;
   Writeln('Original text size (bytes/tokens): ', nCorpus);
-  if not FromSymbolTable then
-    Writeln('Tokens per second: ', nCorpus / (ElapsedMS / 1000): 6: 4);
-  writeln;
+  if not FromSymbolTable then begin
+    Writeln('Tokens per second (total): ', nCorpus / (ElapsedMS / 1000): 6: 4);
+    Writeln('Tokens per second (merging): ', nCorpus / (MElapsedMS / 1000): 6: 4);
+    writeln;
+  end;
 end;
 
 // Report all statistics.
@@ -808,7 +810,7 @@ begin
   StopTime := 0;   // Time to subtract from timing.
 
   // Create the TokenList.
-  writeln('Maximum symbols = ', MaxVocab, '. Maximum merges = ', MaxMerges, '. Maximum pair counts = ', MaxPairCount, '. Tokenizing...');
+  writeln('Maximum symbols = ', MaxVocab, '. Maximum merges = ', MaxMerges, '. Maximum pair counts = ', MaxPairCount, '.');
   writeln('X = Exit program. B = Break out of merge loop. V = toggle Verbose mode. P = Program information. M = Merging information. Merging...');
   BuildTokenListFromCorpus(Corpus);
 

@@ -33,7 +33,7 @@ const
   ModelDimProj = ModelDim * Proj; // Dimension of model of projected X matrix.
   SeqLen = 128;                   // Sequence length for X.
   nHead = 8;                      // Number of heads for multi-headed attention.
-  HeadLen = 16;                   // Length of one head.
+  HeadLen = SeqLen div nHead;     // Length of one head.
   nBlock = 4;                     // Number of blocks in transformer.
   ADropout = 0.1;                 // Probability of attention dropout.
   RDropout = 0.1;                 // Probability of residual dropout.

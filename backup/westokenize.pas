@@ -152,9 +152,6 @@ procedure TokenizeFromSymbolTable(const TextFileName: string; const Corpus: TBVe
 var
   i, BestSym, BestLen: Integer;
 begin
-//  if FileExists(TextFileName) then      ```don't read again!!
-  //  ReadFileBytes(TextFileName, Corpus);
-
   nCorpus := Length(Corpus);
   SetLength(TokenizedCorpus, 1);
   TokenizedCorpus[0] := 256;
@@ -268,7 +265,7 @@ begin
   writeln('Top 60 most frequent symbols:');
   for i := 0 to 59 do begin
     k := Index[i];
-    write(i + 1: 8, ': Symbol ', k: 8, '  Count=', Counts[k]: 6, '  ', '"' + SymbolTable[k] + '"': 15);
+    write(i + 1: 8, ': Symbol ', k: 8, '  Count=', Counts[k]: 6, '  ', '"' + CleanUpSymbol(SymbolTable[k]) + '"': 15);
     if ((i + 1) mod 3) = 0 then
       writeln;
   end;
@@ -345,7 +342,7 @@ begin
     Writeln(i + 1:4, '  ID=', Stats[i].TokenID:6, '  Count=',
       Stats[i].Count:8, '  Symbol="', S, '"');
   end;
-  Writeln;
+  Pause;
 end;
 
 // Report merged tokens never used.
@@ -402,6 +399,7 @@ begin
 
   Writeln('Top ', Limit, ' merged tokens account for ', TopMergedInstances, ' / ', TotalMergedInstances,
     ' merged-token instances = ', Coverage:0:2, '%');
+  Writeln;
 end;
 
 // Report token usage statistics.
@@ -467,26 +465,7 @@ begin
 end;
 
 { Save data from tokenization }
-// Save metadata.
-procedure SaveMetaData(const MetaFileName: String);
-var
-  SaveOut: Text;
-begin
-  // Save current Output.
-  SaveOut := Output;
-
-  // Redirect Output to F.
-  Assign(Output, MetaFileName);
-  Rewrite(Output);
-
-  ReportStatistics;
-
-  // Restore Output to console.
-  Close(Output);
-  Output := SaveOut;
-end;
-
-// Display the toeknized corpus.
+// Display the tokenized corpus.
 procedure WriteTokenList(const Part: TPart = B);
 var
   i, iB, iE: Integer;
@@ -566,13 +545,6 @@ begin
   t0 := Now;       // Start of timing for entire tokenization;
   StopTime := 0;   // Time to subtract from timing.
 
-  // Display stats.
-  writeln('Maximum symbols = ', MaxVocab, '. Maximum merges = ', MaxMerges, '. Maximum pair counts = ', MaxPairCount, '. Tokenizing...');
-  writeln('X = Exit program. B = Break out of merge loop. V = toggle Verbose mode. P = Program information. M = Merging information. Merging...');
-   // ''symboltable from opt 2 is zero
-  DisplayByteSymbolTable(SymbolTable);
-  Pause;
-
   // Create the tokenized corpus.
   TokenizeFromSymbolTable(FileName, Corpus);
 
@@ -592,15 +564,16 @@ begin
 
   // Save TokenizedCorpus and other data.
   if SaveFiles then begin
+    writeln('this is current dir ', getcurrentdir, ' workingdir ', workingdir); pause;
     ChDir(WorkingDir);
     SaveTokenList(TokenizedCorpus, WorkingName + '.tok');
-
 
     // Save current Output.
     SaveOut := Output;
 
     // Redirect Output to F.
     Assign(Output, WorkingName + '.log');
+    writeln('this is current dir ', getcurrentdir, ' workingdir ', workingdir, ' workingfile ', workingfile); pause;
     Append(Output);
 
     ReportStatistics;

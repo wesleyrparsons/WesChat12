@@ -112,12 +112,6 @@ var
 begin
   Writeln('--- Symbol Table ---');
   for i := 0 to High(SymbolTable) do begin  // Loop thru each symbol in table.
-{    case i of
-      7, 8, 9, 10, 11, 12, 13, 127:
-        write(i: 8, ' ': 15)     // Placeholder for dangerous characters.
-      else
-        write(i: 8, '"' + SymbolTable[i] + '"': 15);
-    end;}
     if (i in [0..31]) or (i in [127..255]) then
       write(i: 8, IntToHex(i, 2): 15)       // Hex for non-ASCII characters.
     else

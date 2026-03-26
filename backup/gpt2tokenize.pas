@@ -11,8 +11,10 @@ uses
   Display,
   Fpjson,
   Global,
+  IOHandler,
   Jsonparser,
-  SysUtils;
+  SysUtils,
+  WesTokenize;
 
 procedure RunGPT2Tokenize(const FileName: string; var TokenizedCorpus: TIVector);
 
@@ -625,6 +627,31 @@ begin
   writeln;
   Pause;
 
+   // Report statistics.
+  if VerboseTokenize then
+    ReportStatistics;                             // Also to log file?
+
+  // Save TokenizedCorpus and other data.
+  if SaveFiles then begin
+    ChDir(WorkingDir);
+    SaveTokenList(TokenizedCorpus, WorkingName + '.tok');
+
+    // Save current Output.
+    SaveOut := Output;
+
+    // Redirect Output to F.
+    Assign(Output, WorkingName + '.log');
+    Append(Output);
+
+    ReportStatistics;
+
+    // Restore Output to console.
+    Close(Output);
+    Output := SaveOut;
+
+    ChDir('..');
+  end;
+
   writeln('Vocabulary for TokenizedCorpus:');
   for i := 0 to High(TokenizedCorpus) do
     Write(Vocab[TokenizedCorpus[i]]);
@@ -635,8 +662,8 @@ begin
   for i := 0 to 99 do
     Write(DisplayToken(UTF8Decode(Vocab[TokenizedCorpus[i]])));
   writeln;
-  writeln('Decoded Last 300 TokenizedCorpus:');
-  for i := High(TokenizedCorpus) - 300 to High(TokenizedCorpus) do
+  writeln('Decoded Last 100 TokenizedCorpus:');
+  for i := High(TokenizedCorpus) - 100 to High(TokenizedCorpus) do
     Write(DisplayToken(UTF8Decode(Vocab[TokenizedCorpus[i]])));
   writeln;
   Pause;

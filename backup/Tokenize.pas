@@ -14,7 +14,8 @@ uses
   FileUtil,
   Global,
   IOHandler,
-  SysUtils;
+  SysUtils,
+  WesTokenize;
 
 type
   TSymbolTable = TRBSVector;           // Array of symbols. So index of array is a symbol string.
@@ -1650,12 +1651,13 @@ begin
   // Save various files.
   if SaveFiles then begin
     writeln;
+    ChDir(WorkingDir);
     writeln('--- Saving Files ---');
-    SaveTokenList(WorkingName + Stamp + '.bin');
-    SaveSymbolTable(WorkingName + Stamp + '.sym', SymbolTable);
-    SaveMergeTable(Merges, WorkingName + Stamp + '.mer');
-    SaveMetaData(WorkingName + Stamp + '.meta');
-    ReconstructToFile(Head, SymbolTable, WorkingName + Stamp + '.rcn');
+    SaveTokenList(WorkingName + '.tok');
+    SaveSymbolTable(WorkingName + '.sym', SymbolTable);
+    SaveMergeTable(Merges, WorkingName + '.mer');
+    SaveMetaData(WorkingName + '.meta');
+    ReconstructToFile(Head, SymbolTable, WorkingName + '.rcn');
     ChDir('..');
   end;
 

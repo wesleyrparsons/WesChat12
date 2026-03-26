@@ -56,6 +56,7 @@ procedure WriteTokenList(const Part: TPart = B);
 procedure BuildTrie(out Root: PTrieNode);
 function MatchLongest(root: PTrieNode; const text: TBVector; startPos: Integer;
   out tokenID, matchLen: Integer): Boolean;
+ReportStatistics;
 procedure DetokenizeToDisplay(const TokenizedCorpus: TIVector; const Part: TPart = B);
 //procedure ReportStatistics;
 procedure RunWesTokenize(const Corpus: TBVector; var TokenizedCorpus: TIVector);
@@ -564,7 +565,6 @@ begin
 
   // Save TokenizedCorpus and other data.
   if SaveFiles then begin
-    writeln('this is current dir ',  ' workingdir ', workingname); pause;
     ChDir(WorkingDir);
     SaveTokenList(TokenizedCorpus, WorkingName + '.tok');
 
@@ -573,7 +573,6 @@ begin
 
     // Redirect Output to F.
     Assign(Output, WorkingName + '.log');
-    writeln('this is current dir ',  ' workingdir ', workingdir, ' workingfile ', workingname); pause;
     Append(Output);
 
     ReportStatistics;

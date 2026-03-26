@@ -56,6 +56,7 @@ procedure WriteTokenList(const Part: TPart = B);
 procedure BuildTrie(out Root: PTrieNode);
 function MatchLongest(root: PTrieNode; const text: TBVector; startPos: Integer;
   out tokenID, matchLen: Integer): Boolean;
+procedure ReportStatistics;
 procedure DetokenizeToDisplay(const TokenizedCorpus: TIVector; const Part: TPart = B);
 //procedure ReportStatistics;
 procedure RunWesTokenize(const Corpus: TBVector; var TokenizedCorpus: TIVector);

@@ -271,7 +271,8 @@ begin
       writeln;
   end;
 
-  Pause;
+  if VerboseTokenize and (TextRec(Output).Handle = StdOutputHandle) then
+    Pause;
 end;
 
 // Count token usage.
@@ -414,6 +415,7 @@ begin
   Writeln('Merged token instances: ', MergedInstances);
   Writeln('Unmerged token instances: ', UnmergedInstances);
   Writeln('Mean token length: ', nCorpus / nTokenizedCorpus: 6: 4);
+  Writeln;
   CountTokenUsage(TokenizedCorpus, Length(SymbolTable), Counts);
   FirstMergedToken := StartSymbol;  // 260
   BuildMergedTokenStats(Counts, FirstMergedToken, Stats);
@@ -454,10 +456,11 @@ begin
   writeln;
   end;
 
-// Report all statistics.
+// Report all statistics.       If writing to file, don't do pause.
 procedure ReportStatistics;
 begin
   CalculateTimeStatistics;
+  CalculateSymbolCount;
   ReportBasicStatistics;
   if VerboseTokenize and (TextRec(Output).Handle = StdOutputHandle) then
     Pause;
@@ -553,7 +556,7 @@ begin
   t1 := Now;
 
   if ShowTokenWork and VerboseTokenize then begin
-    Writeln('---  Token Frequencies ---');         // Also to log file?
+    Writeln('---  Token Frequencies ---');
     CountSymbols;
   end;
 

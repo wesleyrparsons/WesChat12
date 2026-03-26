@@ -8,8 +8,9 @@
       <Unit>
         <Filename Value="WesChat.lpr"/>
         <IsPartOfProject Value="True"/>
-        <TopLine Value="148"/>
-        <CursorPos X="44" Y="170"/>
+        <IsVisibleTab Value="True"/>
+        <TopLine Value="220"/>
+        <CursorPos X="24" Y="233"/>
         <UsageCount Value="233"/>
         <Loaded Value="True"/>
       </Unit>
@@ -71,8 +72,7 @@
         <Filename Value="Display.pas"/>
         <IsPartOfProject Value="True"/>
         <EditorIndex Value="11"/>
-        <TopLine Value="65"/>
-        <CursorPos X="52" Y="87"/>
+        <CursorPos X="52"/>
         <UsageCount Value="218"/>
         <Loaded Value="True"/>
       </Unit>
@@ -90,10 +90,9 @@
         <Filename Value="gpt2tokenize.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="GPT2Tokenize"/>
-        <IsVisibleTab Value="True"/>
         <EditorIndex Value="5"/>
-        <TopLine Value="580"/>
-        <CursorPos Y="592"/>
+        <TopLine Value="565"/>
+        <CursorPos X="40" Y="618"/>
         <UsageCount Value="215"/>
         <Loaded Value="True"/>
       </Unit>
@@ -121,7 +120,7 @@
         <EditorIndex Value="3"/>
         <TopLine Value="687"/>
         <CursorPos X="17" Y="729"/>
-        <UsageCount Value="169"/>
+        <UsageCount Value="173"/>
         <Loaded Value="True"/>
       </Unit>
       <Unit>
@@ -129,9 +128,9 @@
         <IsPartOfProject Value="True"/>
         <UnitName Value="WesTokenize"/>
         <EditorIndex Value="2"/>
-        <TopLine Value="497"/>
-        <CursorPos Y="544"/>
-        <UsageCount Value="169"/>
+        <TopLine Value="431"/>
+        <CursorPos X="42" Y="445"/>
+        <UsageCount Value="173"/>
         <Loaded Value="True"/>
       </Unit>
       <Unit>
@@ -140,7 +139,7 @@
         <UnitName Value="IOHandler"/>
         <EditorIndex Value="4"/>
         <CursorPos X="29" Y="19"/>
-        <UsageCount Value="169"/>
+        <UsageCount Value="173"/>
         <Loaded Value="True"/>
       </Unit>
       <Unit>
@@ -162,7 +161,7 @@
         <Filename Value="Global.pas"/>
         <EditorIndex Value="6"/>
         <TopLine Value="79"/>
-        <CursorPos X="52" Y="107"/>
+        <CursorPos X="7" Y="116"/>
         <UsageCount Value="118"/>
         <Loaded Value="True"/>
       </Unit>
@@ -175,126 +174,119 @@
         <DefaultSyntaxHighlighter Value="Text"/>
       </Unit>
     </Units>
-    <JumpHistory HistoryIndex="29">
+    <JumpHistory HistoryIndex="28">
       <Position>
-        <Filename Value="WesChat.lpr"/>
-        <Caret Line="64" Column="9" TopLine="45"/>
-      </Position>
-      <Position>
-        <Filename Value="WesChat.lpr"/>
-        <Caret Line="154" Column="9" TopLine="108"/>
-      </Position>
-      <Position>
-        <Filename Value="WesChat.lpr"/>
-        <Caret Line="248" Column="80" TopLine="202"/>
-      </Position>
-      <Position>
-        <Filename Value="WesChat.lpr"/>
-        <Caret Line="286" Column="84" TopLine="240"/>
-      </Position>
-      <Position>
-        <Filename Value="symbolize.pas"/>
-        <Caret Line="32" Column="25" TopLine="29"/>
-      </Position>
-      <Position>
-        <Filename Value="symbolize.pas"/>
-        <Caret Line="91" Column="16" TopLine="45"/>
-      </Position>
-      <Position>
-        <Filename Value="WesChat.lpr"/>
-        <Caret Line="63" TopLine="36"/>
-      </Position>
-      <Position>
-        <Filename Value="WesChat.lpr"/>
-        <Caret Line="75" Column="18" TopLine="36"/>
-      </Position>
-      <Position>
-        <Filename Value="WesChat.lpr"/>
-        <Caret Line="84" Column="35" TopLine="38"/>
-      </Position>
-      <Position>
-        <Filename Value="WesChat.lpr"/>
-        <Caret Line="27"/>
-      </Position>
-      <Position>
-        <Filename Value="WesChat.lpr"/>
-        <Caret Line="63" Column="8" TopLine="17"/>
-      </Position>
-      <Position>
-        <Filename Value="WesChat.lpr"/>
-        <Caret Line="146" Column="11" TopLine="100"/>
-      </Position>
-      <Position>
-        <Filename Value="WesChat.lpr"/>
-        <Caret Line="147" Column="11" TopLine="101"/>
-      </Position>
-      <Position>
-        <Filename Value="WesChat.lpr"/>
-        <Caret Line="153" TopLine="107"/>
-      </Position>
-      <Position>
-        <Filename Value="WesChat.lpr"/>
-        <Caret Line="246" Column="79" TopLine="200"/>
-      </Position>
-      <Position>
-        <Filename Value="Global.pas"/>
-        <Caret Line="36" Column="33"/>
-      </Position>
-      <Position>
-        <Filename Value="Global.pas"/>
-        <Caret Line="107" Column="52" TopLine="79"/>
-      </Position>
-      <Position>
-        <Filename Value="WesChat.lpr"/>
-        <Caret Line="303" Column="56" TopLine="288"/>
-      </Position>
-      <Position>
-        <Filename Value="Tokenize.pas"/>
-        <Caret Line="1221" Column="27" TopLine="1201"/>
-      </Position>
-      <Position>
-        <Filename Value="westokenize.pas"/>
-        <Caret Line="33" Column="20" TopLine="29"/>
+        <Filename Value="gpt2tokenize.pas"/>
+        <Caret Line="48" Column="21" TopLine="2"/>
       </Position>
       <Position>
         <Filename Value="gpt2tokenize.pas"/>
-        <Caret Line="616" Column="35" TopLine="597"/>
+        <Caret Line="75" Column="25" TopLine="265"/>
       </Position>
       <Position>
         <Filename Value="gpt2tokenize.pas"/>
-        <Caret Line="609" Column="25" TopLine="601"/>
-      </Position>
-      <Position>
-        <Filename Value="westokenize.pas"/>
-        <Caret Line="585" Column="4" TopLine="543"/>
-      </Position>
-      <Position>
-        <Filename Value="westokenize.pas"/>
-        <Caret Line="59" Column="18" TopLine="29"/>
       </Position>
       <Position>
         <Filename Value="gpt2tokenize.pas"/>
-        <Caret Line="623" Column="33" TopLine="604"/>
-      </Position>
-      <Position>
-        <Filename Value="Tokenize.pas"/>
-        <Caret Line="17" Column="11"/>
-      </Position>
-      <Position>
-        <Filename Value="westokenize.pas"/>
-        <Caret Line="59" Column="11" TopLine="32"/>
+        <Caret Line="277" Column="23" TopLine="231"/>
       </Position>
       <Position>
         <Filename Value="gpt2tokenize.pas"/>
-        <Caret Line="631" Column="20" TopLine="610"/>
+        <Caret Line="315" Column="20" TopLine="293"/>
       </Position>
       <Position>
         <Filename Value="gpt2tokenize.pas"/>
-        <Caret Line="14" Column="13"/>
+        <Caret Line="339" Column="17" TopLine="293"/>
+      </Position>
+      <Position>
+        <Filename Value="gpt2tokenize.pas"/>
+        <Caret Line="340" Column="17" TopLine="295"/>
+      </Position>
+      <Position>
+        <Filename Value="gpt2tokenize.pas"/>
+        <Caret Line="341" Column="17" TopLine="296"/>
+      </Position>
+      <Position>
+        <Filename Value="gpt2tokenize.pas"/>
+        <Caret Line="291" Column="10" TopLine="318"/>
+      </Position>
+      <Position>
+        <Filename Value="gpt2tokenize.pas"/>
+        <Caret Line="592" Column="18" TopLine="569"/>
+      </Position>
+      <Position>
+        <Filename Value="gpt2tokenize.pas"/>
+        <Caret Line="662" Column="23" TopLine="636"/>
+      </Position>
+      <Position>
+        <Filename Value="gpt2tokenize.pas"/>
+        <Caret Line="664" Column="27" TopLine="638"/>
+      </Position>
+      <Position>
+        <Filename Value="gpt2tokenize.pas"/>
+        <Caret Line="669" TopLine="638"/>
+      </Position>
+      <Position>
+        <Filename Value="gpt2tokenize.pas"/>
+        <Caret Line="664" Column="21" TopLine="638"/>
       </Position>
       <Position>
         <Filename Value="westokenize.pas"/>
-        <Caret Line="59" Column="11" TopLine="32"/>
+        <Caret Line="237" Column="22" TopLine="217"/>
+      </Position>
+      <Position>
+        <Filename Value="westokenize.pas"/>
+        <Caret Line="414" Column="26" TopLine="368"/>
+      </Position>
+      <Position>
+        <Filename Value="westokenize.pas"/>
+      </Position>
+      <Position>
+        <Filename Value="westokenize.pas"/>
+        <Caret Line="52" Column="32" TopLine="6"/>
+      </Position>
+      <Position>
+        <Filename Value="westokenize.pas"/>
+        <Caret Line="220" Column="13" TopLine="174"/>
+      </Position>
+      <Position>
+        <Filename Value="westokenize.pas"/>
+        <Caret Line="204" Column="30" TopLine="175"/>
+      </Position>
+      <Position>
+        <Filename Value="westokenize.pas"/>
+        <Caret Line="608" TopLine="539"/>
+      </Position>
+      <Position>
+        <Filename Value="westokenize.pas"/>
+      </Position>
+      <Position>
+        <Filename Value="westokenize.pas"/>
+        <Caret Line="205" Column="21" TopLine="159"/>
+      </Position>
+      <Position>
+        <Filename Value="westokenize.pas"/>
+        <Caret Line="189" Column="24" TopLine="231"/>
+      </Position>
+      <Position>
+        <Filename Value="westokenize.pas"/>
+        <Caret Line="207" Column="28" TopLine="178"/>
+      </Position>
+      <Position>
+        <Filename Value="westokenize.pas"/>
+        <Caret Line="237" Column="15" TopLine="226"/>
+      </Position>
+      <Position>
+        <Filename Value="westokenize.pas"/>
+        <Caret Line="25" Column="64"/>
+      </Position>
+      <Position>
+        <Filename Value="westokenize.pas"/>
+        <Caret Line="233" Column="17" TopLine="187"/>
+      </Position>
+      <Position>
+        <Filename Value="westokenize.pas"/>
+        <Caret Line="235" Column="9" TopLine="189"/>
       </Position>
     </JumpHistory>
     <RunParams>

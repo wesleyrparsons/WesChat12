@@ -588,6 +588,7 @@ var
   Tokens: TIVector;
   i, j: Integer;
   s: string;
+  SaveOut: Text;
 begin
   VeryVerbose := False;
 
@@ -598,15 +599,18 @@ begin
   LoadMerges('merges.txt', Merges);
 
   Pause;
+  t0 := Now;
   write('Tokenizing...');
   TokenizeFile(FileName, Vocab, Merges, Tokens);
+  t1 := Now;
 
   writeln('End of three routines in tokenizing.');
 
   SetLength(TokenizedCorpus, Length(Tokens));
 
+  nTokenizedCorpus := Length(TokenizedCorpus);
   for i := 0 to High(Tokens) do
-    TokenizedCorpus[i] := Tokens[i];
+  TokenizedCorpus[i] := Tokens[i];
 
   writeln('After 3 routines, tokens.');
   for i := 0 to High(Tokens) do begin
@@ -627,9 +631,9 @@ begin
   writeln;
   Pause;
 
-   // Report statistics.
+  // Report statistics.
   if VerboseTokenize then
-    ReportStatistics;                             // Also to log file?
+    ReportStatistics;
 
   // Save TokenizedCorpus and other data.
   if SaveFiles then begin
@@ -652,9 +656,20 @@ begin
     ChDir('..');
   end;
 
-  writeln('Vocabulary for TokenizedCorpus:');
-  for i := 0 to High(TokenizedCorpus) do
-    Write(Vocab[TokenizedCorpus[i]]);
+  // Need to write out TC with j loop to deal with chr183.
+  readln;
+  writeln('Vocabulary for TokenizedCorpus:', High(TokenizedCorpus));
+
+  for i := 0 to High(TokenizedCorpus) do begin
+    s := Vocab[TokenizedCorpus[i]];
+    // Replace the GPT-2 "Ġ" marker with a space.
+    if s = 'Ġ' then
+      Write(' ')
+    else begin
+      for j := 1 to Length(s) do
+        Write(s[j]);
+    end;
+  end;
   writeln;
   Pause;
 
@@ -662,6 +677,8 @@ begin
   for i := 0 to 99 do
     Write(DisplayToken(UTF8Decode(Vocab[TokenizedCorpus[i]])));
   writeln;
+  Pause;
+
   writeln('Decoded Last 100 TokenizedCorpus:');
   for i := High(TokenizedCorpus) - 100 to High(TokenizedCorpus) do
     Write(DisplayToken(UTF8Decode(Vocab[TokenizedCorpus[i]])));

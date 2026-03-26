@@ -56,7 +56,7 @@ procedure WriteTokenList(const Part: TPart = B);
 procedure BuildTrie(out Root: PTrieNode);
 function MatchLongest(root: PTrieNode; const text: TBVector; startPos: Integer;
   out tokenID, matchLen: Integer): Boolean;
-ReportStatistics;
+procedure ReportStatistics;
 procedure DetokenizeToDisplay(const TokenizedCorpus: TIVector; const Part: TPart = B);
 //procedure ReportStatistics;
 procedure RunWesTokenize(const Corpus: TBVector; var TokenizedCorpus: TIVector);
@@ -414,6 +414,7 @@ begin
   Writeln('Merged token instances: ', MergedInstances);
   Writeln('Unmerged token instances: ', UnmergedInstances);
   Writeln('Mean token length: ', nCorpus / nTokenizedCorpus: 6: 4);
+  Writeln;
   CountTokenUsage(TokenizedCorpus, Length(SymbolTable), Counts);
   FirstMergedToken := StartSymbol;  // 260
   BuildMergedTokenStats(Counts, FirstMergedToken, Stats);
@@ -458,6 +459,7 @@ begin
 procedure ReportStatistics;
 begin
   CalculateTimeStatistics;
+  CalculateSymbolCount; //``
   ReportBasicStatistics;
   if VerboseTokenize and (TextRec(Output).Handle = StdOutputHandle) then
     Pause;
@@ -553,7 +555,7 @@ begin
   t1 := Now;
 
   if ShowTokenWork and VerboseTokenize then begin
-    Writeln('---  Token Frequencies ---');         // Also to log file?
+    Writeln('---  Token Frequencies ---');
     CountSymbols;
   end;
 

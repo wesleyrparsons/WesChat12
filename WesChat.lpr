@@ -159,8 +159,7 @@ begin
   writeln('     to create a concatenated token list.');
   writeln('  3: Tokenize Bela corpus using WesChat''s Bela symbol table.');
   writeln('  4: Tokenize an input corpus, based on an input symbol table, using WesChat''s tokenization routine.');
-  writeln('  5: Tokenize an input corpus using ChatGPT''s symbol and merge tables and WesChat''s');
-  writeln('     tokenization routine.');
+  writeln('  5: ');
   writeln('  6: Tokenize an input corpus using ChatGPT''s symbol and merge tables and WesChat''s');
   writeln('     tokenization routine.');
   writeln('  7: Input a token list to be used in training.');
@@ -308,7 +307,16 @@ begin
           Continue;
         end;
 
-        RunGPT2Tokenize(CorpusFileName, TokenizedCorpus);
+        FromSymbolTable := True;
+        nCorpus := Length(Corpus);
+        ReadFileBytes(CorpusFileName, Corpus);
+        SetLength(CorpusFileNames, 0);
+        if SaveFiles then
+          LogFile(CorpusFileName);
+        SetLength(CorpusFileNames, 1);     // may not be necessary for multiple input corpuses.
+        CorpusFileNames[0] := CorpusFileName;
+        RunWesTokenize(Corpus, TokenizedCorpus);
+
         writeln('First 200 token of tokenized corpus: ');
         for i := 0 to 199 do
           write(TokenizedCorpus[i], ' ');
@@ -326,14 +334,17 @@ begin
 
         // Read bytes from file.
         if FileExists(CorpusFileName) then begin
-          if Length(Corpus) < MinCorpus then begin
+          if FileSize(CorpusFileName) < MinCorpus then begin
             writeln('Corpus too small. Aborting...');
             Continue;
           end;
 
-          SetLength(CorpusFileNames, 0);
+          ReadFileBytes(CorpusFileName, Corpus);
+          FromSymbolTable := True;
+          nCorpus := Length(Corpus);
           if SaveFiles then
             LogFile(CorpusFileName);
+          SetLength(CorpusFileNames, 1);
           CorpusFileNames[0] := CorpusFileName;
           RunGPT2Tokenize(CorpusFileName, TokenizedCorpus);
           writeln('First 200 token of tokenized corpus: ');

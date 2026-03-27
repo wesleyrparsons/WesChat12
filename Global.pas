@@ -103,6 +103,7 @@ type                                                                           /
   TBVector = array of Byte;            // Array of integers (UTF-8) for initial corpus.
   TRBSVector = array of RawByteString; // Array of raw byte strings for initial corpus.
   TFVector = array of Single;          // Array of single for embedding matrix.
+  TFMatrix = array of TFVector;        // Array of array of single for embedding matrix.
   TSVector = array of String;          // Array of string.
   TEmbeddingMatrix = array[0..DimVocab - 1] of TSeqVector; // Array for embedding matrix.
   TPart = (B, E, F, G);                // Length = VocabSize * Dimension. But only use nSymbols in rows.
@@ -113,7 +114,6 @@ var
   SymbolTable: TSymbolTable;
   WorkingName, WorkingDir: string;               // Saving data.
   CorpusFileInfo: string;                        // Saving lon string of info on corpus.
-  nCorpus: Integer;                              // Length of original corpus, and final output.
   nSymbols: Integer;                             // Number of symbols = Length(SymbolTable);
   nTokenizedCorpus: Integer;                     // Length of tokenized corpus.
   X: TSeqMatrix;                                 // Original X matrix. (Not a tensor.)

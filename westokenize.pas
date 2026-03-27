@@ -41,6 +41,8 @@ type
 var
   StartSymbol: Integer = 260;                    // UTF-8 0.255, BOS, EOS, PAD, UNK is 259.
   TokenizedCorpus: TIVector;
+
+  nCorpus: Integer;
   BOS, EOS, PAD, UNK: Integer;                   // Extra symbols for control.
   ElapsedMS: Int64;                              // For timing.
   Hours, Mins: Int64;                            // For timing.
@@ -153,7 +155,6 @@ procedure TokenizeFromSymbolTable(const TextFileName: string; const Corpus: TBVe
 var
   i, BestSym, BestLen: Integer;
 begin
-  nCorpus := Length(Corpus);
   SetLength(TokenizedCorpus, 1);
   TokenizedCorpus[0] := 256;
   i := 0;
@@ -233,7 +234,7 @@ end;
 procedure CountSymbols;
 var
   Counts, Index: TIVector;
-  i, j, k, N, TmpIndex: Integer;
+  i, j, k, n, TmpIndex: Integer;
 begin
   // Allocate and zero Counts.
   SetLength(Counts, Length(SymbolTable));
@@ -244,15 +245,15 @@ begin
     Inc(Counts[TokenizedCorpus[i]]);
 
   // Build index array.
-  N := Length(Counts);
-  SetLength(Index, N);
-  for i := 0 to N - 1 do
+  n := Length(Counts);
+  SetLength(Index, n);
+  for i := 0 to n - 1 do
     Index[i] := i;
 
   // Selection sort index array by Counts[index] descending.
-  for i := 0 to N - 2 do begin
+  for i := 0 to n - 2 do begin
     k := i;
-    for j := i + 1 to N-1 do
+    for j := i + 1 to n - 1 do
       if Counts[Index[j]] > Counts[Index[k]] then
         k := j;
 
@@ -271,8 +272,7 @@ begin
       writeln;
   end;
 
-  if VerboseTokenize and (TextRec(Output).Handle = StdOutputHandle) then
-    Pause;
+  if VerboseTokenize and (TextRec(Output).Handle = StdOutputHandle) then Pause;
 end;
 
 // Count token usage.
@@ -344,7 +344,7 @@ begin
     Writeln(i + 1:4, '  ID=', Stats[i].TokenID:6, '  Count=',
       Stats[i].Count:8, '  Symbol="', S, '"');
   end;
-  Pause;
+   if TextRec(Output).Handle = StdOutputHandle then Pause;
 end;
 
 // Report merged tokens never used.
@@ -456,7 +456,7 @@ begin
   writeln;
   end;
 
-// Report all statistics.       If writing to file, don't do pause.
+// Report all statistics.
 procedure ReportStatistics;
 begin
   CalculateTimeStatistics;
@@ -501,7 +501,7 @@ begin
     Write(TokenizedCorpus[i], ' ');
   writeln;
   writeln('Tokenized corpus length =  ', Length(TokenizedCorpus));
-  Pause
+  Pause;
 end;
 
 // Detokenize tokenized corpus to text.
@@ -550,6 +550,7 @@ begin
   StopTime := 0;   // Time to subtract from timing.
 
   // Create the tokenized corpus.
+  nCorpus := Length(Corpus);
   TokenizeFromSymbolTable(FileName, Corpus);
 
   // Timing.
@@ -564,7 +565,7 @@ begin
 
   // Report statistics.
   if VerboseTokenize then
-    ReportStatistics;                             // Also to log file?
+    ReportStatistics;
 
   // Save TokenizedCorpus and other data.
   if SaveFiles then begin

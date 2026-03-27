@@ -1,0 +1,68 @@
+--- Program Information ---
+WesChat, Version: 1.2
+Author: Wesley R. Parsons
+Date: begun January 10, 2026
+Sequence Length (SeqLen): 128
+Model Dimensions (ModelDim): 160
+Dimensional Projections (Proj): 4
+Heads (nHead): 8
+Blocks (nBlock): 4
+Learning Rate (LearningRate): 0.0100
+Trainable Parameters: Wq, Wk, Wv, W0, W1, b1, W2, b2, gamma1, beta1, beta2, gamma2
+Maximum Vocabulary (MaxVocab): 12000
+Number of Vocabulary (nVocab): 15000
+
+--- File Information ---
+Files used in symbol table: 
+damnedthing.txt   18457 bytes   3/27/2026 1:08:34 PM  
+
+--- Time Statistics ---
+Start time: 3/27/2026 1:11:08 PM     End time: 3/27/2026 1:11:09 PM
+Total elapsed time: 0 hours, 0 min 1.0540 sec
+--- BPE Statistics ---
+Original text size (bytes/tokens): 18457
+Encoded text size (bytes/tokens): 4962
+Compression ratio: 3.7197
+Tokens per second: 17511.3852
+
+--- Token Statistics ---
+Merged token instances: 4454
+Unmerged token instances: 508
+Mean token length: 3.7197
+
+--- Top 30 Most Frequent Merged Tokens ---
+   1  ID=   373  Count=      56  Symbol="the "
+   2  ID=   276  Count=      52  Symbol=", "
+   3  ID=   262  Count=      52  Symbol="  "
+   4  ID=   261  Count=      49  Symbol="th"
+   5  ID=   646  Count=      38  Symbol="a "
+   6  ID=   467  Count=      33  Symbol="and "
+   7  ID=   300  Count=      31  Symbol="ing "
+   8  ID=   320  Count=      29  Symbol="to "
+   9  ID=   317  Count=      28  Symbol="was "
+  10  ID=   309  Count=      24  Symbol="--"
+  11  ID=   265  Count=      24  Symbol="in"
+  12  ID=   278  Count=      23  Symbol="y "
+  13  ID=   509  Count=      23  Symbol="that "
+  14  ID=   266  Count=      23  Symbol="s "
+  15  ID=   290  Count=      22  Symbol="ed "
+  16  ID=   559  Count=      21  Symbol="as "
+  17  ID=   336  Count=      20  Symbol="is "
+  18  ID=   311  Count=      20  Symbol="se"
+  19  ID=   267  Count=      19  Symbol="d "
+  20  ID=   268  Count=      18  Symbol="t "
+  21  ID=   308  Count=      18  Symbol="at "
+  22  ID=   260  Count=      18  Symbol="e "
+  23  ID=   274  Count=      17  Symbol="an"
+  24  ID=   438  Count=      17  Symbol="all"
+  25  ID=   400  Count=      16  Symbol="; "
+  26  ID=   304  Count=      16  Symbol="of "
+  27  ID=   464  Count=      15  Symbol="or "
+  28  ID=   381  Count=      15  Symbol="were "
+  29  ID=   361  Count=      15  Symbol="not "
+  30  ID=   519  Count=      15  Symbol="me "
+Hit <CR> to continue.... 
+Merged tokens never used: 209
+Merged tokens used only once: 230
+Top 30 merged tokens account for 767 / 4452 merged-token instances = 17.23%
+

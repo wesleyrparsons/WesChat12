@@ -23,7 +23,6 @@ type
     Prev, Next: PTokenNode;
   end;
 
-  // New hash code here.
   type
   TPairSlotState = (psEmpty, psUsed);
 
@@ -54,6 +53,7 @@ type
 
 var
   StartSymbol: Integer = 260;                    // UTF-8 0.255, BOS, EOS, PAD, UNK is 259.
+  nCorpus: Integer;
   ElapsedMS, MElapsedMS: Int64;                  // For timing.
   MHours, Hours, MMIns, Mins: Int64;             // For timing.
   Secs, MSecs: Double;                           // For timing.
@@ -451,7 +451,7 @@ var
           Writeln('Maximum symbols = ', MaxVocab, '. Maximum merges = ', MaxMerges,
             '. Hash capacity = ', H.Capacity, '. Used slots = ', H.Used, '. Best count = ', BestCount, '.');
           Write(DateTimeToStr(Now), '  X = Exit program. B = Break out of merge loop. V = toggle Verbose mode.');
-          Writeln('  P = Program information. M = Merging information. S = maximum Symbols. Merging...');
+          Writeln('  I = program Information. P = Pause. M = Merging information. S = maximum Symbols. Merging...');
         end;
       's', 'S':
         begin
@@ -482,8 +482,11 @@ begin
 
     // Optional: save partial symbol table.
     if SavePartialSymbolTable then
-      if (Length(SymbolTable) mod PartialSymbolTableTrigger) = 0 then
+      if (Length(SymbolTable) mod PartialSymbolTableTrigger) = 0 then begin
+        ChDir(WorkingDir);
         SaveSymbolTable(WorkingDir + FormatDateTime('yyyy-mm-dd_hhnnss' + '.sym', Now), SymbolTable);
+        ChDir('..');
+      end;
 
     // Stop if hash table got too full.
     if H.Used > MaxPairCount then begin
@@ -684,7 +687,7 @@ begin
   WriteLn;
   WriteLn('Mean symbol length: ', SumLen / n: 0: 4);
   WriteLn('Median symbol length: ', Median: 0: 4);
-  writeln('Mean tokens per symbol (compression): ', nCorpus / nSymbols);
+  writeln('Mean tokens per symbol (compression): ', (nCorpus / nSymbols): 0: 4);
 end;
 
 // Calculate and report longest symbols.
@@ -739,9 +742,11 @@ begin
     Writeln('Elapsed time applying merges: ', MHours, ' hours, ', Mmins, ' min ', Msecs: 4: 4, ' sec');
   end;
   Writeln('Original text size (bytes/tokens): ', nCorpus);
-  if not FromSymbolTable then
-    Writeln('Tokens per second: ', nCorpus / (ElapsedMS / 1000): 6: 4);
-  writeln;
+  if not FromSymbolTable then begin
+    Writeln('Tokens per second (total): ', nCorpus / (ElapsedMS / 1000): 6: 4);
+    Writeln('Tokens per second (merging): ', nCorpus / (MElapsedMS / 1000): 6: 4);
+    writeln;
+  end;
 end;
 
 // Report all statistics.
@@ -808,7 +813,7 @@ begin
   StopTime := 0;   // Time to subtract from timing.
 
   // Create the TokenList.
-  writeln('Maximum symbols = ', MaxVocab, '. Maximum merges = ', MaxMerges, '. Maximum pair counts = ', MaxPairCount, '. Tokenizing...');
+  writeln('Maximum symbols = ', MaxVocab, '. Maximum merges = ', MaxMerges, '. Maximum pair counts = ', MaxPairCount, '.');
   writeln('X = Exit program. B = Break out of merge loop. V = toggle Verbose mode. P = Program information. M = Merging information. Merging...');
   BuildTokenListFromCorpus(Corpus);
 

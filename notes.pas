@@ -40,13 +40,6 @@ But because counts change after merges, you usually do lazy heap updates:
 push updated (pair, count, version) records
 when popping, discard stale entries. What heap unit to use in FPC?
 
-2. DetokenizeToDisplay has a symbol index bug.
-You do: else begin
-  symIndex := t - 260;
-  Write(SymbolTable[symIndex]);
-end; But your symbol table already stores merged symbols at their true token IDs:
-That code should likely just be: Write(SymbolTable[t]);
-
 4. Corpus array of byte. Use RawByteString. Done, but check.
 
 5. Drop linked lists. So if you later optimize training hard, use
@@ -55,23 +48,21 @@ Tok[i], Prev[i], Next[i], Alive[i].
 6. Avoid repeated trie rebuilds.
 If the symbol table is fixed, build the trie once after loading. ??
 
-7. nSymbols or nVocab?
+7. Use nSymbols, except use nVocab in Transform.
 
 8. Add a regex pretokenizer. Nope, not necessary.
 
-9. Separate into Symbolize and Tokenize.
-
 Symbolize.
 
-Should I use clean-up symbols in DisplayByteSymbolTable?
+Should I use clean-up symbols in DisplayByteSymbolTable? Yes, doing so.
 Lengthen tabs in printouts like most frequent symbols.array[ or symboltable...1] of Type = ();
 
 Embed.
 
 The name RunEmbed understates what it does. It seems to:
-initialize embeddings, initialize transformer, create training windows, b
-uild input and targets, and run transformer blocks.
-That is more like: RunTrainingWindows or RunEmbeddingAndTransform.
+initialize embeddings, initialize transformer, create training windows,
+build input and targets, and run transformer blocks.
+No, keep it as Embed.
 
 Transform.
 
@@ -81,10 +72,9 @@ This is called weight tying. Don't need WVocab.
 The gradient has to hit the embedding matrix after X0.
 
 2. What to do with nTokens and append proc.
-Check adding EOS and BOS at end of multiple corpuses.
-Should SeqLen be a BVectorType.
+Should SeqLen be a BVectorType. Good question!
 In Tokenize, add maxheap with a hash table to speed up tokenization.
-🔹 Store attention softmax outputs
+Store attention softmax outputs.
 Do I need them intact for backprop through softmax.
 
 3. Put Hidden on the heap; make it a dynamically allocated variable. No. cblas will not work.

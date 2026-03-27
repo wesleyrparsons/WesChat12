@@ -71,6 +71,7 @@ var
   i, j, k: Integer;
   Start, EmbedLoop: Integer;
   Stride: Integer = 64;
+  f: string;
 
   procedure ReadEmbedIfKeyPressed;
   var
@@ -93,26 +94,35 @@ var
         writeln('Very verbose mode: ', VeryVerbose);
         Pause;
       end;                   // Change verbosity.
-      'p', 'P': begin
+      'i', 'I': begin
         writeln;
         ReportInfo;          // Report program info.
         Pause;
       end;
-      'e', 'E': begin
-        writeln('Embedding. nVocab = ', nVocab, ' nSymbols = ', nSymbols, ' ModelDim = ', ModelDim + 1,
-          '  Start = ', Start, ' Stride = ', Stride, ' SeqLen = ', SeqLen, {' MaxSeq = ', MaxSeq, }' Length of TokenizedCorpus = ', Length(TokenizedCorpus));
-        writeln(DateTimeToStr(Now), '  X = Exit program. B = Break out of merge loop. V = toggle Verbose mode.');
-        writeln(' P = Program information. E = Embedding information. Embedding & transforming...');
+      't', 'T': begin
+        writeln('Training. nVocab = ', nVocab, ' nSymbols = ', nSymbols, ' ModelDim = ', ModelDim,
+          '  Start = ', Start, ' Stride = ', Stride, ' SeqLen = ', SeqLen, ' Length of TokenizedCorpus = ', Length(TokenizedCorpus));
+        Write(DateTimeToStr(Now), '  X = Exit program. B = Break out of loop. V = toggle Verbose mode. P = Pause.');
+        Writeln('  W = WesChat Information. T = Training information. S = Save. Training...');
         Pause;
       end;
+      's', 'S':
+        begin
+          ChDir(WorkingDir);
+          f := WorkingDir + FormatDateTime('yyyy-mm-dd_hhnnss' + '.sym', Now);
+          // SaveModel;
+          ChDir('..');
+          // writeln('File ', f, ' successfully saved.');
+          Pause;
+        end;
+
     end;
   end;
 
 begin
-  if VeryVerbose then begin
-    writeln('Start Embedding. nVocab = ', nVocab, ' nSymbols = ', nSymbols, ' ModelDim = ', ModelDim + 1,
-       ' SeqLen = ', SeqLen, {' MaxSeq = ', MaxSeq, }' Length of TokenizedCorpus = ', Length(TokenizedCorpus));
-  end;
+  if VeryVerbose then
+    writeln('Start Training. nVocab = ', nVocab, ' nSymbols = ', nSymbols, ' ModelDim = ', ModelDim,
+       ' SeqLen = ', SeqLen, ' Length of TokenizedCorpus = ', Length(TokenizedCorpus));
 
   // Set the dimensions of the embedding matrix.
   SetLength(Embeddings, nSymbols);
@@ -186,5 +196,4 @@ begin
 end;
 
 end.
-
 

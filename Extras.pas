@@ -96,6 +96,7 @@ begin
   end;
 end;
 
+// F87 optimized blocked matrix operations.
 procedure BlockedMatMulLLLD(const A: SASHLLArray; B: SASHLDArray; out C: SASHLDArray);
 const
   BS = 32;  // block size
@@ -137,6 +138,7 @@ begin
   end;
 end;
 
+// F87 optimized blocked matrix operations.
 procedure BlockedMatMulLDDD(const A: SASHLDArray; B: SASHDDArray; out C: SASHLDArray);
 const
   BS = 32;  // block size
@@ -178,6 +180,7 @@ begin
   end;
 end;
 
+// F87 optimized blocked matrix operations.
 procedure BlockedMatMulLDDL(const A: SASHLDArray; B: SASHDLArray; out C: SASHLLArray);
 const
   BS = 32;  // block size
@@ -219,6 +222,7 @@ begin
   end;
 end;
 
+// Trnspose matrix L and D dimenstions.
 function TransposeLD(const A: SASHLDArray): SASHDLArray;
 var
   M, N: Integer;

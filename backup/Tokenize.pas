@@ -14,8 +14,7 @@ uses
   FileUtil,
   Global,
   IOHandler,
-  SysUtils,
-  WesTokenize;
+  SysUtils;
 
 type
   TSymbolTable = TRBSVector;           // Array of symbols. So index of array is a symbol string.

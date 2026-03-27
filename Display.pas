@@ -9,11 +9,18 @@ interface
 uses
   Global;
 
+// Puase procedures.
 procedure HardPause;
 procedure Pause;
+
+// Interrupt procedures.
 function CheckForControlKey: Char;
+
+// Display symbols procedures.
 function CleanUpSymbol(const x: RawByteString): RawByteString;
 procedure DisplayByteSymbolTable(const SymbolTable: TSymbolTable);
+
+// Display vectors and matrices.
 procedure DisplayVector(const V: TIVector);
 procedure DisplayX(const X: TSeqMatrix; const Part: TPart = B); overload;
 procedure DisplayX(const X: TSeqHeadMatrix; const Part: TPart = B); overload;
@@ -21,6 +28,8 @@ procedure DisplayX(const X: THiddenMatrix; const Part: TPart = B); overload;
 procedure DisplayX(const X: TSeqVocabMatrix; const Part: TPart = B); overload;
 procedure DisplayX(const X: TVocabWeightMatrix; const Part: TPart = B); overload;
 procedure DisplayX(const X: TScoresMatrix; const Part: TPart = B); overload;
+
+// Report information on program.
 procedure ReportInfo;
 
 implementation
@@ -34,9 +43,9 @@ uses
 // Pause, unconditional.
 procedure HardPause;
 begin
-  write('Hit <CR> to continue.... ');
+  Write('Hit <CR> to continue.... ');
   Readln;
-  writeln;
+  Writeln;
 end;
 
 // Pause, subject to DoNotPause.
@@ -63,19 +72,19 @@ end;
 // Write information on state of program.
 procedure ReportInfo;
 begin
-  writeln('--- Program Information ---');
-  writeln('WesChat, Version: ', Version);
-  writeln('Author: Wesley R. Parsons');
-  writeln('Date: February 15, 2026');
-  writeln('Sequence Length (SeqLen): ', SeqLen);
-  writeln('Model Dimensions (ModelDim): ', ModelDim);
-  writeln('Dimensional Projections (Proj): ', Proj);
-  writeln('Heads (nHead): ', nHead);
-  writeln('Blocks (nBlock): ', nBlock);
-  writeln('Learning Rate (LearningRate): ', LearningRate: 6: 4);
-  writeln('Trainable Parameters: Wq, Wk, Wv, W0, W1, b1, W2, b2, gamma1, beta1, beta2, gamma2');
-  writeln('Maximum Vocabulary (MaxVocab): ', MaxVocab);
-  writeln('Number of Vocabulary (nVocab): ', nVocab);
+  Writeln('--- Program Information ---');
+  Writeln('WesChat, Version: ', Version);
+  Writeln('Author: Wesley R. Parsons');
+  Writeln('Date: begun January 10, 2026');
+  Writeln('Sequence Length (SeqLen): ', SeqLen);
+  Writeln('Model Dimensions (ModelDim): ', ModelDim);
+  Writeln('Dimensional Projections (Proj): ', Proj);
+  Writeln('Heads (nHead): ', nHead);
+  Writeln('Blocks (nBlock): ', nBlock);
+  Writeln('Learning Rate (LearningRate): ', LearningRate: 6: 4);
+  Writeln('Trainable Parameters: Wq, Wk, Wv, W0, W1, b1, W2, b2, gamma1, beta1, beta2, gamma2');
+  Writeln('Maximum Vocabulary (MaxVocab): ', MaxVocab);
+  Writeln('Number of Vocabulary (nVocab): ', nVocab);
 end;
 
 // Replace unprintable symbols with space.
@@ -87,8 +96,7 @@ begin
   L := Length(x);
   SetLength(Result, L);   // Allocate output string
 
-  for j := 1 to L do
-  begin
+  for j := 1 to L do begin
     ch := x[j];
 
     if Ord(ch) in [1..31, 127..255] then
@@ -106,15 +114,15 @@ begin
   Writeln('--- Symbol Table ---');
   for i := 0 to High(SymbolTable) do begin  // Loop thru each symbol in table.
     if (i in [0..31]) or (i in [127..255]) then
-      write(i: 8, IntToHex(i, 2): 15)       // Hex for non-ASCII characters.
+      Write(i: 8, IntToHex(i, 2): 15)       // Hex for non-ASCII characters.
     else
-      write(i: 8, '"' + SymbolTable[i] + '"': 15);
-    if (i mod 5) = 4 then writeln;
+      Write(i: 8, '"' + SymbolTable[i] + '"': 15);
+    if (i mod 5) = 4 then Writeln;
     if (i > 0) and (i mod 100 = 99) then Pause;
   end;
-  writeln;
-  writeln('Symbol table length = ', Length(SymbolTable));
-  writeln;
+  Writeln;
+  Writeln('Symbol table length = ', Length(SymbolTable));
+  Writeln;
 end;
 
 // Display a vector, character by character, then pause.
@@ -143,14 +151,12 @@ begin
       iE := 9;
       jB := 0;
       jE := 9;
-      // if High(X[0]) < 9 then jE := High(X[0]);
     end;
     E: begin
       iB := High(X) - 9;
       iE := High(X);
       jB := High(X[0]) - 9;
       jE := High(X[0]);
-      // if High(X[0]) < 9 then jE := High(X[0]);
     end;
     F: begin
       iB := 0;
@@ -167,26 +173,26 @@ begin
       jE := tStride;
     end;
   end;
-  write('       ');
+  Write('       ');
   for j := jB to jE do
-    write(j * hStride: 8, '    ');
+    Write(j * hStride: 8, '    ');
   if Part = G then
-    write(High(X[0]): 8, '    ');
-  writeln;
+    Write(High(X[0]): 8, '    ');
+  Writeln;
   for i := iB to iE do begin
-    write(i * vStride: 4);
+    Write(i * vStride: 4);
     for j := jB to jE do
-      write(X[i * vStride, j * hStride]: 11: 5, ' ');
+      Write(X[i * vStride, j * hStride]: 11: 5, ' ');
     if Part = G then
-      write(X[i * vStride, High(X[0])]: 11: 5, ' ');
-    writeln;
+      Write(X[i * vStride, High(X[0])]: 11: 5, ' ');
+    Writeln;
   end;
   if Part = G then begin
-    write(High(X): 4);
+    Write(High(X): 4);
     for j := jB to jE do
-      write(X[High(X), j * hStride]: 11: 5, ' ');
-    write(X[High(X), High(X[0])]: 11: 5, ' ');
-    writeln;
+      Write(X[High(X), j * hStride]: 11: 5, ' ');
+    Write(X[High(X), High(X[0])]: 11: 5, ' ');
+    Writeln;
   end;
 end;
 
@@ -205,14 +211,12 @@ begin
       iE := 9;
       jB := 0;
       jE := 9;
-      // if High(X[0]) < 9 then jE := High(X[0]);
     end;
     E: begin
       iB := High(X) - 9;
       iE := High(X);
       jB := High(X[0]) - 9;
       jE := High(X[0]);
-      // if High(X[0]) < 9 then jE := High(X[0]);
     end;
     F: begin
       iB := 0;
@@ -229,26 +233,26 @@ begin
       jE := tStride;
     end;
   end;
-  write('       ');
+  Write('       ');
   for j := jB to jE do
-    write(j * hStride: 8, '    ');
+    Write(j * hStride: 8, '    ');
   if Part = G then
-    write(High(X[0]): 8, '    ');
-  writeln;
+    Write(High(X[0]): 8, '    ');
+  Writeln;
   for i := iB to iE do begin
-    write(i * vStride: 4);
+    Write(i * vStride: 4);
     for j := jB to jE do
-      write(X[i * vStride, j * hStride]: 11: 5, ' ');
+      Write(X[i * vStride, j * hStride]: 11: 5, ' ');
     if Part = G then
-      write(X[i * vStride, High(X[0])]: 11: 5, ' ');
-    writeln;
+      Write(X[i * vStride, High(X[0])]: 11: 5, ' ');
+    Writeln;
   end;
   if Part = G then begin
-    write(High(X): 4);
+    Write(High(X): 4);
     for j := jB to jE do
-      write(X[High(X), j * hStride]: 11: 5, ' ');
-    write(X[High(X), High(X[0])]: 11: 5, ' ');
-    writeln;
+      Write(X[High(X), j * hStride]: 11: 5, ' ');
+    Write(X[High(X), High(X[0])]: 11: 5, ' ');
+    Writeln;
   end;
 end;
 
@@ -267,14 +271,12 @@ begin
       iE := 9;
       jB := 0;
       jE := 9;
-      // if High(X[0]) < 9 then jE := High(X[0]);
     end;
     E: begin
       iB := High(X) - 9;
       iE := High(X);
       jB := High(X[0]) - 9;;
       jE := High(X[0]);
-      // if High(X[0]) < 9 then jE := High(X[0]);
     end;
     F: begin
       iB := 0;
@@ -291,26 +293,26 @@ begin
       jE := tStride;
     end;
   end;
-  write('       ');
+  Write('       ');
   for j := jB to jE do
-    write(j * hStride: 8, '    ');
+    Write(j * hStride: 8, '    ');
   if Part = G then
-    write(High(X[0]): 8, '    ');
-  writeln;
+    Write(High(X[0]): 8, '    ');
+  Writeln;
   for i := iB to iE do begin
-    write(i * vStride: 4);
+    Write(i * vStride: 4);
     for j := jB to jE do
-      write(X[i * vStride, j * hStride]: 11: 5, ' ');
+      Write(X[i * vStride, j * hStride]: 11: 5, ' ');
     if Part = G then
-      write(X[i * vStride, High(X[0])]: 11: 5, ' ');
-    writeln;
+      Write(X[i * vStride, High(X[0])]: 11: 5, ' ');
+    Writeln;
   end;
   if Part = G then begin
-    write(High(X): 4);
+    Write(High(X): 4);
     for j := jB to jE do
-      write(X[High(X), j * hStride]: 11: 5, ' ');
-    write(X[High(X), High(X[0])]: 11: 5, ' ');
-    writeln;
+      Write(X[High(X), j * hStride]: 11: 5, ' ');
+    Write(X[High(X), High(X[0])]: 11: 5, ' ');
+    Writeln;
   end;
 end;
 
@@ -329,14 +331,12 @@ begin
       iE := 9;
       jB := 0;
       jE := 9;
-      // if High(X[0]) < 9 then jE := High(X[0]);
     end;
     E: begin
       iB := High(X) - 9;
       iE := High(X);
       jB := High(X[0]) - 9;;
       jE := High(X[0]);
-      // if High(X[0]) < 9 then jE := High(X[0]);
     end;
     F: begin
       iB := 0;
@@ -353,26 +353,26 @@ begin
       jE := tStride;
     end;
   end;
-  write('       ');
+  Write('       ');
   for j := jB to jE do
-    write(j * hStride: 8, '    ');
+    Write(j * hStride: 8, '    ');
   if Part = G then
-    write(High(X[0]): 8, '    ');
-  writeln;
+    Write(High(X[0]): 8, '    ');
+  Writeln;
   for i := iB to iE do begin
-    write(i * vStride: 4);
+    Write(i * vStride: 4);
     for j := jB to jE do
-      write(X[i * vStride, j * hStride]: 11: 5, ' ');
+      Write(X[i * vStride, j * hStride]: 11: 5, ' ');
     if Part = G then
-      write(X[i * vStride, High(X[0])]: 11: 5, ' ');
-    writeln;
+      Write(X[i * vStride, High(X[0])]: 11: 5, ' ');
+    Writeln;
   end;
   if Part = G then begin
-    write(High(X): 4);
+    Write(High(X): 4);
     for j := jB to jE do
-      write(X[High(X), j * hStride]: 11: 5, ' ');
-    write(X[High(X), High(X[0])]: 11: 5, ' ');
-    writeln;
+      Write(X[High(X), j * hStride]: 11: 5, ' ');
+    Write(X[High(X), High(X[0])]: 11: 5, ' ');
+    Writeln;
   end;
 end;
 
@@ -391,14 +391,12 @@ begin
       iE := 9;
       jB := 0;
       jE := 9;
-      // if High(X[0]) < 9 then jE := High(X[0]);
     end;
     E: begin
       iB := High(X) - 9;
       iE := High(X);
       jB := High(X[0]) - 9;;
       jE := High(X[0]);
-      // if High(X[0]) < 9 then jE := High(X[0]);
     end;
     F: begin
       iB := 0;
@@ -415,26 +413,26 @@ begin
       jE := tStride;
     end;
   end;
-  write('       ');
+  Write('       ');
   for j := jB to jE do
-    write(j * hStride: 8, '    ');
+    Write(j * hStride: 8, '    ');
   if Part = G then
-    write(High(X[0]): 8, '    ');
-  writeln;
+    Write(High(X[0]): 8, '    ');
+  Writeln;
   for i := iB to iE do begin
-    write(i * vStride: 4);
+    Write(i * vStride: 4);
     for j := jB to jE do
-      write(X[i * vStride, j * hStride]: 11: 7, ' ');
+      Write(X[i * vStride, j * hStride]: 11: 7, ' ');
     if Part = G then
-      write(X[i * vStride, High(X[0])]: 11: 7, ' ');
-    writeln;
+      Write(X[i * vStride, High(X[0])]: 11: 7, ' ');
+    Writeln;
   end;
   if Part = G then begin
-    write(High(X): 4);
+    Write(High(X): 4);
     for j := jB to jE do
-      write(X[High(X), j * hStride]: 11: 7, ' ');
-    write(X[High(X), High(X[0])]: 11: 7, ' ');
-    writeln;
+      Write(X[High(X), j * hStride]: 11: 7, ' ');
+    Write(X[High(X), High(X[0])]: 11: 7, ' ');
+    Writeln;
   end;
 end;
 
@@ -453,14 +451,12 @@ begin
       iE := 9;
       jB := 0;
       jE := 9;
-      // if High(X[0]) < 9 then jE := High(X[0]);
     end;
     E: begin
       iB := High(X) - 9;
       iE := High(X);
       jB := High(X[0]) - 9;;
       jE := High(X[0]);
-      // if High(X[0]) < 9 then jE := High(X[0]);
     end;
     F: begin
       iB := 0;
@@ -477,26 +473,26 @@ begin
       jE := tStride;
     end;
   end;
-  write('       ');
+  Write('       ');
   for j := jB to jE do
-    write(j * hStride: 8, '    ');
+    Write(j * hStride: 8, '    ');
   if Part = G then
-    write(High(X[0]): 8, '    ');
-  writeln;
+    Write(High(X[0]): 8, '    ');
+  Writeln;
   for i := iB to iE do begin
-    write(i * vStride: 4);
+    Write(i * vStride: 4);
     for j := jB to jE do
-      write(X[i * vStride, j * hStride]: 11: 7, ' ');
+      Write(X[i * vStride, j * hStride]: 11: 7, ' ');
     if Part = G then
-      write(X[i * vStride, High(X[0])]: 11: 7, ' ');
-    writeln;
+      Write(X[i * vStride, High(X[0])]: 11: 7, ' ');
+    Writeln;
   end;
   if Part = G then begin
-    write(High(X): 4);
+    Write(High(X): 4);
     for j := jB to jE do
-      write(X[High(X), j * hStride]: 11: 7, ' ');
-    write(X[High(X), High(X[0])]: 11: 7, ' ');
-    writeln;
+      Write(X[High(X), j * hStride]: 11: 7, ' ');
+    Write(X[High(X), High(X[0])]: 11: 7, ' ');
+    Writeln;
   end;
 end;
 
@@ -505,11 +501,10 @@ procedure DisplayScoresHead(const ScoresHead: TScoresMatrix);
 var
   i, j:Integer;
 begin
-  for i := 0 to 20 do begin
+  for i := 0 to 20 do
     for j := 0 to 15 do
-      write(ScoresHead[i, j]: 11: 6);
-  writeln;
-  end;
+      Write(ScoresHead[i, j]: 11: 6);
+  Writeln;
   Pause;
 end;
 

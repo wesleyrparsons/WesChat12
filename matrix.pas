@@ -19,6 +19,7 @@ const
   CBlasNoTrans  = 111;
   CBlasTrans    = 112;
 
+// Multiply and add procedures.
 procedure MatMulFullNN(const A, B: PSingle; C: PSingle; M, N, K, lda, ldb, ldc: Integer);
 procedure MatMulFullTN(const A, B: PSingle; C: PSingle; M, N, K, lda, ldb, ldc: Integer);
 procedure MatMulFullNT(const A, B: PSingle; C: PSingle; M, N, K, lda, ldb, ldc: Integer);
@@ -26,17 +27,26 @@ procedure MatMulNN(const A, B: PSingle; C: PSingle; M, N, K: Integer);
 procedure MatMulNT(const A, B: PSingle; C: PSingle; M, N, K: Integer);
 procedure MatMulTN(const A, B: PSingle; C: PSingle; M, N, K: Integer);
 procedure MatAdd(const A, B: TSeqMatrix; var C: TSeqMatrix; Rows, Cols: Integer);
+
+// Partition and concatenate procedures.
 procedure VerticalPartitionX(const X: TSeqMatrix; const h: Integer; var XHead: TSeqHeadMatrix; const L, HL: Integer);
 procedure VerticalConcatX(const XHead: array of TSeqHeadMatrix; const h: Integer; var X: TSeqMatrix; const L, HL: Integer);
+
+// Split and accumulate procedures.
 procedure GradSplit(const Upstream: TSeqMatrix; var Left, Right: TSeqMatrix; Rows, Cols: Integer);
 procedure AccumulateGrad(const Src: TSeqMatrix; var Dst: TSeqMatrix; Rows, Cols: Integer);
 procedure MatMulAccNT(const A, B: PSingle; C: PSingle; M, N, K: Integer);
 procedure MatMulAccNN(const A, B: PSingle; C: PSingle; M, N, K: Integer);
+
+// ReLU procedures.
 procedure ReLUMaskForward(const A: THiddenMatrix; var B: THiddenMatrix);
 procedure ReLUMaskBackward(const Hidden: THiddenMatrix; var dHidden: THiddenMatrix);
+
+// Copy matrix procedure.
 procedure CopyXMatrix(const A: array of TSeqVector; var B: array of TSeqVector;
   const Rows, Cols: Integer);
 
+// cblas sgemm.
 procedure cblas_sgemm(
     Layout: LongInt;
     TransA: LongInt;
@@ -54,6 +64,7 @@ procedure cblas_sgemm(
     LDC: TMKLInt
 ); cdecl; external 'libopenblas.dll';
 
+// cblas saxpy.
 procedure cblas_saxpy(
     N: LongInt;
     alpha: Single;
@@ -63,6 +74,7 @@ procedure cblas_saxpy(
     incY: LongInt
 ); cdecl; external 'libopenblas.dll';
 
+// cblas scopy.
 procedure cblas_scopy(
     N: LongInt;
     const X: PSingle;
@@ -71,6 +83,7 @@ procedure cblas_scopy(
     incY: LongInt
 ); cdecl; external 'libopenblas.dll';
 
+// cblas sscal.
 procedure cblas_sscal(
     N: LongInt;
     alpha: Single;
@@ -78,6 +91,7 @@ procedure cblas_sscal(
     incX: LongInt
 ); cdecl; external 'libopenblas.dll';
 
+// cblas sdot.
 function cblas_sdot(
     N: LongInt;
     const X: PSingle;
@@ -86,6 +100,7 @@ function cblas_sdot(
     incY: LongInt
 ): Single; cdecl; external 'libopenblas.dll';
 
+// cblas snrm2.
 function cblas_snrm2(
     N: LongInt;
     const X: PSingle;
@@ -94,6 +109,7 @@ function cblas_snrm2(
 
 implementation
 
+// Parition X into h heads.
 procedure VerticalPartitionX(const X: TSeqMatrix; const h: Integer; var XHead: TSeqHeadMatrix; const L, HL: Integer);
 var
   i: Integer;
@@ -102,6 +118,7 @@ begin
       cblas_scopy(HL, @X[i, h * HL], 1, @XHead[i, 0], 1);
 end;
 
+// Concatenate the h heads back into X.
 procedure VerticalConcatX(const XHead: array of TSeqHeadMatrix; const h: Integer; var X: TSeqMatrix; const L, HL: Integer);
 var
   i: Integer;
@@ -113,20 +130,20 @@ end;
 // Split Gradient into 2 streams, for backprop.
 procedure GradSplit(const Upstream: TSeqMatrix; var Left, Right: TSeqMatrix; Rows, Cols: Integer);
 var
-  N: Integer;
+  n: Integer;
 begin
-  N := Rows * Cols;
+  n := Rows * Cols;
 
   // Left += Upstream.
   cblas_saxpy(
-    N,
+    n,
     1.0,
     @Upstream[0,0], 1,
     @Left[0,0], 1);
 
   // Right += Upstream.
   cblas_saxpy(
-    N,
+    n,
     1.0,
     @Upstream[0,0], 1,
     @Right[0,0], 1);
@@ -135,11 +152,11 @@ end;
 // Accummulate Gradient.
 procedure AccumulateGrad(const Src: TSeqMatrix; var Dst: TSeqMatrix; Rows, Cols: Integer);
 var
-  N: Integer;
+  n: Integer;
 begin
-  N := Rows * Cols;
+  n := Rows * Cols;
   cblas_saxpy(
-  N,
+  n,
   1.0,
   @Src[0,0], 1,
   @Dst[0,0], 1);
@@ -190,78 +207,78 @@ end;
 procedure MatMulNN(const A, B: PSingle; C: PSingle; M, N, K: Integer);
 begin
   cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
-       M, N, K,
-       1.0,
-       A, K,
-       B, N,
-       0.0,
-       C, N);
+    M, N, K,
+    1.0,
+    A, K,
+    B, N,
+    0.0,
+    C, N);
 end;
 
 // Matrix multiplication, B transpose, overwrite, row-major.
 procedure MatMulNT(const A, B: PSingle; C: PSingle; M, N, K: Integer);
 begin
   cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasTrans,
-       M, N, K,
-       1.0,
-       A, K,
-       B, K,
-       0.0,
-       C, N);
+    M, N, K,
+    1.0,
+    A, K,
+    B, K,
+    0.0,
+    C, N);
 end;
 
 // Matrix multiplication, A transpose, overwrite, row-major.
 procedure MatMulTN(const A, B: PSingle; C: PSingle; M, N, K: Integer);
 begin
   cblas_sgemm(CblasRowMajor, CblasTrans, CblasNoTrans,
-       M, N, K,
-       1.0,
-       A, M,
-       B, N,
-       0.0,
-       C, N);
+    M, N, K,
+    1.0,
+    A, M,
+    B, N,
+    0.0,
+    C, N);
 end;
 
 // Matrix multiplication, no transpose, accumulate, row-major.
 procedure MatMulAccNN(const A, B: PSingle; C: PSingle; M, N, K: Integer);
 begin
   cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
-       M, N, K,
-       1.0,
-       A, K,
-       B, N,
-       1.0,
-       C, N);
+    M, N, K,
+    1.0,
+    A, K,
+    B, N,
+    1.0,
+    C, N);
 end;
 
 // Matrix multiplication, B transpose, accumulate, row-major.
 procedure MatMulAccNT(const A, B: PSingle; C: PSingle; M, N, K: Integer);
 begin
   cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasTrans,
-       M, N, K,
-       1.0,
-       A, K,
-       B, K,
-       1.0,
-       C, N);
+    M, N, K,
+    1.0,
+    A, K,
+    B, K,
+    1.0,
+    C, N);
 end;
 
 // Matrix addition, overwrite.
 procedure MatAdd(const A, B: TSeqMatrix; var C: TSeqMatrix; Rows, Cols: Integer);
 var
-  N: Integer;
+  n: Integer;
 begin
-  N := Rows * Cols;
+  n := Rows * Cols;
 
   // C := A.
   cblas_scopy(
-    N,
+    n,
     @A[0,0], 1,
     @C[0,0], 1);
 
   // C += B.
   cblas_saxpy(
-    N,
+    n,
     1.0,
     @B[0,0], 1,
     @C[0,0], 1);
@@ -270,27 +287,26 @@ end;
 // Matrix addition, accumulate.
 procedure MatAccumulate(const A: TSeqMatrix; var C: TSeqMatrix; Rows, Cols: Integer);
 var
-  N: Integer;
+  n: Integer;
 begin
-  N := Rows * Cols;
+  n := Rows * Cols;
 
   // C += A.
   cblas_saxpy(
-    N,
+    n,
     1.0,
     @A[0,0], 1,
     @C[0,0], 1);
 end;
 
-{For each row, you need: Xstd = X − μσ. Where:
+{ Standard z-score transform: Xstd = X − μσ.
    μ = mean of the row.
-   σ = standard deviation (usually computed with L2 norm).
- This is the standard z-score transform.}
+   σ = standard deviation (usually computed with L2 norm).}
 procedure StandardizeRows(var A: array of Single; M, N: Integer);
 var
   r, j: Integer;
-  mean, std, invStd: Single;
-  Ones: array of Single;
+  Mean, Std, InvStd: Single;
+  Ones: TFVector;
 begin
   // Build a vector of ones for mean calculation.
   SetLength(Ones, N);
@@ -302,20 +318,20 @@ begin
     // Row r begins at index r * N.
     // Row is contiguous, so stride = 1.
     // 1. Compute mean = (1/N) * sum(row).
-    mean := cblas_sdot(N, @A[r * N], 1, @Ones[0], 1) / N;
+    Mean := cblas_sdot(N, @A[r * N], 1, @Ones[0], 1) / N;
 
     // 2. Subtract mean: row := row - mean.
-    cblas_saxpy(N, -mean, @Ones[0], 1, @A[r * N], 1);
+    cblas_saxpy(N, -Mean, @Ones[0], 1, @A[r * N], 1);
 
     // 3. Compute std = sqrt(sum((row - mean)^2) / N).
-    std := cblas_snrm2(N, @A[r * N], 1) / Sqrt(N);
+    Std := cblas_snrm2(N, @A[r * N], 1) / Sqrt(N);
 
     // Avoid divide-by-zero.
-    if std > 1e-12 then begin
-      invStd := 1.0 / std;
+    if Std > 1e-12 then begin
+      InvStd := 1.0 / Std;
 
     // 4. Scale row: row := row * (1 / std).
-    cblas_sscal(N, invStd, @A[r * N], 1);
+    cblas_sscal(N, InvStd, @A[r * N], 1);
     end;
   end;
 end;
@@ -330,6 +346,7 @@ begin
       B[i, j] := Max(0.0, A[i, j]);
 end;
 
+// Apply ReLU if needed for back propagation.
 procedure ReLUMaskBackward(const Hidden: THiddenMatrix; var dHidden: THiddenMatrix);
 var
   i, j: Integer;

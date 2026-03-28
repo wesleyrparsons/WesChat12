@@ -410,6 +410,7 @@ procedure TrainBPEHash(var Head, Tail: PTokenNode; MaxMerges: Integer;
   var MergeCount, StartSymbol: Integer);
 var
   m, BestCount, A, B: Integer;
+  f: string;
   H: TPairHash;
 
   procedure ReadMergeIfKeyPressed;
@@ -435,7 +436,7 @@ var
           VeryVerbose := not VeryVerbose;
           Writeln('Very verbose mode: ', VeryVerbose);
         end;
-      'i', 'I':
+      'w', 'W':
         begin
           Writeln;
           ReportInfo;
@@ -450,14 +451,22 @@ var
           Writeln;
           Writeln('Maximum symbols = ', MaxVocab, '. Maximum merges = ', MaxMerges,
             '. Hash capacity = ', H.Capacity, '. Used slots = ', H.Used, '. Best count = ', BestCount, '.');
-          Write(DateTimeToStr(Now), '  X = Exit program. B = Break out of merge loop. V = toggle Verbose mode.');
-          Writeln('  I = program Information. P = Pause. M = Merging information. S = maximum Symbols. Merging...');
+          Write(DateTimeToStr(Now), '  X = Exit program. B = Break out of merge loop. V = toggle Verbose mode. P = Pause.');
+          Writeln('  W = WesChat Information. M = Merging information. Y = set maximum sYmbols. S = Save. Merging...');
         end;
-      's', 'S':
+      'y', 'Y':
         begin
           Writeln;
           Write('Current maximum symbols = ', MaxVocab, '. Enter new maximum symbols: ');
           ReadLn(MaxVocab);
+        end;
+      's', 'S':
+        begin
+          ChDir(WorkingDir);
+          f := WorkingDir + FormatDateTime('yyyy-mm-dd_hhnnss' + '.sym', Now);
+          SaveSymbolTable(f, SymbolTable);
+          ChDir('..');
+          writeln('File ', f, ' successfully saved.');
         end;
     end;
   end;

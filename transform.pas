@@ -19,14 +19,14 @@ var
   // Not trainable parameters.
   X1, X2, X3, X4, X5,
     X6, X7, X8, U:                TSeqTensor;              // X's at all stages.
-  X1Head, X2Head:                 array[0..nHead - 1] of TSeqHeadTensor;
-  X1q, X1v, X1k:                  TSeqTensor;
-  X1qHead, X1vHead, X1kHead:      array[0..nHead - 1] of TSeqTensor;
+  X1Head, X2Head:                 array[0..nHead - 1] of TSeqHeadTensor;  // X partitioned into nHeads.
+  X1q, X1v, X1k:                  TSeqTensor;              // X's for Q, K, V.
+  X1qHead, X1vHead, X1kHead:      array[0..nHead - 1] of TSeqTensor;      // Above partitioned into nHeads.
   Q, K, V:                        TSeqTensor;              // Q is X*Wq, K is X*Wk, V is X*Wv.
-  QHead, KHead, VHead:            array[0..nHead - 1] of TSeqHeadTensor;
+  QHead, KHead, VHead:            array[0..nHead - 1] of TSeqHeadTensor;  // Q, K, V partitioned into nHeads.
   Scores1, Scores2:               TScoresTensor;           // Scores is Q * K'; SoftMax on Scores.
-  ScoresHead1, ScoresHead2:       array[0..nHead - 1] of TScoresHeadTensor;
-  Hidden1, Hidden2:               THiddenTensor;
+  ScoresHead1, ScoresHead2:       array[0..nHead - 1] of TScoresHeadTensor;    // Scores partitioned into nHeads.
+  Hidden1, Hidden2:               THiddenTensor;           // Neural net payer.
   WVocab:                         TVocabWeightTensor;      // ModelDim x MaxVocab.
   Logits, TopGradient:            TSeqVocabMatrix;         // Logit and Gradient.
   // Trainable parameters.
@@ -38,13 +38,13 @@ var
   b2:                             TSeqVectorTensor;        // Biases.
   Gamma1, Beta1, Gamma2, Beta2:   TSeqVectorTensor;        // Weights.
   // Caches.
-  LNInvStd1: TFSVector;                                    // Caches for Layer-Norm.
-  LNXhat1: TSeqMatrix;
-  LNInvStd2: TFSVector;
-  LNXhat2: TSeqMatrix;
+  LNInvStd1:  TFSVector;          // Caches for Layer-Norm.
+  LNXhat1:    TSeqMatrix;
+  LNInvStd2:  TFSVector;
+  LNXhat2:    TSeqMatrix;
   // Other.
-  TestVector:                     TFSVector;               // Vector for testing. [0..SeqLen] of Single.
-  InvFreq:                        TFVector;                // For RoPE.
+  TestVector: TFSVector;          // Vector for testing. [0..SeqLen] of Single.
+  InvFreq:    TFVector;           // For RoPE.
 
 procedure  InitializeTransformer;
 procedure RunTransform;
@@ -156,8 +156,8 @@ var
 begin
   Limit := Sqrt(6.0 / (FanIn + FanOut));
 
-  for i := 0 to ModelDim - 1 do
-    for j := 0 to ModelDim - 1 do begin
+  for i := 0 to HeadLen - 1 do
+    for j := 0 to HeadLen - 1 do begin
       r := Random;              // 0..1.
       W[i, j] := (2 * r - 1) * Limit;
     end;
@@ -208,126 +208,6 @@ begin
     end;
 end;
 
-// Simple autoregressive masking.
-procedure ApplyAutoregressiveMask(var Scores: TScoresMatrix; const L: Integer);
-var
-  i, j: Integer;
-const
-  NEG_INF: Single = -1e30;
-begin
-  for i := 0 to L - 1 do
-    for j := i + 1 to L - 1 do
-      Scores[i, j] := NEG_INF;
-end;
-
-// Softmax procedure.
-procedure Softmax(const x: array of Single; out y: array of Single);
-var
-  i: Integer;
-  MaxVal, SumVal, InvT: Single;
-begin
-  // Find max for numerical stability.
-  InvT := 1.0 / Temperature;
-  MaxVal := x[0] * InvT;
-  for i := 1 to High(x) do
-    if (x[i] * InvT) > MaxVal then
-      MaxVal := x[i] * InvT;
-
-  // Compute exp(x - max).
-  SumVal := 0;
-  for i := 0 to High(x) do begin
-    y[i] := Exp((x[i] * InvT) - MaxVal);
-    SumVal := SumVal + y[i];
-  end;
-
-  // Normalize.
-  SumVal := 1.0 / SumVal;
-  for i := 0 to High(x) do
-    y[i] := y[i] * SumVal;
-end;
-
-procedure SoftmaxBackwards(const y, dy: array of Single; out dx: array of Single);
-var
-  j: Integer;
-  dot: Single;
-  D: Integer;
-begin
-  D := Length(y);
-
-  // dot = sum_j dy[j] * y[j].
-  dot := 0.0;
-  for j := 0 to D - 1 do
-    dot := dot + dy[j] * y[j];
-
-  // dx[j] = y[j] * (dy[j] - dot).
-  for j := 0 to D - 1 do
-    dx[j] := y[j] * (dy[j] - dot);
-end;
-
-// Layer-Norm a matrix.
-procedure LayerNorm(const InX: TSeqMatrix; var OutX: TSeqMatrix; SeqLen: Integer;
-  const Gamma, Beta: TSeqVector; var LNXhat: TSeqMatrix; var LNInvStd: TFSVector);
-var
-  i, j: Integer;
-  MeanL, VarL, InvStd: Single;
-const
-  EPS = 1e-5;
-begin
-  for i := 0 to SeqLen - 1 do begin
-    MeanL := 0.0;
-    for j := 0 to ModelDim - 1 do
-      MeanL := MeanL + InX[i, j];
-    MeanL := MeanL / ModelDim;
-
-    VarL := 0.0;
-    for j := 0 to ModelDim - 1 do
-      VarL := VarL + Sqr(InX[i, j] - MeanL);
-    VarL := VarL / ModelDim;
-
-    InvStd := 1.0 / Sqrt(VarL + EPS);
-
-    for j := 0 to ModelDim - 1 do
-      OutX[i, j] := (InX[i, j] - MeanL) * InvStd * Gamma[j] + Beta[j];
-    LNInvStd[i] := InvStd;
-    for j := 0 to ModelDim - 1 do
-      LNXhat[i, j] := (InX[i, j] - MeanL) * InvStd;
-
-  end;
-end;
-
-// dY is upstream gradient.
-// dX is output gradient.
-// dGamma, dBeta are accumulated over all rows.
-procedure LayerNormBackwards(const dY: TSeqMatrix; var dX: TSeqMatrix; var dGamma, dBeta: TSeqVector;
-  SeqLen: Integer; const Gamma: TSeqVector; var LNXhat: TSeqMatrix; var LNInvStd: TFSVector);
-var
-  i, j: Integer;
-  sum1, sum2, scale: Single;
-  dHat: TSeqVector;
-begin
-  for i := 0 to SeqLen - 1 do begin
-    // Step 1: dHat = dY * Gamma.
-    sum1 := 0.0;
-    sum2 := 0.0;
-    for j := 0 to ModelDim - 1 do begin
-      dHat[j] := dY[i, j] * Gamma[j];
-      sum1 := sum1 + dHat[j];
-      sum2 := sum2 + dHat[j] * LNXhat[i][j];
-    end;
-
-    // Step 2: compute dX.
-    scale := LNInvStd[i] / ModelDim;
-    for j := 0 to ModelDim - 1 do
-      dX[i, j] := scale * (ModelDim * dHat[j] - sum1 - LNXhat[i, j] * sum2);
-
-    // Step 3: accumulate dGamma and dBeta.
-    for j := 0 to ModelDim - 1 do begin
-      dGamma[j] := dGamma[j] + dY[i, j] * LNXhat[i][j];
-      dBeta[j]  := dBeta[j]  + dY[i, j];
-    end;
-  end;
-end;
-
 // Initialize the transformer stage.
 procedure InitializeTransformer;
 var
@@ -368,32 +248,9 @@ begin
     Gamma1.Value[j] := 1.0;
     Gamma2.Value[j] := 1.0;
   end;
-
-end;
-                                                    // Gradient should just be a tseqmatrix
-// Calculate gradient from logits and target.
-procedure GradientFromLogits;
-var
-  i, v: Integer;
-begin
-  for i := 0 to SeqLen - 1 do begin
-    for v := 0 to nVocab - 1 do
-      TopGradient[i, v] := Logits[i, v];
-    TopGradient[i, TargetTokens[i]] := Logits[i, TargetTokens[i]] - 1.0;
-  end;
 end;
 
-procedure BackpropAdd(const dOut: TSeqMatrix; var dA, dB: TSeqMatrix; const L, D: Integer);
-var
-  i, j: Integer;
-begin
-  for i := 0 to L - 1 do
-    for j := 0 to D - 1 do begin
-      dA[i, j] := dA[i, j] + dOut[i, j];
-      dB[i, j] := dB[i, j] + dOut[i, j];
-    end;
-end;
-
+// Zero out all gradients.
 procedure ZeroGradients;
 var
   h: Integer;
@@ -432,10 +289,154 @@ begin
   end;
 end;
 
+// Simple autoregressive masking.
+procedure ApplyAutoregressiveMask(var Scores: TScoresMatrix; const L: Integer);
+var
+  i, j: Integer;
+const
+  NEG_INF: Single = -1e30;
+begin
+  for i := 0 to L - 1 do
+    for j := i + 1 to L - 1 do
+      Scores[i, j] := NEG_INF;
+end;
+
+// Softmax procedure forward.
+procedure SoftmaxForward(const x: TFVector; out y: array of Single);
+var
+  i: Integer;
+  MaxVal, SumVal, InvT: Single;
+begin
+  // Find max for numerical stability.
+  InvT := 1.0 / Temperature;
+  MaxVal := x[0] * InvT;
+  for i := 1 to High(x) do
+    if (x[i] * InvT) > MaxVal then
+      MaxVal := x[i] * InvT;
+
+  // Compute exp(x - max).
+  SumVal := 0;
+  for i := 0 to High(x) do begin
+    y[i] := Exp((x[i] * InvT) - MaxVal);
+    SumVal := SumVal + y[i];
+  end;
+
+  // Normalize.
+  SumVal := 1.0 / SumVal;
+  for i := 0 to High(x) do
+    y[i] := y[i] * SumVal;
+end;
+
+// Softmax procedure backward.
+procedure SoftmaxBackward(const y, dy:  TFVector; out dx: array of Single);
+var
+  j: Integer;
+  dot: Single;
+  D: Integer;
+begin
+  D := Length(y);
+
+  // dot = sum_j dy[j] * y[j].
+  dot := 0.0;
+  for j := 0 to D - 1 do
+    dot := dot + dy[j] * y[j];
+
+  // dx[j] = y[j] * (dy[j] - dot).
+  for j := 0 to D - 1 do
+    dx[j] := y[j] * (dy[j] - dot);
+end;
+
+// Layer-Norm a matrix.
+procedure LayerNormForward(const InX: TSeqMatrix; var OutX: TSeqMatrix; SeqLen: Integer;
+  const Gamma, Beta: TSeqVector; var LNXhat: TSeqMatrix; var LNInvStd: TFSVector);
+var
+  i, j: Integer;
+  MeanL, VarL, InvStd: Single;
+const
+  EPS = 1e-5;
+begin
+  for i := 0 to SeqLen - 1 do begin
+    MeanL := 0.0;
+    for j := 0 to ModelDim - 1 do
+      MeanL := MeanL + InX[i, j];
+    MeanL := MeanL / ModelDim;
+
+    VarL := 0.0;
+    for j := 0 to ModelDim - 1 do
+      VarL := VarL + Sqr(InX[i, j] - MeanL);
+    VarL := VarL / ModelDim;
+
+    InvStd := 1.0 / Sqrt(VarL + EPS);
+
+    for j := 0 to ModelDim - 1 do
+      OutX[i, j] := (InX[i, j] - MeanL) * InvStd * Gamma[j] + Beta[j];
+    LNInvStd[i] := InvStd;
+    for j := 0 to ModelDim - 1 do
+      LNXhat[i, j] := (InX[i, j] - MeanL) * InvStd;
+
+  end;
+end;
+
+// Layer on back propagation. dY is upstream gradient. dX is output gradient.
+// dGamma, dBeta are accumulated over all rows.
+procedure LayerNormBackward(const dY: TSeqMatrix; var dX: TSeqMatrix; var dGamma, dBeta: TSeqVector;
+  SeqLen: Integer; const Gamma: TSeqVector; var LNXhat: TSeqMatrix; var LNInvStd: TFSVector);
+var
+  i, j: Integer;
+  sum1, sum2, scale: Single;
+  dHat: TSeqVector;
+begin
+  for i := 0 to SeqLen - 1 do begin
+    // Step 1: dHat = dY * Gamma.
+    sum1 := 0.0;
+    sum2 := 0.0;
+    for j := 0 to ModelDim - 1 do begin
+      dHat[j] := dY[i, j] * Gamma[j];
+      sum1 := sum1 + dHat[j];
+      sum2 := sum2 + dHat[j] * LNXhat[i][j];
+    end;
+
+    // Step 2: compute dX.
+    scale := LNInvStd[i] / ModelDim;
+    for j := 0 to ModelDim - 1 do
+      dX[i, j] := scale * (ModelDim * dHat[j] - sum1 - LNXhat[i, j] * sum2);
+
+    // Step 3: accumulate dGamma and dBeta.
+    for j := 0 to ModelDim - 1 do begin
+      dGamma[j] := dGamma[j] + dY[i, j] * LNXhat[i][j];
+      dBeta[j]  := dBeta[j]  + dY[i, j];
+    end;
+  end;
+end;
+
+// Calculate gradient from logits and target. ??Gradient should just be a tseqmatrix
+procedure GradientFromLogits;
+var
+  i, v: Integer;
+begin
+  for i := 0 to SeqLen - 1 do begin
+    for v := 0 to nVocab - 1 do
+      TopGradient[i, v] := Logits[i, v];
+    TopGradient[i, TargetTokens[i]] := Logits[i, TargetTokens[i]] - 1.0;
+  end;
+end;
+
+// Back propagation addition.
+procedure BackpropAdd(const dOut: TSeqMatrix; var dA, dB: TSeqMatrix; const L, D: Integer);
+var
+  i, j: Integer;
+begin
+  for i := 0 to L - 1 do
+    for j := 0 to D - 1 do begin
+      dA[i, j] := dA[i, j] + dOut[i, j];
+      dB[i, j] := dB[i, j] + dOut[i, j];
+    end;
+end;
+
 // Moify the weights an biases.
 procedure Optimization;
 begin
-  // cblas_saxpy(N,  -LearningRate,  @Weight[0, 0], 1,  @Weight[0, 0], 1);
+  // cblas_saxpy(N,  -LearningRate,  @Weight[0, 0], 1,  @Weight[0, 0], 1); Do I need this?
   cblas_saxpy(ModelDim * ModelDim,  -LearningRate,  @W0.Grad[0, 0], 1,  @W0.Value[0, 0], 1);
   cblas_saxpy(ModelDim * ModelDimProj,  -LearningRate,  @W1.Grad[0, 0], 1,  @W1.Value[0, 0], 1);
   cblas_saxpy(ModelDimProj * ModelDim,  -LearningRate,  @W2.Grad[0, 0], 1,  @W2.Value[0, 0], 1);
@@ -452,7 +453,6 @@ begin
 end;
 
 // Run the transformer.
-// N is SeqLen * ModelDim.
 procedure RunTransform;
 var
   h, i, j: Integer;
@@ -480,7 +480,7 @@ begin
     // Obtain input X from Tokenizer for Transformer stage.
     // Purpose: Normalization.
     // Equation: X1 = LayerNorm(X). X, X1 in R^{L × D}. Gamma1, Beta1 in R^{D}.
-    LayerNorm(X, X1.Value, SeqLen, Gamma1.Value, Beta1.Value, LNXhat1, LNInvStd1);
+    LayerNormForward(X, X1.Value, SeqLen, Gamma1.Value, Beta1.Value, LNXhat1, LNInvStd1);
 
     // Display X1 matrix.
     if VerboseTransform then begin
@@ -598,7 +598,7 @@ begin
     // Equation: ScoresHead2 = Softmax(ScoresHead1). ScoresHead in R^{L x L}.
     for h := 0 to nHead - 1 do
       for i := 0 to SeqLen - 1 do
-        Softmax(ScoresHead1[h].Value[i], ScoresHead2[h].Value[i]);
+        SoftmaxForward(ScoresHead1[h].Value[i], ScoresHead2[h].Value[i]);
 
     // Display Scores1Head2[1] matrix.
     if VerboseTransform then begin
@@ -669,7 +669,7 @@ begin
     // 1J. Layer-Norm. Obtain X5 from X4.
     // Layer Norm: Input X4. Output X5.
     // Equation: X5 = LayerNorm(X4). X4 in R^{L × D}. X5 in R^{L × D}. Gamma2, Beta2 in R^{D}.
-    LayerNorm(X4.Value, X5.Value, SeqLen, Gamma2.Value, Beta2.Value, LNXhat2, LNInvStd2);
+    LayerNormForward(X4.Value, X5.Value, SeqLen, Gamma2.Value, Beta2.Value, LNXhat2, LNInvStd2);
 
     // Display X5 matrix.
     if VerboseTransform then begin
@@ -773,7 +773,7 @@ begin
         // Softmax: Input Logit. Output Logit.
         // Equation: Logit = Softmax(Logit).
         for i := 0 to SeqLen - 1 do
-          Softmax(Logits[i], Logits[i]);
+          SoftmaxForward(Logits[i], Logits[i]);
 
         // Display Logits matrix.
         if VerboseTransform then begin
@@ -875,7 +875,7 @@ begin
     writeln('Stage 1J');
     // Backprop Layer-Norm: Input X5, dX5. Output X4.Grad, Gamma2.Grad, Beta2.Grad.
     // Equation: X4.Grad, Gamma2.Grad, Beta2.Grad = LayerNorm(X5, X5.Grad, Gamma2, Beta2). X4.Grad, X5.Grad in R^{L x D}. Gamma2.Grad, Beta2.Grad in R^{D}.
-    LayerNormBackwards(X5.Grad, X4.Grad, Gamma2.Grad, Beta2.Grad, SeqLen, Gamma2.Value, LNXhat2, LNInvStd2);
+    LayerNormBackward(X5.Grad, X4.Grad, Gamma2.Grad, Beta2.Grad, SeqLen, Gamma2.Value, LNXhat2, LNInvStd2);
 
     if VerboseTransform then begin
       writeln('Display X4.Grad, sample, in transform, after stage 1J, layer-norm.');
@@ -943,7 +943,7 @@ begin
     // Equation: ScoresHead1.Grad = SoftMaxBackwards(ScoresHead2.Value, ScoresHead2.Grad).
     for h := 0 to nHead - 1 do
       for i := 0 to SeqLen - 1 do
-        SoftmaxBackwards(ScoresHead2[h].Value[i], ScoresHead2[h].Grad[i], ScoresHead1[h].Grad[i]);
+        SoftmaxBackward(ScoresHead2[h].Value[i], ScoresHead2[h].Grad[i], ScoresHead1[h].Grad[i]);
 
     // Backprop AutoRegression.
     // Equation: ScoresHead1.Grad = Unmask(ScoresHead1.Grad).
@@ -1057,7 +1057,7 @@ begin
     // 1A. Backprop Layer-Norm: Input X1.Value, X1.Grad. Output X.Grad, Gamma1.Grad, Beta1.Grad.
     writeln('Stage 1A');
     // Equation: X1.Grad, Gamma1.Grad, Beta1.Grad = LayerNorm(X1.Value, X1.Grad, Gamma1.Value, Beta1.Value). X.Grad, X1.Grad in R^{L x D}. Gamma1.Grad, Beta1.Grad in R^{D}.
-    LayerNormBackwards(X1.Grad, X1.Grad, Gamma1.Grad, Beta1.Grad, SeqLen, Gamma1.Value, LNXhat1, LNInvStd1);
+    LayerNormBackward(X1.Grad, X1.Grad, Gamma1.Grad, Beta1.Grad, SeqLen, Gamma1.Value, LNXhat1, LNInvStd1);
                   //X1 or X Output grad above?
     if VerboseTransform then begin
       writeln('Display X1.Grad, grid, in transform, at end.');

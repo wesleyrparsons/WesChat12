@@ -435,6 +435,7 @@ var
         begin
           VeryVerbose := not VeryVerbose;
           Writeln('Very verbose mode: ', VeryVerbose);
+          Pause;
         end;
       'w', 'W':
         begin
@@ -453,6 +454,7 @@ var
             '. Hash capacity = ', H.Capacity, '. Used slots = ', H.Used, '. Best count = ', BestCount, '.');
           Write(DateTimeToStr(Now), '  X = Exit program. B = Break out of merge loop. V = toggle Verbose mode. P = Pause.');
           Writeln('  W = WesChat Information. M = Merging information. Y = set maximum sYmbols. S = Save. Merging...');
+          Pause;
         end;
       'y', 'Y':
         begin
@@ -467,6 +469,7 @@ var
           SaveSymbolTable(f, SymbolTable);
           ChDir('..');
           writeln('File ', f, ' successfully saved.');
+          Pause;
         end;
     end;
   end;

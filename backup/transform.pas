@@ -19,14 +19,14 @@ var
   // Not trainable parameters.
   X1, X2, X3, X4, X5,
     X6, X7, X8, U:                TSeqTensor;              // X's at all stages.
-  X1Head, X2Head:                 array[0..nHead - 1] of TSeqHeadTensor;
-  X1q, X1v, X1k:                  TSeqTensor;
-  X1qHead, X1vHead, X1kHead:      array[0..nHead - 1] of TSeqTensor;
+  X1Head, X2Head:                 array[0..nHead - 1] of TSeqHeadTensor;  // X partitioned into nHeads.
+  X1q, X1v, X1k:                  TSeqTensor;              // X's for Q, K, V.
+  X1qHead, X1vHead, X1kHead:      array[0..nHead - 1] of TSeqTensor;      // Above partitioned into nHeads.
   Q, K, V:                        TSeqTensor;              // Q is X*Wq, K is X*Wk, V is X*Wv.
-  QHead, KHead, VHead:            array[0..nHead - 1] of TSeqHeadTensor;
+  QHead, KHead, VHead:            array[0..nHead - 1] of TSeqHeadTensor;  // Q, K, V partitioned into nHeads.
   Scores1, Scores2:               TScoresTensor;           // Scores is Q * K'; SoftMax on Scores.
-  ScoresHead1, ScoresHead2:       array[0..nHead - 1] of TScoresHeadTensor;
-  Hidden1, Hidden2:               THiddenTensor;
+  ScoresHead1, ScoresHead2:       array[0..nHead - 1] of TScoresHeadTensor;    // Scores partitioned into nHeads.
+  Hidden1, Hidden2:               THiddenTensor;           // Neural net payer.
   WVocab:                         TVocabWeightTensor;      // ModelDim x MaxVocab.
   Logits, TopGradient:            TSeqVocabMatrix;         // Logit and Gradient.
   // Trainable parameters.
@@ -38,13 +38,13 @@ var
   b2:                             TSeqVectorTensor;        // Biases.
   Gamma1, Beta1, Gamma2, Beta2:   TSeqVectorTensor;        // Weights.
   // Caches.
-  LNInvStd1: TFSVector;                                    // Caches for Layer-Norm.
-  LNXhat1: TSeqMatrix;
-  LNInvStd2: TFSVector;
-  LNXhat2: TSeqMatrix;
+  LNInvStd1:  TFSVector;          // Caches for Layer-Norm.
+  LNXhat1:    TSeqMatrix;
+  LNInvStd2:  TFSVector;
+  LNXhat2:    TSeqMatrix;
   // Other.
-  TestVector:                     TFSVector;               // Vector for testing. [0..SeqLen] of Single.
-  InvFreq:                        TFVector;                // For RoPE.
+  TestVector: TFSVector;          // Vector for testing. [0..SeqLen] of Single.
+  InvFreq:    TFVector;           // For RoPE.
 
 procedure  InitializeTransformer;
 procedure RunTransform;
@@ -156,8 +156,8 @@ var
 begin
   Limit := Sqrt(6.0 / (FanIn + FanOut));
 
-  for i := 0 to ModelDim - 1 do
-    for j := 0 to ModelDim - 1 do begin
+  for i := 0 to HeadLen - 1 do
+    for j := 0 to HeadLen - 1 do begin
       r := Random;              // 0..1.
       W[i, j] := (2 * r - 1) * Limit;
     end;
@@ -220,8 +220,8 @@ begin
       Scores[i, j] := NEG_INF;
 end;
 
-// Softmax procedure.
-procedure Softmax(const x: array of Single; out y: array of Single);
+// Softmax procedure forward.
+procedure SoftmaxForward(const x: TFVector; out y: array of Single);
 var
   i: Integer;
   MaxVal, SumVal, InvT: Single;
@@ -246,7 +246,8 @@ begin
     y[i] := y[i] * SumVal;
 end;
 
-procedure SoftmaxBackwards(const y, dy: array of Single; out dx: array of Single);
+// Softmax procedure backward.
+procedure SoftmaxBackward(const y, dy:  TFVector; out dx: array of Single);
 var
   j: Integer;
   dot: Single;
@@ -265,7 +266,7 @@ begin
 end;
 
 // Layer-Norm a matrix.
-procedure LayerNorm(const InX: TSeqMatrix; var OutX: TSeqMatrix; SeqLen: Integer;
+procedure LayerNormForward(const InX: TSeqMatrix; var OutX: TSeqMatrix; SeqLen: Integer;
   const Gamma, Beta: TSeqVector; var LNXhat: TSeqMatrix; var LNInvStd: TFSVector);
 var
   i, j: Integer;
@@ -295,10 +296,9 @@ begin
   end;
 end;
 
-// dY is upstream gradient.
-// dX is output gradient.
+// Layer on back propagation. dY is upstream gradient. dX is output gradient.
 // dGamma, dBeta are accumulated over all rows.
-procedure LayerNormBackwards(const dY: TSeqMatrix; var dX: TSeqMatrix; var dGamma, dBeta: TSeqVector;
+procedure LayerNormBackward(const dY: TSeqMatrix; var dX: TSeqMatrix; var dGamma, dBeta: TSeqVector;
   SeqLen: Integer; const Gamma: TSeqVector; var LNXhat: TSeqMatrix; var LNInvStd: TFSVector);
 var
   i, j: Integer;
@@ -480,7 +480,7 @@ begin
     // Obtain input X from Tokenizer for Transformer stage.
     // Purpose: Normalization.
     // Equation: X1 = LayerNorm(X). X, X1 in R^{L × D}. Gamma1, Beta1 in R^{D}.
-    LayerNorm(X, X1.Value, SeqLen, Gamma1.Value, Beta1.Value, LNXhat1, LNInvStd1);
+    LayerNormForward(X, X1.Value, SeqLen, Gamma1.Value, Beta1.Value, LNXhat1, LNInvStd1);
 
     // Display X1 matrix.
     if VerboseTransform then begin
@@ -598,7 +598,7 @@ begin
     // Equation: ScoresHead2 = Softmax(ScoresHead1). ScoresHead in R^{L x L}.
     for h := 0 to nHead - 1 do
       for i := 0 to SeqLen - 1 do
-        Softmax(ScoresHead1[h].Value[i], ScoresHead2[h].Value[i]);
+        SoftmaxForward(ScoresHead1[h].Value[i], ScoresHead2[h].Value[i]);
 
     // Display Scores1Head2[1] matrix.
     if VerboseTransform then begin
@@ -669,7 +669,7 @@ begin
     // 1J. Layer-Norm. Obtain X5 from X4.
     // Layer Norm: Input X4. Output X5.
     // Equation: X5 = LayerNorm(X4). X4 in R^{L × D}. X5 in R^{L × D}. Gamma2, Beta2 in R^{D}.
-    LayerNorm(X4.Value, X5.Value, SeqLen, Gamma2.Value, Beta2.Value, LNXhat2, LNInvStd2);
+    LayerNormForward(X4.Value, X5.Value, SeqLen, Gamma2.Value, Beta2.Value, LNXhat2, LNInvStd2);
 
     // Display X5 matrix.
     if VerboseTransform then begin
@@ -773,7 +773,7 @@ begin
         // Softmax: Input Logit. Output Logit.
         // Equation: Logit = Softmax(Logit).
         for i := 0 to SeqLen - 1 do
-          Softmax(Logits[i], Logits[i]);
+          SoftmaxForward(Logits[i], Logits[i]);
 
         // Display Logits matrix.
         if VerboseTransform then begin
@@ -875,7 +875,7 @@ begin
     writeln('Stage 1J');
     // Backprop Layer-Norm: Input X5, dX5. Output X4.Grad, Gamma2.Grad, Beta2.Grad.
     // Equation: X4.Grad, Gamma2.Grad, Beta2.Grad = LayerNorm(X5, X5.Grad, Gamma2, Beta2). X4.Grad, X5.Grad in R^{L x D}. Gamma2.Grad, Beta2.Grad in R^{D}.
-    LayerNormBackwards(X5.Grad, X4.Grad, Gamma2.Grad, Beta2.Grad, SeqLen, Gamma2.Value, LNXhat2, LNInvStd2);
+    LayerNormBackward(X5.Grad, X4.Grad, Gamma2.Grad, Beta2.Grad, SeqLen, Gamma2.Value, LNXhat2, LNInvStd2);
 
     if VerboseTransform then begin
       writeln('Display X4.Grad, sample, in transform, after stage 1J, layer-norm.');
@@ -943,7 +943,7 @@ begin
     // Equation: ScoresHead1.Grad = SoftMaxBackwards(ScoresHead2.Value, ScoresHead2.Grad).
     for h := 0 to nHead - 1 do
       for i := 0 to SeqLen - 1 do
-        SoftmaxBackwards(ScoresHead2[h].Value[i], ScoresHead2[h].Grad[i], ScoresHead1[h].Grad[i]);
+        SoftmaxBackward(ScoresHead2[h].Value[i], ScoresHead2[h].Grad[i], ScoresHead1[h].Grad[i]);
 
     // Backprop AutoRegression.
     // Equation: ScoresHead1.Grad = Unmask(ScoresHead1.Grad).
@@ -1035,7 +1035,7 @@ begin
     // 1C. Backprop Concatenate. Concat X1Head[1], etc. into X1.
     // Equation: X1, etc. := VerticalConcatX(X1Head).
     for h := 0 to nHead - 1do
-      VerticalConcatX( X1Head[h].Value, h, X1.Value);
+      VerticalConcatX( X1Head[h].Value, h, X1.Value, SeqLen, HeadLen);
 
     if VerboseTransform then begin
       writeln('Display X1.Grad, grid, in transform, after concatenation.');
@@ -1057,7 +1057,7 @@ begin
     // 1A. Backprop Layer-Norm: Input X1.Value, X1.Grad. Output X.Grad, Gamma1.Grad, Beta1.Grad.
     writeln('Stage 1A');
     // Equation: X1.Grad, Gamma1.Grad, Beta1.Grad = LayerNorm(X1.Value, X1.Grad, Gamma1.Value, Beta1.Value). X.Grad, X1.Grad in R^{L x D}. Gamma1.Grad, Beta1.Grad in R^{D}.
-    LayerNormBackwards(X1.Grad, X1.Grad, Gamma1.Grad, Beta1.Grad, SeqLen, Gamma1.Value, LNXhat1, LNInvStd1);
+    LayerNormBackward(X1.Grad, X1.Grad, Gamma1.Grad, Beta1.Grad, SeqLen, Gamma1.Value, LNXhat1, LNInvStd1);
                   //X1 or X Output grad above?
     if VerboseTransform then begin
       writeln('Display X1.Grad, grid, in transform, at end.');

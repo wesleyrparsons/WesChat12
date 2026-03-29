@@ -113,6 +113,7 @@ var
           // SaveModel;
           ChDir('..');
           // writeln('File ', f, ' successfully saved.');
+          Pause;
         end;
 
     end;

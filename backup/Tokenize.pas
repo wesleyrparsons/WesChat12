@@ -73,6 +73,7 @@ type
   TMergedTokenStats = array of TMergedTokenStat;
 var
   StartSymbol: Integer = 260;                    // UTF-8 0.255, BOS, EOS, PAD, UNK is 259.
+  nCorpus: Integer;
   TokenizedCorpus: TIVector;
   ElapsedMS, MElapsedMS: Int64;                  // For timing.
   MHours, Hours, MMIns, Mins: Int64;             // For timing.
@@ -631,7 +632,6 @@ begin
   if FileExists(TextFileName) then
     ReadFileBytes(TextFileName, Corpus);
 
-  nCorpus := Length(Corpus);
   SetLength(TokenizedCorpus, 0);
 
   i := 0;

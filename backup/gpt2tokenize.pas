@@ -582,6 +582,36 @@ begin
 
 end;
 
+function DecodeToken(const s: UTF8String): UnicodeString;
+var
+  u: UnicodeString;
+  i: Integer;
+  c: Word;
+begin
+  // Convert UTF‑8 → UTF‑16
+  u := UTF8Decode(s);
+
+  Result := '';
+
+  for i := 1 to Length(u) do begin
+    c := Ord(u[i]);
+
+    case c of
+      $0120:  Result := Result + ' ';        // Ġ → space
+      $010D:  Result := Result + #13;        // č → CR
+      $010A:  Result := Result + #10;        // Ċ → LF
+      $0009:  Result := Result + #9;         // tab stays tab
+    else
+      if c < 128 then
+        Result := Result + Chr(c)            // ASCII
+      else if (c >= $0100) and (c <= $01FF) then
+        Result := Result + '?'               // other GPT‑2 fallback bytes
+      else
+        Result := Result + u[i];             // normal Unicode
+    end;
+  end;
+end;
+
 procedure RunGPT2Tokenize(const FileName: string; var TokenizedCorpus: TIVector);
 var
   Merges: TStringList;
@@ -662,6 +692,11 @@ begin
 
   for i := 0 to High(TokenizedCorpus) do begin
     s := Vocab[TokenizedCorpus[i]];
+    Write(DecodeToken(s));
+  end;
+
+{  for i := 0 to High(TokenizedCorpus) do begin
+    s := Vocab[TokenizedCorpus[i]];
     // Replace the GPT-2 "Ġ" marker with a space.
     if s = 'Ġ' then
       Write(' ')
@@ -669,7 +704,7 @@ begin
       for j := 1 to Length(s) do
         Write(s[j]);
     end;
-  end;
+  end;}
   writeln;
   Pause;
 

@@ -12,7 +12,7 @@ uses
   Matrix;
 
 const
-  Scale: Single = Sqrt(6.0 / (ModelDim + ModelDim));
+  InvSqrtHeadDim: Single = 1 / Sqrt(HeadDim);              // Used in softmax.
 
 // Note: Vocab is dimensioned at MaxVocab, but only uses nVocab.
 var
@@ -21,7 +21,6 @@ var
     X6, X7, X8, U:                TSeqTensor;              // X's at all stages.
   X1Head, X2Head:                 array[0..nHead - 1] of TSeqHeadTensor;       // X partitioned into nHeads.
   X1q, X1v, X1k:                  TSeqTensor;              // X's for Q, K, V.
-  //X1qHead, X1vHead, X1kHead:      array[0..nHead - 1] of TSeqHeadTensor;       // Above partitioned into nHeads.
   Q, K, V:                        TSeqTensor;              // Q is X*Wq, K is X*Wk, V is X*Wv.
   ScoresHead1, ScoresHead2:       array[0..nHead - 1] of TScoresHeadTensor;    // Scores partitioned into nHeads.
   Hidden1, Hidden2:               THiddenTensor;           // Neural net payer.
@@ -29,7 +28,7 @@ var
   Logits, TopGradient:            TSeqVocabMatrix;         // Logit and Gradient.
   // Trainable parameters.
   Wq, Wk, Wv, W0:                 TWeightTensor;
-  WqHead, WkHead, WvHead:         array[0..nHead - 1] of TWeightHeadTensor;
+  //WqHead, WkHead, WvHead:         array[0..nHead - 1] of TWeightHeadTensor;
   W1:                             TWeightProjTensor;       // Weights.
   W2:                             TWeightProjTensorT;      // Weights.
   b1:                             TSeqVectorProjTensor;    // Biases.
@@ -92,38 +91,6 @@ begin
       H[i, 2 * j + 1] :=  x0 * s + x1 * c;
     end;
 end;
-
-{procedure GradientCheckW1;
-var
-  i, j: Integer;
-  eps, orig, loss_plus, loss_minus, numgrad, analytic: Single;
-begin
-  eps := 1e-4;
-
-  // ForwardPass;
-  // BackwardPass;
-  // Check below.
-  loss_plus := 0.0;
-  loss_minus := 0.0;
-
-  for i := 0 to ModelDim - 1 do
-    for j := 0 to ModelDimProj - 1 do begin
-      orig := W1.Value[i, j];
-
-      W1.Value[i, j] := orig + eps;
-      // loss_plus := ForwardLoss;
-
-      W1.Value[i, j] := orig - eps;
-      // loss_minus := ForwardLoss;
-
-      W1.Value[i, j] := orig;
-
-      numgrad := (loss_plus - loss_minus) / (2 * eps);
-      analytic := W1.Grad[i, j];
-
-      WriteLn(i, j, ' error= ', Abs(numgrad - analytic));
-    end;
-end;}
 
 // Xavier-Glorot initialization on W0 matrix.
 procedure XGUniformW(var W: TWeightMatrix; FanIn, FanOut: Integer);
@@ -216,11 +183,11 @@ begin
   XGUniformW(Wq.Value, ModelDim, ModelDim);
   XGUniformW(Wk.Value, ModelDim, ModelDim);
   XGUniformW(Wv.Value, ModelDim, ModelDim);
-  for h := 0 to nHead - 1 do begin
+  {for h := 0 to nHead - 1 do begin
     XGUniformWHead(WqHead[h].Value, HeadDim, HeadDim);
     XGUniformWHead(WkHead[h].Value, HeadDim, HeadDim);
     XGUniformWHead(WvHead[h].Value, HeadDim, HeadDim);
-  end;
+  end;}
 
   // Initialize W1 and W2 weight matrices.
   XGUniformW1(W1.Value, ModelDim, ModelDimProj);
@@ -268,9 +235,9 @@ begin
   for h := 0 to nHead - 1 do begin
     FillChar(X1Head[h].Grad, SizeOf(X1Head[h].Grad), 0);
     FillChar(X2Head[h].Grad, SizeOf(X2Head[h].Grad), 0);
-    FillChar(WqHead[h].Grad, SizeOf(WqHead[h].Grad), 0);
+    {FillChar(WqHead[h].Grad, SizeOf(WqHead[h].Grad), 0);
     FillChar(WkHead[h].Grad, SizeOf(WkHead[h].Grad), 0);
-    FillChar(WvHead[h].Grad, SizeOf(WvHead[h].Grad), 0);
+    FillChar(WvHead[h].Grad, SizeOf(WvHead[h].Grad), 0);}
   end;
 end;
 
@@ -427,7 +394,7 @@ begin
   cblas_saxpy(ModelDim * ModelDim, -LearningRate, @W0.Grad[0, 0], 1, @W0.Value[0, 0], 1);
 
   // Per-head weights.
-  for h := 0 to nHead - 1 do begin
+{  for h := 0 to nHead - 1 do begin
     cblas_saxpy(HeadDim * HeadDim, -LearningRate,
                 @WqHead[h].Grad[0, 0], 1,
                 @WqHead[h].Value[0, 0], 1);
@@ -439,7 +406,7 @@ begin
     cblas_saxpy(HeadDim * HeadDim, -LearningRate,
                 @WvHead[h].Grad[0, 0], 1,
                 @WvHead[h].Value[0, 0], 1);
-  end;
+  end;}
 
   // Feed-forward and vocab projection.
   cblas_saxpy(ModelDim * ModelDimProj, -LearningRate, @W1.Grad[0, 0], 1, @W1.Value[0, 0], 1);
@@ -592,8 +559,7 @@ begin
     // 1F. Standardize, Mask & Softmax. Obtain Scores2.
     // Standardization: Input ScoresHead1. Output ScoresHead1.
     // Equation: ScoresHead1 = Sqrt(1 / HeadDim). ScoresHead1 in R^{L x L}. Using HeadDim.
-    for h := 0 to nHead - 1 do
-      cblas_sscal(SeqLen * SeqLen,  1 / Sqrt(HeadDim),  @ScoresHead1[h].Value[0, 0], 1);
+    // Now done below, in V, as a scale.
 
     // Masking: Input ScoresHead1. Output ScoresHead1.
     // Equation: ScoresHead1 = Mask(ScoresHead1). ScoresHead1 in R^{L x L}.
@@ -633,13 +599,13 @@ begin
         CblasRowMajor,
         CblasNoTrans,
         CblasNoTrans,
-        SeqLen,                // M = L
-        HeadDim,                // N = H
-        SeqLen,                // K = L
+        SeqLen,
+        HeadDim,
+        SeqLen,
         1.0,
         @ScoresHead2[h].Value[0,0], SeqLen,
         @V.Value[0, HeadOffset], ModelDim,
-        0.0,
+        InvSqrtHeadDim,
         @X2.Value[0, HeadOffset], ModelDim   // write directly into final L×D output
       );
     end;
@@ -895,8 +861,6 @@ begin
     // 1I. Backprop Split. Input: X1.Grad. Output: X3.Grad. Output X4.Grad,
     writeln('Stage 1I');
     // Equation: X3.Grad, X4.Grad = X1.Grad. All in R^{L x D}.
-    //cblas_saxpy(SeqLen * ModelDim,  1.0,  @dX4[0, 0], 1,  @dX1[0, 0], 1);
-      //cblas_saxpy(SeqLen * ModelDim,  1.0,  @dX4[0, 0], 1,  @dX3[0, 0], 1);
     GradSplit(X4.Grad, X1.Grad, X3.Grad, SeqLen, ModelDim);
     { Example for i := 0 to SeqLen - 1 do
     cblas_saxpy(ModelDim, 1.0, @dX7[i,0], 1, @dX6[i,0], 1);}
@@ -958,7 +922,7 @@ begin
         1.0,
         @ScoresHead2[h].Value[0, 0], SeqLen,       // lda = L
         @X2.Grad[0, HeadOffset], ModelDim,    // ldb = D
-        0.0,
+        InvSqrtHeadDim,
         @V.Grad[0, HeadOffset], ModelDim      // ldc = D
       );
     end;
@@ -985,8 +949,9 @@ begin
 
     // Backprop standardization. Input: ScoresHead1.Grad. Output: ScoresHead1.Grad.
     // Equation: ScoresHead1.Grad = Sqrt(1 / ModelDim). ScoresHead1.Grad in R^{L x L}.
-    for h := 0 to nHead - 1 do
-      cblas_sscal(SeqLen * SeqLen,  1 / SqrtHD,  @ScoresHead1[h].Grad[0, 0], 1);
+    {for h := 0 to nHead - 1 do
+      cblas_sscal(SeqLen * SeqLen,  1 / SqrtHD,  @ScoresHead1[h].Grad[0, 0], 1);}
+    // This is now done in the cblas, of V, above.
 
     if VerboseTransform then begin
       writeln('ScoresHead1[0].Grad, grid, in transform, before stage 1E, Q and K-transform.');
@@ -1068,7 +1033,7 @@ begin
 
     // Backprop Create X1v Grad from V Grad. Input V.Grad, Wvᵀ. Value. Output X1v.Grad.
     // Equation: X1v.Grad = V.Grad times Wvᵀ.Value. X1v.Grad = V.Grad · WVᵀ.Value. V.Grad in R^{L x D}. Wvᵀ.Value in R^{D · D}.
-      MatMulNT(@V.Grad, @Wv.Value, @X1v.Grad, SeqLen, ModelDim, ModelDim);
+     MatMulNT(@V.Grad, @Wv.Value, @X1v.Grad, SeqLen, ModelDim, ModelDim);
 
     if VerboseTransform then begin
       writeln('Display X1.Grad, grid, in transform, after concatenation.');

@@ -346,6 +346,7 @@ begin
       B[i, j] := Max(0.0, A[i, j]);
 end;
 
+// Apply ReLU if needed for back propagation.
 procedure ReLUMaskBackward(const Hidden: THiddenMatrix; var dHidden: THiddenMatrix);
 var
   i, j: Integer;

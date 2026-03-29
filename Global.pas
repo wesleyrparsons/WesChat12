@@ -125,7 +125,6 @@ var
   LearningRate: Single = 0.01;                   // LearningRate for Gradient.
   Temperature: Single = 1.0;                     // Temperature for softmax.
   Training: Boolean = True;                      // In training as opposed to inference mode.
-  SqrtHD: Single = Sqrt(HeadDim);                // Used in softmax.
 
 implementation
 

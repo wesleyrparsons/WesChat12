@@ -344,7 +344,7 @@ begin
     Writeln(i + 1:4, '  ID=', Stats[i].TokenID:6, '  Count=',
       Stats[i].Count:8, '  Symbol="', S, '"');
   end;
-  Pause;
+   if TextRec(Output).Handle = StdOutputHandle then Pause;
 end;
 
 // Report merged tokens never used.
@@ -456,7 +456,7 @@ begin
   writeln;
   end;
 
-// Report all statistics.       If writing to file, don't do pause.
+// Report all statistics.
 procedure ReportStatistics;
 begin
   CalculateTimeStatistics;
@@ -501,7 +501,7 @@ begin
     Write(TokenizedCorpus[i], ' ');
   writeln;
   writeln('Tokenized corpus length =  ', Length(TokenizedCorpus));
-  Pause
+  Pause;
 end;
 
 // Detokenize tokenized corpus to text.

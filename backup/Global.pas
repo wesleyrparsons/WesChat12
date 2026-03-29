@@ -91,9 +91,6 @@ type                                                                           /
   TSeqVocabTensor = record
     Value, Grad:  TSeqVocabMatrix;
   end;
-{  TScoresTensor = record
-    Value, Grad:  TScoresMatrix;
-  end;}
   TScoresHeadTensor = record
     Value, Grad:  TScoresMatrix;
   end;

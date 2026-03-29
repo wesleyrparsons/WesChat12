@@ -33,7 +33,7 @@ const
   ModelDimProj = ModelDim * Proj; // Dimension of model of projected X matrix.
   SeqLen = 128;                   // Sequence length for X.
   nHead = 8;                      // Number of heads for multi-headed attention.
-  HeadLen = SeqLen div nHead;     // Length of one head.
+  HeadDim = SeqLen div nHead;     // Length of one head.
   nBlock = 4;                     // Number of blocks in transformer.
   ADropout = 0.1;                 // Probability of attention dropout.
   RDropout = 0.1;                 // Probability of residual dropout.
@@ -44,12 +44,12 @@ type                                                                           /
   TSeqVectorProj = array[0..ModelDimProj - 1] of Single;                       // DB (DB is like D)
   TDimVector = array[0..SeqLen - 1] of Single;                                 // L
   TIDimVector = array[0..SeqLen - 1] of Integer;                               // L
-  THeadVector = array[0..HeadLen - 1] of Single;                               // H (H is like D)
+  THeadVector = array[0..HeadDim - 1] of Single;                               // H (H is like D)
   TVocabVector = array[0..DimVocab - 1] of Single;                             // MaxVocab (MaxVocab is like L)
   TSeqMatrix = array[0..SeqLen - 1] of TSeqVector;                             // L x D
   TSeqHeadMatrix = array[0..SeqLen - 1] of THeadVector;                        // L x H
   TWeightMatrix = array[0..ModelDim - 1] of TSeqVector;                        // D x D
-  TWeightHeadMatrix = array[0..HeadLen - 1] of THeadVector;                    // H x H        ?
+  TWeightHeadMatrix = array[0..HeadDim - 1] of THeadVector;                    // H x H        ?
   TWeightProjMatrix = array[0..ModelDim - 1] of TSeqVectorProj;                // D x DB
   TWeightProjMatrixT = array[0..ModelDimProj - 1] of TSeqVector;               // DB x D
   THiddenMatrix = array[0..SeqLen - 1] of TSeqVectorProj;                      // L x DB
@@ -91,9 +91,9 @@ type                                                                           /
   TSeqVocabTensor = record
     Value, Grad:  TSeqVocabMatrix;
   end;
-  TScoresTensor = record
+{  TScoresTensor = record
     Value, Grad:  TScoresMatrix;
-  end;
+  end;}
   TScoresHeadTensor = record
     Value, Grad:  TScoresMatrix;
   end;
@@ -103,6 +103,7 @@ type                                                                           /
   TBVector = array of Byte;            // Array of integers (UTF-8) for initial corpus.
   TRBSVector = array of RawByteString; // Array of raw byte strings for initial corpus.
   TFVector = array of Single;          // Array of single for embedding matrix.
+  TFMatrix = array of TFVector;        // Array of array of single for embedding matrix.
   TSVector = array of String;          // Array of string.
   TEmbeddingMatrix = array[0..DimVocab - 1] of TSeqVector; // Array for embedding matrix.
   TPart = (B, E, F, G);                // Length = VocabSize * Dimension. But only use nSymbols in rows.
@@ -127,7 +128,7 @@ var
   LearningRate: Single = 0.01;                   // LearningRate for Gradient.
   Temperature: Single = 1.0;                     // Temperature for softmax.
   Training: Boolean = True;                      // In training as opposed to inference mode.
-  SqrtD: Single = Sqrt(ModelDim);                // Used in softmax.
+  SqrtHD: Single = Sqrt(HeadDim);                // Used in softmax.
 
 implementation
 

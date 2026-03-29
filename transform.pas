@@ -16,15 +16,13 @@ const
 
 // Note: Vocab is dimensioned at MaxVocab, but only uses nVocab.
 var
-  // Not trainable parameters.
+  // Non-trainable parameters.
   X1, X2, X3, X4, X5,
     X6, X7, X8, U:                TSeqTensor;              // X's at all stages.
-  X1Head, X2Head:                 array[0..nHead - 1] of TSeqHeadTensor;  // X partitioned into nHeads.
+  X1Head, X2Head:                 array[0..nHead - 1] of TSeqHeadTensor;       // X partitioned into nHeads.
   X1q, X1v, X1k:                  TSeqTensor;              // X's for Q, K, V.
-  X1qHead, X1vHead, X1kHead:      array[0..nHead - 1] of TSeqTensor;      // Above partitioned into nHeads.
+  //X1qHead, X1vHead, X1kHead:      array[0..nHead - 1] of TSeqHeadTensor;       // Above partitioned into nHeads.
   Q, K, V:                        TSeqTensor;              // Q is X*Wq, K is X*Wk, V is X*Wv.
-  QHead, KHead, VHead:            array[0..nHead - 1] of TSeqHeadTensor;  // Q, K, V partitioned into nHeads.
-  Scores1, Scores2:               TScoresTensor;           // Scores is Q * K'; SoftMax on Scores.
   ScoresHead1, ScoresHead2:       array[0..nHead - 1] of TScoresHeadTensor;    // Scores partitioned into nHeads.
   Hidden1, Hidden2:               THiddenTensor;           // Neural net payer.
   WVocab:                         TVocabWeightTensor;      // ModelDim x MaxVocab.
@@ -46,47 +44,41 @@ var
   TestVector: TFSVector;          // Vector for testing. [0..SeqLen] of Single.
   InvFreq:    TFVector;           // For RoPE.
 
-procedure  InitializeTransformer;
+procedure InitializeTransformer;
 procedure RunTransform;
 
 implementation
-
-// Random float between A and B.
-function RandomFloat(A, B: Single): Single;
-begin
-  Result := A + Random * (B - A);
-end;
 
 // Initialize test vector.
 procedure InitTestVector(var N: TFSVector);
 var
   i: Integer;
 begin
-for i := 0 to 9 do
+for i := 0 to SeqLen - 1 do
   N[i] := 0.0;
 end;
 
 // Rotary positional encoding.
 // Apply at initialization of transformer.
-procedure InitRoPE(var InvFreq: TFVector; HeadLen: Integer);
+procedure InitRoPE(var InvFreq: TFVector; HeadDim: Integer);
 var
   j: Integer;
 begin
-  // HeadLen must be even.
-  SetLength(InvFreq, HeadLen div 2);
-  for j := 0 to (HeadLen div 2) - 1 do
-    InvFreq[j] := Exp( - (2.0 * j) / HeadLen * Ln(10000.0) );
+  // HeadDim must be even.
+  SetLength(InvFreq, HeadDim div 2);
+  for j := 0 to (HeadDim div 2) - 1 do
+    InvFreq[j] := Exp( - (2.0 * j) / HeadDim * Ln(10000.0) );
 end;
 
-// Apply to both Q and K. QHead[h] : [0..SeqLen-1, 0..HeadLen-1]
+// Apply to both Q and K. QHead[h] : [0..SeqLen-1, 0..HeadDim-1]
 // Apply before or after head-splitting. But immediately after computing Q and K.
-procedure ApplyRoPE(var H: TSeqHeadMatrix;  const InvFreq: TFVector; SeqLen, HeadLen: Integer);
+procedure ApplyRoPE(var H: TSeqHeadMatrix;  const InvFreq: TFVector; SeqLen, HeadDim: Integer);
 var
   i, j: Integer;
   angle, c, s, x0, x1: Single;
 begin
   for i := 0 to SeqLen - 1 do
-    for j := 0 to (HeadLen div 2) - 1 do begin
+    for j := 0 to (HeadDim div 2) - 1 do begin
       angle := i * InvFreq[j];
       c := Cos(angle);
       s := Sin(angle);
@@ -156,8 +148,8 @@ var
 begin
   Limit := Sqrt(6.0 / (FanIn + FanOut));
 
-  for i := 0 to HeadLen - 1 do
-    for j := 0 to HeadLen - 1 do begin
+  for i := 0 to HeadDim - 1 do
+    for j := 0 to HeadDim - 1 do begin
       r := Random;              // 0..1.
       W[i, j] := (2 * r - 1) * Limit;
     end;
@@ -215,7 +207,7 @@ var
 begin
   // InitTestVector(TestVector);
   // Initialize RoPE.
-  InitRoPE(InvFreq, HeadLen);
+  InitRoPE(InvFreq, HeadDim);
 
   // Initialize weight matrix W0.
   XGUniformW(W0.Value, ModelDim, ModelDim);
@@ -225,9 +217,9 @@ begin
   XGUniformW(Wk.Value, ModelDim, ModelDim);
   XGUniformW(Wv.Value, ModelDim, ModelDim);
   for h := 0 to nHead - 1 do begin
-    XGUniformWHead(WqHead[h].Value, HeadLen, HeadLen);
-    XGUniformWHead(WkHead[h].Value, HeadLen, HeadLen);
-    XGUniformWHead(WvHead[h].Value, HeadLen, HeadLen);
+    XGUniformWHead(WqHead[h].Value, HeadDim, HeadDim);
+    XGUniformWHead(WkHead[h].Value, HeadDim, HeadDim);
+    XGUniformWHead(WvHead[h].Value, HeadDim, HeadDim);
   end;
 
   // Initialize W1 and W2 weight matrices.
@@ -274,18 +266,11 @@ begin
   FillChar(Beta1.Grad, SizeOf(Beta1.Grad), 0);
   FillChar(Beta2.Grad, SizeOf(Beta2.Grad), 0);
   for h := 0 to nHead - 1 do begin
-    FillChar(X1Head[h].Grad, SizeOf(X1.Grad), 0);
-    FillChar(X2Head[h].Grad, SizeOf(X2.Grad), 0);
-    FillChar(WqHead[h].Grad, SizeOf(WvHead[h].Grad), 0);
+    FillChar(X1Head[h].Grad, SizeOf(X1Head[h].Grad), 0);
+    FillChar(X2Head[h].Grad, SizeOf(X2Head[h].Grad), 0);
+    FillChar(WqHead[h].Grad, SizeOf(WqHead[h].Grad), 0);
     FillChar(WkHead[h].Grad, SizeOf(WkHead[h].Grad), 0);
     FillChar(WvHead[h].Grad, SizeOf(WvHead[h].Grad), 0);
-    FillChar(X1qHead[h].Grad, SizeOf(X1qHead[h].Grad), 0);
-    FillChar(X1kHead[h].Grad, SizeOf(X1kHead[h].Grad), 0);
-    FillChar(X1vHead[h].Grad, SizeOf(X1vHead[h].Grad), 0);
-    FillChar(QHead[h].Grad, SizeOf(QHead[h].Grad), 0);
-    FillChar(KHead[h].Grad, SizeOf(KHead[h].Grad), 0);
-    FillChar(VHead[h].Grad, SizeOf(VHead[h].Grad), 0);
-
   end;
 end;
 
@@ -410,7 +395,7 @@ begin
 end;
 
 // Calculate gradient from logits and target. ??Gradient should just be a tseqmatrix
-procedure GradientFromLogits;
+procedure GradientFromProbabilities;
 var
   i, v: Integer;
 begin
@@ -433,29 +418,49 @@ begin
     end;
 end;
 
-// Moify the weights an biases.
+// Update the weights and biases.
 procedure Optimization;
+var
+  h: Integer;
 begin
-  // cblas_saxpy(N,  -LearningRate,  @Weight[0, 0], 1,  @Weight[0, 0], 1); Do I need this?
-  cblas_saxpy(ModelDim * ModelDim,  -LearningRate,  @W0.Grad[0, 0], 1,  @W0.Value[0, 0], 1);
-  cblas_saxpy(ModelDim * ModelDimProj,  -LearningRate,  @W1.Grad[0, 0], 1,  @W1.Value[0, 0], 1);
-  cblas_saxpy(ModelDimProj * ModelDim,  -LearningRate,  @W2.Grad[0, 0], 1,  @W2.Value[0, 0], 1);
-  cblas_saxpy(ModelDim * nVocab,  -LearningRate,  @WVocab.Grad[0, 0], 1,  @WVocab.Value[0, 0], 1);
+  // Main attention/output weights.
+  cblas_saxpy(ModelDim * ModelDim, -LearningRate, @W0.Grad[0, 0], 1, @W0.Value[0, 0], 1);
 
-  cblas_saxpy(ModelDimProj,  -LearningRate,  @b1.Grad[0], 1,  @b1.Value[0], 1);
-  cblas_saxpy(ModelDim,  -LearningRate,  @b2.Grad[0], 1,  @b2.Value[0], 1);
+  // Per-head weights.
+  for h := 0 to nHead - 1 do begin
+    cblas_saxpy(HeadDim * HeadDim, -LearningRate,
+                @WqHead[h].Grad[0, 0], 1,
+                @WqHead[h].Value[0, 0], 1);
 
-  cblas_saxpy(ModelDim,  -LearningRate,  @Gamma1.Grad[0], 1,  @Gamma1.Value[0], 1);
-  cblas_saxpy(ModelDim,  -LearningRate,  @Gamma2.Grad[0], 1,  @Gamma2.Value[0], 1);
+    cblas_saxpy(HeadDim * HeadDim, -LearningRate,
+                @WkHead[h].Grad[0, 0], 1,
+                @WkHead[h].Value[0, 0], 1);
 
-  cblas_saxpy(ModelDim,  -LearningRate,  @Beta1.Grad[0], 1,  @Beta1.Value[0], 1);
-  cblas_saxpy(ModelDim,  -LearningRate,  @Beta2.Grad[0], 1,  @Beta2.Value[0], 1);
+    cblas_saxpy(HeadDim * HeadDim, -LearningRate,
+                @WvHead[h].Grad[0, 0], 1,
+                @WvHead[h].Value[0, 0], 1);
+  end;
+
+  // Feed-forward and vocab projection.
+  cblas_saxpy(ModelDim * ModelDimProj, -LearningRate, @W1.Grad[0, 0], 1, @W1.Value[0, 0], 1);
+  cblas_saxpy(ModelDimProj * ModelDim, -LearningRate, @W2.Grad[0, 0], 1, @W2.Value[0, 0], 1);
+  cblas_saxpy(ModelDim * nVocab, -LearningRate, @WVocab.Grad[0, 0], 1, @WVocab.Value[0, 0], 1);
+
+  // Biases.
+  cblas_saxpy(ModelDimProj, -LearningRate, @b1.Grad[0], 1, @b1.Value[0], 1);
+  cblas_saxpy(ModelDim, -LearningRate, @b2.Grad[0], 1, @b2.Value[0], 1);
+
+  // LayerNorm parameters.
+  cblas_saxpy(ModelDim, -LearningRate, @Gamma1.Grad[0], 1, @Gamma1.Value[0], 1);
+  cblas_saxpy(ModelDim, -LearningRate, @Gamma2.Grad[0], 1, @Gamma2.Value[0], 1);
+  cblas_saxpy(ModelDim, -LearningRate, @Beta1.Grad[0], 1, @Beta1.Value[0], 1);
+  cblas_saxpy(ModelDim, -LearningRate, @Beta2.Grad[0], 1, @Beta2.Value[0], 1);
 end;
 
 // Run the transformer.
 procedure RunTransform;
 var
-  h, i, j: Integer;
+  h, i, j, HeadOffset: Integer;
 begin
   // Display entry to transform.
   writeln('Entering Transformer/FFN/Head Output');
@@ -492,11 +497,11 @@ begin
     // 1B. Split. Implicit split into X1 and accumulate into X4.
     //     RoPE. Also apply RoPE here.
 
-    // 1C. Partition X1 into X1Head[1], etc.
+    // 1C. Partition X1 into X1Head[1], etc.     DON'T DO THIS RECODING MULTIHEADS.
     // Equation: X1Head[1], etc. := VerticalPartitionX(X1).
-    for h := 0 to nHead - 1 do begin
-      VerticalPartitionX(X1.Value, h, X1Head[h].Value, SeqLen, HeadLen);
-      ApplyRoPE(X1Head[h].Value, InvFreq, SeqLen, HeadLen);
+    {for h := 0 to nHead - 1 do begin
+      VerticalPartitionX(X1.Value, h, X1Head[h].Value, SeqLen, HeadDim);
+      ApplyRoPE(X1Head[h].Value, InvFreq, SeqLen, HeadDim);
     end;
 
 
@@ -505,60 +510,68 @@ begin
       writeln('Display X1Head[3], sample, before standardizing.');
       DisplayX(X1Head[3].Value, G);
       Pause;
-    end;
+    end;}
 
     // 1D. Multiplication/Overwrite. Obtain QHead, KHead, VHead from X1.
 
-    // Multihead Multiplication/Overwrite: Input X1Head, WqHead. Output QHead.
+    // Full Size Multihead Multiplication/Overwrite: Input X1, Wq. Output Q.
     // Update--Equation: Q = X1 · Wq. Q in R^{L x D}. X1 in R^{L · D}. Wq in R^{D x D}. M=SeqLen N=ModelDim K=ModelDim.
-    for h := 0 to nHead - 1 do
-     MatMulNN(@X1Head[h].Value[0, 0], @WqHead[h].Value[0, 0], @QHead[h].Value[0, 0], SeqLen, HeadLen, HeadLen);
+     MatMulNN(@X1.Value[0, 0], @Wq.Value[0, 0], @Q.Value[0, 0], SeqLen, ModelDim, ModelDim);
 
-    {// Multiplication/Overwrite: Input X1, Wq. Output Q.
-    // Equation: Q = X1 · Wq. Q in R^{L x D}. X1 in R^{L · D}. Wq in R^{D x D}. M=SeqLen N=ModelDim K=ModelDim.
-    MatMulNN(@X1.Value[0, 0], @Wq.Value[0, 0], @Q.Value[0, 0], SeqLen, ModelDim, ModelDim);}
-
-    // Display QHead[3] matrix.
+    // Display Q matrix.
     if VerboseTransform then begin
-      writeln('Display QHead[3], sample, in transform.');
-      DisplayX(QHead[3].Value, G);
+      writeln('Display Q, sample, in transform.');
+      DisplayX(Q.Value, G);
       Pause;
     end;
 
-    // Multihead Multiplication/Overwrite: Input X1Head, WkHead. Output KHead.
+    // Full Size Multihead Multiplication/Overwrite: Input X1, Wk. Output K.
     // Update-
-    for h := 0 to nHead - 1 do
-      MatMulNN(@X1Head[h].Value[0, 0], @WkHead[h].Value[0, 0], @KHead[h].Value[0, 0], SeqLen, HeadLen, HeadLen);
+      MatMulNN(@X1.Value[0, 0], @Wk.Value[0, 0], @K.Value[0, 0], SeqLen, ModelDim, ModelDim);
 
-    // Display KHead[3] matrix.
+    // Display K matrix.
     if VerboseTransform then begin
-      writeln('Display KHead[3], endbeginning, in transform.');
-      DisplayX(KHead[3].Value, E);
+      writeln('Display K, end, in transform.');
+      DisplayX(K.Value, E);
       Pause;
     end;
 
-    {// Multiplication/Overwrite: Input X1, Wk. Output K.
-    // Equation: K = X1 · Wk. K in R^{L x D}. X1 in R^{L · D}. Wk in R^{D x D}. M=SeqLen N=ModelDim K=ModelDim.
-    MatMulNN(@X1.Value[0, 0], @Wk.Value[0, 0], @K.Value[0, 0], SeqLen, ModelDim, ModelDim);}
-
-    // Multihead Multiplication/Overwrite: Input X1Head, WvHead. Output VHead.
+    // Multihead Multiplication/Overwrite: Input X1, Wv. Output V.
     // Update--
-    for h := 0 to nHead - 1 do
-      MatMulNN(@X1Head[h].Value[0, 0], @WvHead[h].Value[0, 0], @VHead[h].Value[0, 0], SeqLen, HeadLen, HeadLen);
-
-    {// Multiplication/Overwrite: Input X1, Wv. Output V.
-    // Equation: V = X1 · Wv. V in R^{L x D}. X1 in R^{L · D}. Wv in R^{D x D}. M=SeqLen N=ModelDim K=ModelDim.
-    MatMulNN(@X1.Value[0, 0], @Wv.Value[0, 0], @V.Value[0, 0], SeqLen, ModelDim, ModelDim);}
+      MatMulNN(@X1.Value[0, 0], @Wv.Value[0, 0], @V.Value[0, 0], SeqLen, ModelDim, ModelDim);
 
     // 1D. Nil.
 
     // 1E. Multiplication. Obtain Scores1.
 
-    // Multihead Multiplication/Overwrite: Input QHead, KᵀHead. Output: ScoresHead1.
+    // Multihead Multiplication/Overwrite: Input Q, Kᵀ. Output: Scores1.
     // That is, the Queries * Tansposed(Keys) are the attention scores.
-    // Update Equation: Scores1 = Q · Kᵀ. Scores1 in R^{L · L}. Q in R^{L x D}. Kᵀ in R^{D x L}. M=SeqLen N=SeqLen K=HeadLen
-    for h := 0 to nHead - 1 do
-      MatMulNT(@QHead[h].Value[0, 0], @KHead[h].Value[0, 0], @ScoresHead1[h].Value[0,0], SeqLen, SeqLen, HeadLen);
+    // Update Equation: Scores1 = Q · Kᵀ. Scores1 in R^{L · L}. Q in R^{L x D}. Kᵀ in R^{D x L}. M=SeqLen N=SeqLen K=HeadDim
+
+    for h := 0 to nHead - 1 do begin
+      HeadOffset := h * HeadDim;
+
+      // Q_h is Q[*, headOffset .. headOffset+H-1]
+      // K_h is K[*, headOffset .. headOffset+H-1]
+
+      // Multiply Q_h (L x H) by K_h^T (H x L)
+      cblas_sgemm(
+        CblasRowMajor,
+        CblasNoTrans,   // Q_h
+        CblasTrans,     // K_h^T
+        SeqLen,              // M = L
+        SeqLen,              // N = L
+        HeadDim,              // K = H
+        1.0,
+        @Q.Value[0, HeadOffset], ModelDim,   // lda = D (full row stride)
+        @K.Value[0, HeadOffset], ModelDim,   // ldb = D
+        0.0,
+        @ScoresHead1[h].Value[0, 0], SeqLen     // ldc = L
+      );
+    end;
+
+    {for h := 0 to nHead - 1 do
+      MatMulNT(@QHead[h].Value[0, 0], @KHead[h].Value[0, 0], @ScoresHead1[h].Value[0,0], SeqLen, SeqLen, HeadDim);}
 
     if VerboseTransform then begin
       writeln('Display ScoresHead1[0], beginning, before standardizing.');
@@ -566,8 +579,8 @@ begin
       Pause;
     end;
     if VerboseTransform then begin
-      writeln('Display ScoresHead1[4], sample, before standardizing.');
-      DisplayX(ScoresHead1[4].Value, G);
+      writeln('Display ScoresHead1[0], sample, before standardizing.');
+      DisplayX(ScoresHead1[0].Value, G);
       Pause;
     end;
 
@@ -576,18 +589,11 @@ begin
     // Equation: Scores1 = Q · Kᵀ. Scores1 in R^{L · L}. Q in R^{L x D}. Kᵀ in R^{D x L}. M=SeqLen N=SeqLen K=SeqLen
     MatMulNT(@Q.Value[0, 0], @K.Value[0, 0], @Scores1.Value[0,0], SeqLen, SeqLen, ModelDim);}
 
-    // Display Scores1Head1[3] matrix.
-    if VerboseTransform then begin
-      writeln('Display ScoresHead1[3], beginning, before standardizing.');
-      DisplayX(ScoresHead1[3].Value, B);
-      Pause;
-    end;
-
     // 1F. Standardize, Mask & Softmax. Obtain Scores2.
     // Standardization: Input ScoresHead1. Output ScoresHead1.
-    // Equation: ScoresHead1 = Sqrt(1 / HeadLen). ScoresHead1 in R^{L x L}. Using HeadLen not ModelDim.
+    // Equation: ScoresHead1 = Sqrt(1 / HeadDim). ScoresHead1 in R^{L x L}. Using HeadDim.
     for h := 0 to nHead - 1 do
-      cblas_sscal(SeqLen * SeqLen,  1 / Sqrt(HeadLen),  @ScoresHead1[h].Value[0, 0], 1);
+      cblas_sscal(SeqLen * SeqLen,  1 / Sqrt(HeadDim),  @ScoresHead1[h].Value[0, 0], 1);
 
     // Masking: Input ScoresHead1. Output ScoresHead1.
     // Equation: ScoresHead1 = Mask(ScoresHead1). ScoresHead1 in R^{L x L}.
@@ -620,20 +626,23 @@ begin
     // 1G. Multiplication/Overwrite. Obtain X2Head from ScoresHead2.
     // Scoring: Input ScoresHead2, VHead. Output: X2Head.
     // Equation: X2 = Scores2 · V. X2 in R^{L · D}. Scores2 in R^{L x L}. V in R^{L x D}. M=SeqLen N=ModelDim K=SeqLen
-    for h := 0 to nHead - 1 do
-      MatMulNN(@ScoresHead2[h].Value[0, 0], @VHead[h].Value[0, 0], @X2Head[h].Value[0, 0], SeqLen, HeadLen, SeqLen);
 
-    // Display X2Head[0] matrix.
-    if VerboseTransform then begin
-      writeln('Display X2Head[0], sample, after softmax.');
-      DisplayX(X2Head[0].Value, G);
-      Pause;
+    for h := 0 to nHead - 1 do begin
+      HeadOffset := h * HeadDim;
+      cblas_sgemm(
+        CblasRowMajor,
+        CblasNoTrans,
+        CblasNoTrans,
+        SeqLen,                // M = L
+        HeadDim,                // N = H
+        SeqLen,                // K = L
+        1.0,
+        @ScoresHead2[h].Value[0,0], SeqLen,
+        @V.Value[0, HeadOffset], ModelDim,
+        0.0,
+        @X2.Value[0, HeadOffset], ModelDim   // write directly into final L×D output
+      );
     end;
-
-    // Concatenate XHead[1], etc. into X2.
-    // Equation: X2 := VerticalConcatX(X1).
-    for h := 0 to nHead - 1 do
-      VerticalConcatX(X1Head[h].Value, h, X2.Value, SeqLen, HeadLen);
 
     // Display X2 matrix.
     if VerboseTransform then begin
@@ -785,7 +794,7 @@ begin
         // 3C. Cross-Entropy Loss. Obtain TopGradient from Logits.
         // Gradient: Input Logits. Output TopGradient.
         // Equation: TopGradient in R^{L x nVocab}. Logits in R^{L x nVocab}.
-        GradientFromLogits;
+        GradientFromProbabilities;
 
         // Display TopGradient matrix.
         if VerboseTransform then begin
@@ -918,21 +927,43 @@ begin
     // 1G. Backprop Multiplication/Overwrite. Obtain Scores2.Grad from X2.Grad: Input X2.Grad, Vᵀ.Value. Output: Scores2.Grad.
     writeln('Stage 1G');
     // Equations: Scores2.Grad = X2.Grad · Vᵀ.Value. Scores2.Grad is R^{L x L}. X2.Grad is R^{L x D}. Vᵀ.Value is R^{D x L}.
-    MatMulNT(@X2.Grad, @V.Value, @Scores2.Grad, SeqLen, ModelDim, SeqLen);
-    //cblas_sgemm(101, 111, 112,  SeqLen, SeqLen, ModelDim,  1.0,     // 112 = Transposed.
-    //@X2.Grad[0, 0], ModelDim,  @V.Value[0, 0], ModelDim,  0.0,  @Scores2.Grad[0, 0], SeqLen);
-
-    // Partition X2 into X1Head[1], etc.
-    // Equation: X1Head[2], etc. := VerticalPartitionX(X2).
-    for h := 0 to nHead - 1 do
-      VerticalPartitionX(X2.Value, h, X1Head[h].Value, SeqLen, HeadLen);
+    for h := 0 to nHead - 1 do begin
+      HeadOffset := h * HeadDim;
+      cblas_sgemm(
+        CblasRowMajor,
+        CblasNoTrans,     // dX_h
+        CblasTrans,       // V_h^T
+        SeqLen,                // M = L
+        SeqLen,                // N = L
+        HeadDim,                // K = H
+        1.0,
+        @X2.Grad[0, HeadOffset], ModelDim,   // dX_h (L×H)
+        @V.Value[0, HeadOffset], ModelDim,   // V_h (L×H)
+        0.0,
+        @ScoresHead2[h].Grad[0, 0], SeqLen        // output L×L
+      );
+    end;
 
     // Backprop Create VHead Grad from X2Head Grad: Input ScoresHead2ᵀ.Value, X2Head.Grad. Output: VHead.Grad.
     // Equations: VHead.Grad = ScoresHead2ᵀ.Value · X2Head.Grad. VHead.Grad is R^{L x D}. ScoresHead2ᵀ.Value is R^{L x L}. X2Head.Grad is R^{L x D}.
-    for h := 0 to nHead - 1 do
-      MatMulTN(@ScoresHead2[h].Value, @X2Head[h].Grad, @VHead[h].Grad, SeqLen, SeqLen, HeadLen);
-    //cblas_sgemm(101, 112, 111,  SeqLen, ModelDim, SeqLen,  1.0,
-      //@Scores2.Value[0, 0], SeqLen,  @X2.Grad[0, 0], ModelDim,  0.0,  @V.Grad[0, 0], ModelDim);
+    for h := 0 to nHead - 1 do begin
+      HeadOffset := h * HeadDim;
+      cblas_sgemm(
+        CblasRowMajor,
+        CblasTrans,       // Scores_h^T
+        CblasNoTrans,     // dX_h
+        SeqLen,                // M = L
+        HeadDim,                // N = H
+        SeqLen,                // K = L
+        1.0,
+        @ScoresHead2[h].Value[0, 0], SeqLen,       // lda = L
+        @X2.Grad[0, HeadOffset], ModelDim,    // ldb = D
+        0.0,
+        @V.Grad[0, HeadOffset], ModelDim      // ldc = D
+      );
+    end;
+{    for h := 0 to nHead - 1 do
+      MatMulTN(@ScoresHead2[h].Value, @X2Head[h].Grad, @VHead[h].Grad, SeqLen, SeqLen, HeadDim);}
 
     // 1F. Backprop Standardize, Mask & Softmax. Obtain ScoresHead1.
     writeln('Stage 1F');
@@ -955,7 +986,7 @@ begin
     // Backprop standardization. Input: ScoresHead1.Grad. Output: ScoresHead1.Grad.
     // Equation: ScoresHead1.Grad = Sqrt(1 / ModelDim). ScoresHead1.Grad in R^{L x L}.
     for h := 0 to nHead - 1 do
-      cblas_sscal(SeqLen * SeqLen,  1 / SqrtD,  @ScoresHead1[h].Grad[0, 0], 1);
+      cblas_sscal(SeqLen * SeqLen,  1 / SqrtHD,  @ScoresHead1[h].Grad[0, 0], 1);
 
     if VerboseTransform then begin
       writeln('ScoresHead1[0].Grad, grid, in transform, before stage 1E, Q and K-transform.');
@@ -966,76 +997,78 @@ begin
     // 1E. Backprop multiplication. Obtain QHead.Grad and KHead.Grad.
     writeln('Stage 1E');
     {QHead.Grad = ScoresHead1.Grad · KHead.Value
-     KHead.Grad = QHeadᵀ.Value · ScoresHead1.Grad}
+     KHead.Grad = }
     // Backprop Multiplication: Input ScoresHead1.Grad, KHead.Value. Output QHead.Grad.
     // Equation: QHead.Grad = ScoresHead1.Grad · KHead.Value. QHead.Grad, ScoresHead1.Grad in R^{L x L}. KHead.Value in R^{L x D}.
-    for h := 0 to nHead - 1 do
-      MatMulNN(@ScoresHead1[h].Grad, @KHead[h].Value, @QHead[h].Grad, SeqLen, HeadLen, SeqLen);
-    //cblas_sgemm(101, 111, 111,  SeqLen, ModelDim, SeqLen,  1.0,
-      //@Scores1.Grad[0, 0], SeqLen,  @K.Value[0, 0], ModelDim,  0.0,  @Q.Grad[0, 0], ModelDim);
 
-    // Backprop Multiplication: Input ScoresHead1.Gradᵀ, QHead.Value. Output KHead.Grad.
-    // Equation: KHead.Grad = ScoresHead1.Gradᵀ · QHead.Value. KHead.Grad in R^{L x D}. ScoresHead1.Gradᵀ in R^{L · L}. QHead.Value in R^{L x D}.
-    for h := 0 to nHead - 1 do
-      MatMulTN(@ScoresHead1[h].Grad, @QHead[h].Value, @KHead[h].Grad, SeqLen, HeadLen, SeqLen);
-    //cblas_sgemm(101, 112, 111,  SeqLen, ModelDim, SeqLen,  1.0,
-      //@Scores1.Grad[0, 0], SeqLen,  @Q.Value[0, 0], ModelDim,  0.0,  @K.Grad[0, 0], ModelDim);
+    for h := 0 to nHead - 1 do begin
+      HeadOffset := h * HeadDim;
+      cblas_sgemm(
+        CblasRowMajor,
+        CblasNoTrans,     // dScores_h
+        CblasNoTrans,     // K_h
+        SeqLen,                // M = L
+        HeadDim,                // N = H
+        SeqLen,                // K = L
+        1.0,            // 1/sqrt(H)    Move scalehere" SqrtD?
+        @ScoresHead1[h].Grad[0,0], SeqLen,
+        @K.Value[0, HeadOffset], ModelDim,
+        0.0,
+        @Q.Grad[0, HeadOffset], ModelDim
+      );
+    end;
 
-    // 1D. Backprop multiplication/overwrite. Obtain W_.Grad and X1_q.Grad for q, k, v.
+    // Backprop Multiplication: Input ScoresHead1.Gradᵀ, Q.Value. Output K.Grad.
+    // Equation: K.Grad = ScoresHead1.Gradᵀ · Q.Value. K.Grad in R^{L x D}. ScoresHead1.Gradᵀ in R^{L · L}. Q.Value in R^{L x D}.
+    for h := 0 to nHead - 1 do begin
+      HeadOffset := h * HeadDim;
+      cblas_sgemm(
+        CblasRowMajor,
+        CblasTrans,       // dScores_h^T
+        CblasNoTrans,     // Q_h
+        SeqLen,                // M = L
+        HeadDim,                // N = H
+        SeqLen,                // K = L
+        1.0,            // 1/sqrt(H)
+        @ScoresHead1[h].Grad[0,0], SeqLen,
+        @Q.Value[0, HeadOffset], ModelDim,
+        0.0,
+        @K.Grad[0, HeadOffset], ModelDim
+      );
+    end;
+
+    // 1D. Backprop multiplication/overwrite. Obtain W_.Grad and X1_q.Grad for Q, K, and V.
     writeln('Stage 1D');
-    // Obtain X1qHead, X1kHead, X1vHead, from X1Head.
-    {WqHead.Grad = X1Headᵀ.Value · QHead.Grad
-     X1qHead.Grad = QHead.Grad · WqHeadᵀ.Value}
-    // Backprop Create WqHead Grad from QHead Grad: Input X1Headᵀ.Value · QHead.Grad. Output WqHead.Grad.
-    // Equation: WqHead.Grad = X1ᵀ · QHead.Grad. WqHead.Grad in R^{D x D}. X1Headᵀ in R^{D x L}. QHead.Grad in R^{L x D}.
-    for h := 0 to nHead - 1 do
-      MatMulTN(@X1Head[h].Value, @QHead[h].Grad, @WqHead[h].Grad, HeadLen, HeadLen, SeqLen);
-    //cblas_sgemm(101, 112, 111,  ModelDim, ModelDim, SeqLen,  1.0,
-      //@X1[0, 0], ModelDim,  @Q.Grad[0, 0], ModelDim, 1.0,  @Wq.Grad[0, 0], ModelDim);
+    // Obtain X1q, X1k, X1v, from X1.
+    {Wq.Grad = X1ᵀ.Value · Q.Grad
+     X1q.Grad = Q.Grad · Wqᵀ.Value}
+    // Backprop Create Wq Grad from Q Grad: Input X1ᵀ.Value · Q.Grad. Output Wq.Grad.
+    // Equation: Wq.Grad = X1ᵀ · Q.Grad. Wq.Grad in R^{D x D}. X1ᵀ in R^{D x L}. Q.Grad in R^{L x D}.
+    MatMulTN(@X1.Value, @Q.Grad, @Wq.Grad, ModelDim, ModelDim, SeqLen);
 
-    // Backprop Create X1qHead from QHead Grad: Input QHead.Grad, WqHeadᵀ.Value. Output X1qHead.Grad.
-    // Equation: X1qHead.Grad = QHead.Grad · WqHeadᵀ. X1qHead.Grad in R^{L x D}. QHead.Grad in R^{L x D}. WqHeadᵀ.Value in R^{D · D}.
-    for h := 0 to nHead - 1 do
-      MatMulNT(@QHead[h].Grad, @WqHead[h].Value, @X1qHead[h].Grad, SeqLen, HeadLen, HeadLen);
-    //cblas_sgemm(101, 111, 112,  SeqLen, HeadLen, HeadLen,  1.0,
-      //@Q.Grad[0, 0], ModelDim,  @Wq[0, 0], ModelDim, 1.0,  @X1q.Grad[0, 0], ModelDim);
+    // Backprop Create X1q from Q Grad: Input Q.Grad, Wqᵀ.Value. Output X1q.Grad.
+    // Equation: X1q.Grad = Q.Grad · Wqᵀ. X1q.Grad in R^{L x D}. Q.Grad in R^{L x D}. Wqᵀ.Value in R^{D · D}.
+    MatMulNT(@Q.Grad, @Wq.Value, @X1q.Grad, SeqLen, ModelDim, ModelDim);
 
-    {WHeadk.Grad = X1Headᵀ.Value · KHead.Grad
-     X1Headk.Grad = KHead.Grad · WHeadkᵀ.Value}
-    // Backprop Create WkHead Grad from KHead Grad: Input X1Headᵀ.Value · KHead.Grad. Output WkHead.Grad.
-    // Equation:  WkHead.Grad = X1Headᵀ.Value · KHead.Grad. WkHead.Grad in R^{D x D}. X1Headᵀ.Value in R^{D x L}. KHead.Grad in R^{L x D}.
-    for h := 0 to nHead - 1 do
-      MatMulTN(@X1Head[h].Value, @KHead[h].Grad, @WkHead[h].Grad[h], HeadLen, HeadLen, SeqLen);
-    //cblas_sgemm(101, 112, 111,  ModelDim, ModelDim, SeqLen,  1.0,
-      //@X1.Value[0, 0], ModelDim,  @K.Grad[0, 0], ModelDim, 1.0,  @Wk.Grad[0, 0], ModelDim);
+    {Wk.Grad = X1ᵀ.Value · K.Grad
+     X1k.Grad = K.Grad · Wkᵀ.Value}
+    // Backprop Create Wk Grad from K Grad: Input X1ᵀ.Value · K.Grad. Output Wk.Grad.
+    // Equation:  Wk.Grad = X1ᵀ.Value · K.Grad. Wk.Grad in R^{D x D}. X1ᵀ.Value in R^{D x L}. K.Grad in R^{L x D}.
+    MatMulTN(@X1.Value, @K.Grad, @Wk.Grad[h], ModelDim, ModelDim, SeqLen);
 
-    // Backprop Create X1kHeadk Grad from KHead Grad. Input KHead.Grad, WkHeadᵀ.Value. Output X1kHead.Grad.
-    // Equation: X1kHead.Grad = KHead.Grad · WkHeadᵀ.Value. X1kHead.Grad in R^{L x D}. KHead.Grad in R^{L x D}. WkHeadᵀ.Value in R^{D · D}.
-    for h := 0 to nHead - 1 do
-      MatMulNT(@KHead[h].Grad, @WkHead[h].Value, @X1kHead[h].Grad, SeqLen, HeadLen, HeadLen);
-    //cblas_sgemm(101, 111, 112,  SeqLen, ModelDim, ModelDim,  1.0,
-      //@K.Grad[0, 0], ModelDim,  @Wk.Value[0, 0], ModelDim, 1.0,  @X1k.Grad[0, 0], ModelDim);
+    // Backprop Create X1kk Grad from K Grad. Input K.Grad, Wkᵀ.Value. Output X1k.Grad.
+    // Equation: X1k.Grad = K.Grad · Wkᵀ.Value. X1k.Grad in R^{L x D}. K.Grad in R^{L x D}. Wkᵀ.Value in R^{D · D}.
+    MatMulNT(@K.Grad, @Wk.Value, @X1k.Grad, SeqLen, ModelDim, ModelDim);
 
-    {WvHead.Grad = X1Headᵀ · VHead.Grad
-     X1vHead.Grad = VHead.Grad · WvHeadᵀ.Value}
-    // Backprop Create WvHead Grad from VHead Grad: Input X1Headᵀ.Value · VHead.Grad. Output WvHead.Grad.
-    // Equation: WvHead.Grad = X1Headᵀ.Value · V.Grad. WvHead.Grad in R^{D x D}. X1Headᵀ in R^{D x L}. VHead.Grad in R^{L x D}.
-    for h := 0 to nHead - 1 do
-      MatMulTN(@X1Head[h].Value, @VHead[h].Value, @WvHead[h].Grad, HeadLen, HeadLen, SeqLen);
-    //cblas_sgemm(101, 112, 111,  ModelDim, ModelDim, SeqLen,  1.0,
-      //@X1.Value[0, 0], ModelDim,  @V.Grad[0, 0], ModelDim, 1.0,  @Wv.Grad[0, 0], ModelDim);
+    {Wv.Grad = X1ᵀ · V.Grad
+     X1v.Grad = V.Grad · Wvᵀ.Value}
+    // Backprop Create Wv Grad from V Grad: Input X1ᵀ.Value · V.Grad. Output Wv.Grad.
+    // Equation: Wv.Grad = X1ᵀ.Value · V.Grad. Wv.Grad in R^{D x D}. X1ᵀ in R^{D x L}. V.Grad in R^{L x D}.
+    MatMulTN(@X1.Value, @V.Value, @Wv.Grad, ModelDim, ModelDim, SeqLen);
 
-    // Backprop Create X1vHead Grad from VHead Grad. Input VHead.Grad, WvHeadᵀ. Value. Output X1vHead.Grad.
-    // Equation: X1vHead.Grad = VHead.Grad times WvHeadᵀ.Value. X1vHead.Grad = V.Grad · WVHeadᵀ.Value. VHead.Grad in R^{L x D}. WvHeadᵀ.Value in R^{D · D}.
-    for h := 0 to nHead - 1 do
-      MatMulNT(@VHead[h].Grad, @WvHead[h].Value, @X1vHead[h].Grad, SeqLen, HeadLen, HeadLen);
-    //cblas_sgemm(101, 111, 112,  SeqLen, ModelDim, ModelDim,  1.0,
-      //@V.Grad[0, 0], ModelDim,  @Wv.Value[0, 0], ModelDim, 1.0,  @X1v.Grad[0, 0], ModelDim);
-
-    // 1C. Backprop Concatenate. Concat X1Head[1], etc. into X1.
-    // Equation: X1, etc. := VerticalConcatX(X1Head).
-    for h := 0 to nHead - 1do
-      VerticalConcatX( X1Head[h].Value, h, X1.Value, SeqLen, HeadLen);
+    // Backprop Create X1v Grad from V Grad. Input V.Grad, Wvᵀ. Value. Output X1v.Grad.
+    // Equation: X1v.Grad = V.Grad times Wvᵀ.Value. X1v.Grad = V.Grad · WVᵀ.Value. V.Grad in R^{L x D}. Wvᵀ.Value in R^{D · D}.
+      MatMulNT(@V.Grad, @Wv.Value, @X1v.Grad, SeqLen, ModelDim, ModelDim);
 
     if VerboseTransform then begin
       writeln('Display X1.Grad, grid, in transform, after concatenation.');
@@ -1075,11 +1108,6 @@ begin
     Pause;
   end;
 end;
-
-end.
-
-
-implementation
 
 end.
 

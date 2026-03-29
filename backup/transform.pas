@@ -271,9 +271,6 @@ begin
     FillChar(WqHead[h].Grad, SizeOf(WqHead[h].Grad), 0);
     FillChar(WkHead[h].Grad, SizeOf(WkHead[h].Grad), 0);
     FillChar(WvHead[h].Grad, SizeOf(WvHead[h].Grad), 0);
-    FillChar(X1qHead[h].Grad, SizeOf(X1qHead[h].Grad), 0);
-    FillChar(X1kHead[h].Grad, SizeOf(X1kHead[h].Grad), 0);
-    FillChar(X1vHead[h].Grad, SizeOf(X1vHead[h].Grad), 0);
   end;
 end;
 

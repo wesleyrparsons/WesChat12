@@ -21,7 +21,6 @@ var
     X6, X7, X8, U:                TSeqTensor;              // X's at all stages.
   X1Head, X2Head:                 array[0..nHead - 1] of TSeqHeadTensor;       // X partitioned into nHeads.
   X1q, X1v, X1k:                  TSeqTensor;              // X's for Q, K, V.
-  //X1qHead, X1vHead, X1kHead:      array[0..nHead - 1] of TSeqHeadTensor;       // Above partitioned into nHeads.
   Q, K, V:                        TSeqTensor;              // Q is X*Wq, K is X*Wk, V is X*Wv.
   ScoresHead1, ScoresHead2:       array[0..nHead - 1] of TScoresHeadTensor;    // Scores partitioned into nHeads.
   Hidden1, Hidden2:               THiddenTensor;           // Neural net payer.

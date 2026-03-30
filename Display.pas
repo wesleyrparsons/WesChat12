@@ -23,6 +23,7 @@ procedure DisplayByteSymbolTable(const SymbolTable: TSymbolTable);
 // Display vectors and matrices.
 procedure DisplayVector(const V: TIVector);
 procedure DisplayX(const X: TSeqMatrix; const Part: TPart = B); overload;
+procedure PDisplayX(const Mess: string; const X: TSeqMatrix; const Part: TPart = B); overload;
 procedure DisplayX(const X: TSeqHeadMatrix; const Part: TPart = B); overload;
 procedure DisplayX(const X: THiddenMatrix; const Part: TPart = B); overload;
 procedure DisplayX(const X: TSeqVocabMatrix; const Part: TPart = B); overload;
@@ -194,6 +195,13 @@ begin
     Write(X[High(X), High(X[0])]: 11: 5, ' ');
     Writeln;
   end;
+end;
+
+procedure PDisplayX(const Mess: string; const X: TSeqMatrix; const Part: TPart = B); overload;
+begin
+  Writeln(Mess);
+  DisplayX(X, Part);
+  Pause;
 end;
 
 // Display an XHead matrix, B, E, F, or G.

@@ -58,25 +58,25 @@ end;
 
 // Rotary positional encoding.
 // Apply at initialization of transformer.
-procedure InitRoPE(var InvFreq: TFVector; HeadDim: Integer);
+procedure InitRoPE(var InvFreq: TFVector; ModelDim: Integer);
 var
   j: Integer;
 begin
-  // HeadDim must be even.
-  SetLength(InvFreq, HeadDim div 2);
-  for j := 0 to (HeadDim div 2) - 1 do
-    InvFreq[j] := Exp( - (2.0 * j) / HeadDim * Ln(10000.0) );
+  // ModelDim must be even.
+  SetLength(InvFreq, ModelDim div 2);
+  for j := 0 to (ModelDim div 2) - 1 do
+    InvFreq[j] := Exp( - (2.0 * j) / ModelDim * Ln(10000.0) );
 end;
 
-// Apply to both Q and K, [0..SeqLen-1, 0..ModelDim-1]
-// Apply before or after head-splitting. But immediately after computing Q and K.
-procedure ApplyRoPE(var H: TSeqHeadMatrix;  const InvFreq: TFVector; SeqLen, D: Integer);
+// Apply to both Q and K, [0..SeqLen - 1, 0..ModelDim - 1]
+// Apply before head-splitting, immediately after computing Q and K.
+procedure ApplyRoPE(var H: TSeqMatrix;  const InvFreq: TFVector; SeqLen, ModelDim: Integer);
 var
   i, j: Integer;
   angle, c, s, x0, x1: Single;
 begin
   for i := 0 to SeqLen - 1 do
-    for j := 0 to (D div 2) - 1 do begin
+    for j := 0 to (ModelDim div 2) - 1 do begin
       angle := i * InvFreq[j];
       c := Cos(angle);
       s := Sin(angle);
@@ -169,7 +169,7 @@ end;
 // Initialize the transformer stage.
 procedure InitializeTransformer;
 var
-  h, j: Integer;
+  j: Integer;
 begin
   // InitTestVector(TestVector);
   // Initialize RoPE.
@@ -378,25 +378,22 @@ end;
 
 // Update the weights and biases.
 procedure Optimization;
-var
-  h: Integer;
 begin
   // Main attention/output weights.
   cblas_saxpy(ModelDim * ModelDim, -LearningRate, @W0.Grad[0, 0], 1, @W0.Value[0, 0], 1);
 
   // Wq, Wk. Wv weights.
-    cblas_saxpy(ModelDim * ModelDim, -LearningRate,
-                @Wq.Grad[0, 0], 1,
-                @Wq.Value[0, 0], 1);
+  cblas_saxpy(ModelDim * ModelDim, -LearningRate,
+              @Wq.Grad[0, 0], 1,
+              @Wq.Value[0, 0], 1);
 
-    cblas_saxpy(ModelDim * ModelDim, -LearningRate,
-                @Wk.Grad[0, 0], 1,
-                @Wk.Value[0, 0], 1);
+  cblas_saxpy(ModelDim * ModelDim, -LearningRate,
+              @Wk.Grad[0, 0], 1,
+              @Wk.Value[0, 0], 1);
 
-    cblas_saxpy(ModelDim * ModelDim, -LearningRate,
-                @Wv.Grad[0, 0], 1,
-                @Wv.Value[0, 0], 1);
-  end;}
+  cblas_saxpy(ModelDim * ModelDim, -LearningRate,
+              @Wv.Grad[0, 0], 1,
+              @Wv.Value[0, 0], 1);
 
   // Feed-forward and vocab projection.
   cblas_saxpy(ModelDim * ModelDimProj, -LearningRate, @W1.Grad[0, 0], 1, @W1.Value[0, 0], 1);
@@ -426,11 +423,13 @@ begin
   ZeroGradients;
 
   // Display X matrix.
-  if VerboseTransform then begin
+  if VerboseTransform then
+    PDisplayX('Display X, beginning, in transform, before any action.', X, G);
+{  if VerboseTransform then begin
     writeln('Display X, beginning, in transform, before any action.');
     DisplayX(X, G);
     Pause;
-  end;
+  end;}
 
   // BLOCK 0.
 
@@ -452,26 +451,10 @@ begin
     end;
 
     // 1B. Split. Implicit split into X1 and accumulate into X4.
-    //     RoPE. Also apply RoPE here.
 
-    // 1C. Partition X1 into X1Head[1], etc.     DON'T DO THIS RECODING MULTIHEADS.
-    // Equation: X1Head[1], etc. := VerticalPartitionX(X1).
-    {for h := 0 to nHead - 1 do begin
-      VerticalPartitionX(X1.Value, h, X1Head[h].Value, SeqLen, HeadDim);
-      ApplyRoPE(X1Head[h].Value, InvFreq, SeqLen, HeadDim);
-    end;
+    // 1C. Multiplication/Overwrite. Obtain Q, K, V from X1.
 
-
-    // Display X1Head[3] matrix.
-    if VerboseTransform then begin
-      writeln('Display X1Head[3], sample, before standardizing.');
-      DisplayX(X1Head[3].Value, G);
-      Pause;
-    end;}
-
-    // 1D. Multiplication/Overwrite. Obtain QHead, KHead, VHead from X1.
-
-    // Full Size Multihead Multiplication/Overwrite: Input X1, Wq. Output Q.
+    // Full Size Multiplication/Overwrite: Input X1, Wq. Output Q.
     // Update--Equation: Q = X1 · Wq. Q in R^{L x D}. X1 in R^{L · D}. Wq in R^{D x D}. M=SeqLen N=ModelDim K=ModelDim.
      MatMulNN(@X1.Value[0, 0], @Wq.Value[0, 0], @Q.Value[0, 0], SeqLen, ModelDim, ModelDim);
 
@@ -482,7 +465,7 @@ begin
       Pause;
     end;
 
-    // Full Size Multihead Multiplication/Overwrite: Input X1, Wk. Output K.
+    // Full Size Multiplication/Overwrite: Input X1, Wk. Output K.
     // Update-
       MatMulNN(@X1.Value[0, 0], @Wk.Value[0, 0], @K.Value[0, 0], SeqLen, ModelDim, ModelDim);
 
@@ -493,11 +476,13 @@ begin
       Pause;
     end;
 
-    // Multihead Multiplication/Overwrite: Input X1, Wv. Output V.
+    // Full Size Multiplication/Overwrite: Input X1, Wv. Output V.
     // Update--
       MatMulNN(@X1.Value[0, 0], @Wv.Value[0, 0], @V.Value[0, 0], SeqLen, ModelDim, ModelDim);
 
-    // 1D. Nil.
+    // 1D. RoPE.
+      ApplyRoPE(Q.Value, InvFreq, SeqLen, ModelDim);
+      ApplyRoPE(K.Value, InvFreq, SeqLen, ModelDim);
 
     // 1E. Multiplication. Obtain Scores1.
 

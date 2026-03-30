@@ -15,9 +15,9 @@ type
   TMKLInt = LongInt;
 
 const
-  CBlasRowMajor = 101;
-  CBlasNoTrans  = 111;
-  CBlasTrans    = 112;
+  CBlasRowMajor = 101; RowMajor = 101;
+  CBlasNoTrans  = 111; NoTrans  = 111;
+  CBlasTrans    = 112; Trans    = 112;
 
 // Multiply and add procedures.
 procedure MatMulFullNN(const A, B: PSingle; C: PSingle; M, N, K, lda, ldb, ldc: Integer);
@@ -29,8 +29,8 @@ procedure MatMulTN(const A, B: PSingle; C: PSingle; M, N, K: Integer);
 procedure MatAdd(const A, B: TSeqMatrix; var C: TSeqMatrix; Rows, Cols: Integer);
 
 // Partition and concatenate procedures.
-procedure VerticalPartitionX(const X: TSeqMatrix; const h: Integer; var XHead: TSeqHeadMatrix; const L, HL: Integer);
-procedure VerticalConcatX(const XHead: array of TSeqHeadMatrix; const h: Integer; var X: TSeqMatrix; const L, HL: Integer);
+//procedure VerticalPartitionX(const X: TSeqMatrix; const h: Integer; var XHead: TSeqHeadMatrix; const L, HL: Integer);
+//procedure VerticalConcatX(const XHead: array of TSeqHeadMatrix; const h: Integer; var X: TSeqMatrix; const L, HL: Integer);
 
 // Split and accumulate procedures.
 procedure GradSplit(const Upstream: TSeqMatrix; var Left, Right: TSeqMatrix; Rows, Cols: Integer);
@@ -38,9 +38,8 @@ procedure AccumulateGrad(const Src: TSeqMatrix; var Dst: TSeqMatrix; Rows, Cols:
 procedure MatMulAccNT(const A, B: PSingle; C: PSingle; M, N, K: Integer);
 procedure MatMulAccNN(const A, B: PSingle; C: PSingle; M, N, K: Integer);
 
-// ReLU procedures.
+// ReLU procedure.
 procedure ReLUMaskForward(const A: THiddenMatrix; var B: THiddenMatrix);
-procedure ReLUMaskBackward(const Hidden: THiddenMatrix; var dHidden: THiddenMatrix);
 
 // Copy matrix procedure.
 procedure CopyXMatrix(const A: array of TSeqVector; var B: array of TSeqVector;
@@ -110,7 +109,7 @@ function cblas_snrm2(
 implementation
 
 // Parition X into h heads.
-procedure VerticalPartitionX(const X: TSeqMatrix; const h: Integer; var XHead: TSeqHeadMatrix; const L, HL: Integer);
+{procedure VerticalPartitionX(const X: TSeqMatrix; const h: Integer; var XHead: TSeqHeadMatrix; const L, HL: Integer);
 var
   i: Integer;
 begin
@@ -125,7 +124,7 @@ var
 begin
   for i := 0 to L - 1 do
     cblas_scopy(HL, @XHead[h][i, 0], 1, @X[i, h * HL], 1);
-end;
+end;}
 
 // Split Gradient into 2 streams, for backprop.
 procedure GradSplit(const Upstream: TSeqMatrix; var Left, Right: TSeqMatrix; Rows, Cols: Integer);
@@ -347,7 +346,7 @@ begin
 end;
 
 // Apply ReLU if needed for back propagation.
-procedure ReLUMaskBackward(const Hidden: THiddenMatrix; var dHidden: THiddenMatrix);
+{procedure ReLUMaskBackward(const Hidden: THiddenMatrix; var dHidden: THiddenMatrix);
 var
   i, j: Integer;
 begin
@@ -355,8 +354,9 @@ begin
     for j := 0 to High(Hidden[0]) do
       if Hidden[i, j] <= 0.0 then
         dHidden[i, j] := 0.0;
-end;
+end;}
 
+// Copy an X matrix.
 procedure CopyXMatrix(const A: array of TSeqVector; var B: array of TSeqVector;
   const Rows, Cols: Integer);
 var

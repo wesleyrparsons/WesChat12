@@ -23,12 +23,17 @@ procedure DisplayByteSymbolTable(const SymbolTable: TSymbolTable);
 // Display vectors and matrices.
 procedure DisplayVector(const V: TIVector);
 procedure DisplayX(const X: TSeqMatrix; const Part: TPart = B); overload;
-procedure PDisplayX(const Mess: string; const X: TSeqMatrix; const Part: TPart = B); overload;
+procedure VTPDisplayX(const Mess: string; const X: TSeqMatrix; const Part: TPart = B); overload;
 procedure DisplayX(const X: TSeqHeadMatrix; const Part: TPart = B); overload;
+procedure VTPDisplayX(const Mess: string; const X: TSeqHeadMatrix; const Part: TPart = B); overload;
 procedure DisplayX(const X: THiddenMatrix; const Part: TPart = B); overload;
+procedure VTPDisplayX(const Mess: string; const X: THiddenMatrix; const Part: TPart = B); overload;
 procedure DisplayX(const X: TSeqVocabMatrix; const Part: TPart = B); overload;
+procedure VTPDisplayX(const Mess: string; const X: TSeqVocabMatrix; const Part: TPart = B); overload;
 procedure DisplayX(const X: TVocabWeightMatrix; const Part: TPart = B); overload;
+procedure VTPDisplayX(const Mess: string; const X: TVocabWeightMatrix; const Part: TPart = B); overload;
 procedure DisplayX(const X: TScoresMatrix; const Part: TPart = B); overload;
+procedure VTPDisplayX(const Mess: string; const X: TScoresMatrix; const Part: TPart = B); overload;
 
 // Report information on program.
 procedure ReportInfo;
@@ -137,6 +142,17 @@ begin
   Pause;
 end;
 
+// Display scope of display below.
+procedure PartScope(const Part: TPart);
+begin
+  Case Part of
+    B: Writeln(' Beginning.');
+    E: Writeln(' End.');
+    F: Writeln(' Full.');
+    G: Writeln(' Sample.');
+  end;
+end;
+
 // Display an X matrix, B, E, F, or G.
 procedure DisplayX(const X: TSeqMatrix; const Part: TPart = B); overload;
 const
@@ -197,11 +213,15 @@ begin
   end;
 end;
 
-procedure PDisplayX(const Mess: string; const X: TSeqMatrix; const Part: TPart = B); overload;
+// Conditional form of DisplayX.
+procedure VTPDisplayX(const Mess: string; const X: TSeqMatrix; const Part: TPart = B); overload;
 begin
-  Writeln(Mess);
-  DisplayX(X, Part);
-  Pause;
+  if VerboseTransform then begin
+    Write(Mess);
+    PartScope(Part);
+    DisplayX(X, Part);
+    Pause;
+  end;
 end;
 
 // Display an XHead matrix, B, E, F, or G.
@@ -261,6 +281,17 @@ begin
       Write(X[High(X), j * hStride]: 11: 5, ' ');
     Write(X[High(X), High(X[0])]: 11: 5, ' ');
     Writeln;
+  end;
+end;
+
+// Conditional form of DisplayX.
+procedure VTPDisplayX(const Mess: string; const X: TSeqHeadMatrix; const Part: TPart = B); overload;
+begin
+  if VerboseTransform then begin
+    Write(Mess);
+    PartScope(Part);
+    DisplayX(X, Part);
+    Pause;
   end;
 end;
 
@@ -324,6 +355,17 @@ begin
   end;
 end;
 
+// Conditional form of DisplayX.
+procedure VTPDisplayX(const Mess: string; const X: THiddenMatrix; const Part: TPart = B); overload;
+begin
+  if VerboseTransform then begin
+    Write(Mess);
+    PartScope(Part);
+    DisplayX(X, Part);
+    Pause;
+  end;
+end;
+
 // Display a Vocab Weight matrix, B, E, F, or G.
 procedure DisplayX(const X: TVocabWeightMatrix; const Part: TPart = B); overload;
 const
@@ -381,6 +423,17 @@ begin
       Write(X[High(X), j * hStride]: 11: 5, ' ');
     Write(X[High(X), High(X[0])]: 11: 5, ' ');
     Writeln;
+  end;
+end;
+
+// Conditional form of DisplayX.
+procedure VTPDisplayX(const Mess: string; const X: TVocabWeightMatrix; const Part: TPart = B); overload;
+begin
+  if VerboseTransform then begin
+    Write(Mess);
+    PartScope(Part);
+    DisplayX(X, Part);
+    Pause;
   end;
 end;
 
@@ -444,7 +497,18 @@ begin
   end;
 end;
 
-// Display a Scores matrix, B, E, F, or G.
+// Conditional form of DisplayX.
+procedure VTPDisplayX(const Mess: string; const X: TSeqVocabMatrix; const Part: TPart = B); overload;
+begin
+  if VerboseTransform then begin
+    Write(Mess);
+    PartScope(Part);
+    DisplayX(X, Part);
+    Pause;
+  end;
+end;
+
+// Display a ScoresHead matrix, B, E, F, or G.
 procedure DisplayX(const X: TScoresMatrix; const Part: TPart = B); overload;
 const
   tStride = 10;
@@ -501,6 +565,17 @@ begin
       Write(X[High(X), j * hStride]: 11: 7, ' ');
     Write(X[High(X), High(X[0])]: 11: 7, ' ');
     Writeln;
+  end;
+end;
+
+// Conditional form of DisplayX.
+procedure VTPDisplayX(const Mess: string; const X: TScoresMatrix; const Part: TPart = B); overload;
+begin
+  if VerboseTransform then begin
+    Write(Mess);
+    PartScope(Part);
+    DisplayX(X, Part);
+    Pause;
   end;
 end;
 

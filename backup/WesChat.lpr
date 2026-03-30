@@ -157,7 +157,7 @@ begin
   Writeln('Options:');
   Writeln('  1: Tokenize an input corpus from a file using WesChat''s byte-level byte-pair encoding, with');
   Writeln('     deterministic left-to-right longest-prefix matching and greedy longest-match decoding.');
-  Writeln('  2: Tokenize an input set of corpuses listed one per line in a file ,using WesChat''s tokenization routine,');
+  Writeln('  2: Tokenize an input set of corpuses listed one per line in a file, using WesChat''s tokenization routine,');
   Writeln('     to create a concatenated token list.');
   Writeln('  3: Tokenize Bela corpus using WesChat''s Bela symbol table.');
   Writeln('  4: Tokenize an input corpus, based on an input symbol table, using WesChat''s tokenization routine.');
@@ -215,7 +215,7 @@ begin
         RunWesTokenize(Corpus, TokenizedCorpus);
 
         // Check number of symbols.
-        if nSymbols > MinSymbols then begin
+        if nSymbols < MinSymbols then begin
           Writeln('Too few symbols found. Aborting...');
           Continue;
         end;
@@ -225,7 +225,7 @@ begin
           RunEmbed(TokenizedCorpus);
       end;
       '2': begin
-        // Proces multiple corpuses.
+        // Process multiple corpuses.
         ProcessFileList(ListFile, Corpus);
 
         // Check for existence of listfile.

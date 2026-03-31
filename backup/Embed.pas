@@ -71,6 +71,7 @@ var
   i, j, k: Integer;
   Start, EmbedLoop: Integer;
   Stride: Integer = 64;
+  f: string;
 
   procedure ReadEmbedIfKeyPressed;
   var

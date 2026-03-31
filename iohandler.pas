@@ -23,11 +23,11 @@ procedure SaveTokenList(const TokenizedCorpus: TIVector; const TokenFileName: St
 implementation
 
 var
-  BOS: Integer = 256;
+  BOS: Integer = 256;                                 // Meta-symbols.
   EOS: Integer = 257;
   PAD: Integer = 258;
   UNK: Integer = 259;
-  Magic: array[0..3] of Char = ('S', 'Y', 'M', 'T');  // For saving symbol table.
+  Magic: array[0..3] of Char = ('S', 'Y', 'M', 'T');  // Magic, for saving symbol table.
 
 procedure ReadFileBytes(const FileName: String; var OneCorpus: TBVector);
 var
@@ -42,7 +42,7 @@ begin
 
   // Write the Corpus as it is read.
   if VeryVerbose and VerboseTokenize then
-    writeln('--- Original Corpus ---');
+    Writeln('--- Original Corpus ---');
   for i := 0 to Size - 1 do begin
     BlockRead(F, B, 1);
     OneCorpus[i] := B;
@@ -55,14 +55,15 @@ begin
           Write(Chr(B));
   end;
   CloseFile(F);
+
   if VeryVerbose and VerboseTokenize then begin
-    writeln('ReadByteFile: ');
+    Writeln('ReadByteFile: ');
     for i := 0 to 150 do
-      write(OneCorpus[i], ' ');
+      Write(OneCorpus[i], ' ');
     Readln;
   end;
   if VeryVerbose and VerboseTokenize then
-    writeln;
+    Writeln;
 
   // Display initial Corpus length.
   Writeln('Read ', Size, ' bytes from ', FileName);
@@ -88,7 +89,7 @@ begin
   if (Magic[0] <> 'S') or (Magic[1] <> 'Y') or
      (Magic[2] <> 'M') or (Magic[3] <> 'T') then begin
     Close(F);
-    writeln('Invalid symbol table file.');
+    Writeln('Invalid symbol table file.');
     Pause;
     Exit;
   end;
@@ -100,7 +101,7 @@ begin
   BlockRead(F, nSymbols, SizeOf(nSymbols));
   SetLength(SymbolTable, NSymbols);
 
-  // Special token IDs.
+  // Meta symbol IDs.
   BlockRead(F, BOS, SizeOf(BOS));
   BlockRead(F, EOS, SizeOf(EOS));
   BlockRead(F, PAD, SizeOf(PAD));
@@ -128,7 +129,7 @@ var
   i, Len: Integer;
 begin
   Assign(F, SymbolFileName);
-  Rewrite(F, 1);
+  ReWrite(F, 1);
 
   // Magic.
   BlockWrite(F, Magic, SizeOf(Magic));
@@ -155,7 +156,7 @@ begin
   end;
 
   Close(F);
-  writeln('File ', SymbolFileName, ' successfully saved.');
+  Writeln('File ', SymbolFileName, ' successfully saved.');
 end;
 
 // Load tokenized corpus from a token file.
@@ -191,7 +192,7 @@ var
   v, i: Integer;
 begin
   AssignFile(F, TokenFileName);
-  Rewrite(F);
+  ReWrite(F);
 
   for i := 0 to High(TokenizedCorpus) do begin
     v := TokenizedCorpus[i];
@@ -199,8 +200,8 @@ begin
   end;
 
   CloseFile(F);
-  writeln('File ', TokenFileName, ' successfully saved.');
-  writeln;
+  Writeln('File ', TokenFileName, ' successfully saved.');
+  Writeln;
 end;
 
 end.

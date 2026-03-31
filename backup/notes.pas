@@ -68,6 +68,10 @@ Transform.
 
 0. Move mult by SqrtD or H into the cblas calls.
 
+a. Create Saxpy wrapper.
+
+b. Use MatMul wrapper for all cblas.
+
 1. Many models reuse the embedding matrix for output projection:
 logits = X_final · Embedding^T.
 This is called weight tying. Don't need WVocab.

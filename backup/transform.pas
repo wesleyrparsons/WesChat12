@@ -377,17 +377,9 @@ begin
   cblas_saxpy(ModelDim * ModelDim, -LearningRate, @W0.Grad[0, 0], 1, @W0.Value[0, 0], 1);
 
   // Wq, Wk, Wv weights: Q, K, V.
-  cblas_saxpy(ModelDim * ModelDim, -LearningRate,
-              @Wq.Grad[0, 0], 1,
-              @Wq.Value[0, 0], 1);
-
-  cblas_saxpy(ModelDim * ModelDim, -LearningRate,
-              @Wk.Grad[0, 0], 1,
-              @Wk.Value[0, 0], 1);
-
-  cblas_saxpy(ModelDim * ModelDim, -LearningRate,
-              @Wv.Grad[0, 0], 1,
-              @Wv.Value[0, 0], 1);
+  cblas_saxpy(ModelDim * ModelDim, -LearningRate, @Wq.Grad[0, 0], 1, @Wq.Value[0, 0], 1);
+  cblas_saxpy(ModelDim * ModelDim, -LearningRate, @Wk.Grad[0, 0], 1, @Wk.Value[0, 0], 1);
+  cblas_saxpy(ModelDim * ModelDim, -LearningRate, @Wv.Grad[0, 0], 1, @Wv.Value[0, 0], 1);
 
   // W1, W2: feed-forward and vocab projection.
   cblas_saxpy(ModelDim * ModelDimProj, -LearningRate, @W1.Grad[0, 0], 1, @W1.Value[0, 0], 1);
@@ -492,19 +484,10 @@ begin
       // Q_h is Q[*, headOffset .. headOffset+H-1]
       // K_h is K[*, headOffset .. headOffset+H-1]
       // Multiply Q_h (L x H) by K_h^T (H x L)
-      cblas_sgemm(
-        CblasRowMajor,
-        CblasNoTrans,   // Q_h
-        CblasTrans,     // K_h^T
-        SeqLen,         // M = L
-        SeqLen,         // N = L
-        HeadDim,        // K = H
-        1.0,
-        @Q.Value[0, HeadOffset], ModelDim,  // lda = D (full row stride)
-        @K.Value[0, HeadOffset], ModelDim,  // ldb = D
-        0.0,
-        @ScoresHead1[h].Value[0, 0], SeqLen // ldc = L
-      );
+      cblas_sgemm(RowMajor, NoTrans, Trans, SeqLen, SeqLen, HeadDim, 1.0, @Q.Value[0, HeadOffset],
+        ModelDim, @K.Value[0, HeadOffset], ModelDim, 0.0, @ScoresHead1[h].Value[0, 0], SeqLen);
+      {OR THIS WAY:
+      MatMulNT(@Q.Value[0, HeadOffset], @K.Value[0, HeadOffset], @ScoresHead1[h].Value[0, 0], SeqLen, SeqLen, HeadDim);}
     end;
 
     VTPDisplayX('Display ScoresHead1[0] before standardizing.', ScoresHead1[0].Value, B);
@@ -554,13 +537,8 @@ begin
 
     for h := 0 to nHead - 1 do begin
       HeadOffset := h * HeadDim;
-      cblas_sgemm(
-        CblasRowMajor,
-        CblasNoTrans,
-        CblasNoTrans,
-        SeqLen,
-        HeadDim,
-        SeqLen,
+      cblas_sgemm(RowMajor, NoTrans, NoTrans,
+        SeqLen, HeadDim, SeqLen,
         1.0,
         @ScoresHead2[h].Value[0,0], SeqLen,
         @V.Value[0, HeadOffset], ModelDim,
@@ -854,7 +832,7 @@ begin
       writeln('Display X3.Grad, grid, in transform, before stage 1G, obtain scores2.');
       DisplayX(X3.Grad, G);
       Pause;
-    end;} ``
+    end;}
 
     // 1G. Backprop Multiplication/Overwrite. Obtain Scores2.Grad from X2.Grad: Input X2.Grad, Vᵀ.Value. Output: Scores2.Grad.
 

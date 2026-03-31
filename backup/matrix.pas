@@ -11,13 +11,12 @@ uses
   Math;
 
 type
-  // MKL_INT is 32-bit int in CBLAS interface.
-  TMKLInt = LongInt;
+  TMKLInt = LongInt;    // MKL_INT is 32-bit int in CBLAS interface.
 
 const
-  CBlasRowMajor = 101; RowMajor = 101;
-  CBlasNoTrans  = 111; NoTrans  = 111;
-  CBlasTrans    = 112; Trans    = 112;
+  RowMajor = 101;       // Row Major.
+  NoTrans  = 111;       // No transposition.
+  Trans    = 112;       // Transposition.
 
 // Multiply and add procedures.
 procedure MatMulFullNN(const A, B: PSingle; C: PSingle; M, N, K, lda, ldb, ldc: Integer);
@@ -38,74 +37,47 @@ procedure AccumulateGrad(const Src: TSeqMatrix; var Dst: TSeqMatrix; Rows, Cols:
 procedure MatMulAccNT(const A, B: PSingle; C: PSingle; M, N, K: Integer);
 procedure MatMulAccNN(const A, B: PSingle; C: PSingle; M, N, K: Integer);
 
-// ReLU procedures.
+// ReLU procedure.
 procedure ReLUMaskForward(const A: THiddenMatrix; var B: THiddenMatrix);
-procedure ReLUMaskBackward(const Hidden: THiddenMatrix; var dHidden: THiddenMatrix);
 
 // Copy matrix procedure.
 procedure CopyXMatrix(const A: array of TSeqVector; var B: array of TSeqVector;
   const Rows, Cols: Integer);
 
 // cblas sgemm.
-procedure cblas_sgemm(
-    Layout: LongInt;
-    TransA: LongInt;
-    TransB: LongInt;
-    M: TMKLInt;
-    N: TMKLInt;
-    K: TMKLInt;
-    Alpha: Single;
-    const A: PSingle;
-    LDA: TMKLInt;
-    const B: PSingle;
-    LDB: TMKLInt;
-    Beta: Single;
-    C: PSingle;
-    LDC: TMKLInt
-); cdecl; external 'libopenblas.dll';
+procedure cblas_sgemm(Layout: LongInt;
+  TransA: LongInt; TransB: LongInt;
+  M: TMKLInt; N: TMKLInt; K: TMKLInt;
+  Alpha: Single;
+  const A: PSingle; LDA: TMKLInt;
+  const B: PSingle; LDB: TMKLInt;
+  Beta: Single;
+  C: PSingle;  LDC: TMKLInt); cdecl; external 'libopenblas.dll';
 
 // cblas saxpy.
-procedure cblas_saxpy(
-    N: LongInt;
-    alpha: Single;
-    X: PSingle;
-    incX: LongInt;
-    Y: PSingle;
-    incY: LongInt
-); cdecl; external 'libopenblas.dll';
+procedure cblas_saxpy(N: LongInt;
+  alpha: Single;
+  X: PSingle; incX: LongInt;
+  Y: PSingle; incY: LongInt); cdecl; external 'libopenblas.dll';
 
 // cblas scopy.
-procedure cblas_scopy(
-    N: LongInt;
-    const X: PSingle;
-    incX: LongInt;
-    Y: PSingle;
-    incY: LongInt
-); cdecl; external 'libopenblas.dll';
+procedure cblas_scopy(N: LongInt;
+  const X: PSingle; incX: LongInt;
+  Y: PSingle; incY: LongInt); cdecl; external 'libopenblas.dll';
 
 // cblas sscal.
-procedure cblas_sscal(
-    N: LongInt;
-    alpha: Single;
-    X: PSingle;
-    incX: LongInt
-); cdecl; external 'libopenblas.dll';
+procedure cblas_sscal(N: LongInt;
+  alpha: Single; X: PSingle;
+  incX: LongInt); cdecl; external 'libopenblas.dll';
 
 // cblas sdot.
-function cblas_sdot(
-    N: LongInt;
-    const X: PSingle;
-    incX: LongInt;
-    const Y: PSingle;
-    incY: LongInt
-): Single; cdecl; external 'libopenblas.dll';
+function cblas_sdot(N: LongInt;
+  const X: PSingle; incX: LongInt;
+  const Y: PSingle; incY: LongInt): Single; cdecl; external 'libopenblas.dll';
 
 // cblas snrm2.
-function cblas_snrm2(
-    N: LongInt;
-    const X: PSingle;
-    incX: LongInt
-): Single; cdecl; external 'libopenblas.dll';
+function cblas_snrm2(N: LongInt;
+  const X: PSingle; incX: LongInt): Single; cdecl; external 'libopenblas.dll';
 
 implementation
 
@@ -135,15 +107,13 @@ begin
   n := Rows * Cols;
 
   // Left += Upstream.
-  cblas_saxpy(
-    n,
+  cblas_saxpy(n,
     1.0,
     @Upstream[0,0], 1,
     @Left[0,0], 1);
 
   // Right += Upstream.
-  cblas_saxpy(
-    n,
+  cblas_saxpy(n,
     1.0,
     @Upstream[0,0], 1,
     @Right[0,0], 1);
@@ -155,22 +125,16 @@ var
   n: Integer;
 begin
   n := Rows * Cols;
-  cblas_saxpy(
-  n,
-  1.0,
-  @Src[0,0], 1,
-  @Dst[0,0], 1);
+  cblas_saxpy(n,
+    1.0,
+    @Src[0,0], 1,
+    @Dst[0,0], 1);
 end;
-
-{procedure AccumulateGrad(const src: TSeqMatrix; var dst: TSeqMatrix);               // Don't use XSize.
-begin
-  cblas_saxpy(XSize, 1.0, @src[0,0], 1, @dst[0,0], 1);
-end; }
 
 // Full matrix multiplication (lda, ldb, ldc), no transpose, overwrite, row-major.
 procedure MatMulFullNN(const A, B: PSingle; C: PSingle; M, N, K, lda, ldb, ldc: Integer);
 begin
-  cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
+  cblas_sgemm(RowMajor, NoTrans, NoTrans,
     M, N, K,
     1.0,
     A, lda,
@@ -182,7 +146,7 @@ end;
 // Full matrix multiplication (lda, ldb, ldc), A transpose, overwrite, row-major.
 procedure MatMulFullNT(const A, B: PSingle; C: PSingle; M, N, K, lda, ldb, ldc: Integer);
 begin
-  cblas_sgemm(CblasRowMajor, CblasTrans, CblasNoTrans,
+  cblas_sgemm(RowMajor, Trans, NoTrans,
     M, N, K,
     1.0,
     A, lda,
@@ -194,7 +158,7 @@ end;
 // Full matrix multiplication (lda, ldb, ldc), B transpose, overwrite, row-major.
 procedure MatMulFullTN(const A, B: PSingle; C: PSingle; M, N, K, lda, ldb, ldc: Integer);
 begin
-  cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasTrans,
+  cblas_sgemm(RowMajor, NoTrans, Trans,
     M, N, K,
     1.0,
     A, lda,
@@ -206,7 +170,7 @@ end;
 // Matrix multiplication, no transpose, overwrite, row-major.
 procedure MatMulNN(const A, B: PSingle; C: PSingle; M, N, K: Integer);
 begin
-  cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
+  cblas_sgemm(RowMajor, NoTrans, NoTrans,
     M, N, K,
     1.0,
     A, K,
@@ -218,7 +182,7 @@ end;
 // Matrix multiplication, B transpose, overwrite, row-major.
 procedure MatMulNT(const A, B: PSingle; C: PSingle; M, N, K: Integer);
 begin
-  cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasTrans,
+  cblas_sgemm(RowMajor, NoTrans, Trans,
     M, N, K,
     1.0,
     A, K,
@@ -230,7 +194,7 @@ end;
 // Matrix multiplication, A transpose, overwrite, row-major.
 procedure MatMulTN(const A, B: PSingle; C: PSingle; M, N, K: Integer);
 begin
-  cblas_sgemm(CblasRowMajor, CblasTrans, CblasNoTrans,
+  cblas_sgemm(RowMajor, Trans, NoTrans,
     M, N, K,
     1.0,
     A, M,
@@ -242,7 +206,7 @@ end;
 // Matrix multiplication, no transpose, accumulate, row-major.
 procedure MatMulAccNN(const A, B: PSingle; C: PSingle; M, N, K: Integer);
 begin
-  cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
+  cblas_sgemm(RowMajor, NoTrans, NoTrans,
     M, N, K,
     1.0,
     A, K,
@@ -254,7 +218,7 @@ end;
 // Matrix multiplication, B transpose, accumulate, row-major.
 procedure MatMulAccNT(const A, B: PSingle; C: PSingle; M, N, K: Integer);
 begin
-  cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasTrans,
+  cblas_sgemm(RowMajor, NoTrans, Trans,
     M, N, K,
     1.0,
     A, K,
@@ -271,14 +235,12 @@ begin
   n := Rows * Cols;
 
   // C := A.
-  cblas_scopy(
-    n,
+  cblas_scopy(n,
     @A[0,0], 1,
     @C[0,0], 1);
 
   // C += B.
-  cblas_saxpy(
-    n,
+  cblas_saxpy(n,
     1.0,
     @B[0,0], 1,
     @C[0,0], 1);
@@ -292,16 +254,14 @@ begin
   n := Rows * Cols;
 
   // C += A.
-  cblas_saxpy(
-    n,
+  cblas_saxpy(n,
     1.0,
     @A[0,0], 1,
     @C[0,0], 1);
 end;
 
 { Standard z-score transform: Xstd = X − μσ.
-   μ = mean of the row.
-   σ = standard deviation (usually computed with L2 norm).}
+   μ = mean of the row. σ = standard deviation.}
 procedure StandardizeRows(var A: array of Single; M, N: Integer);
 var
   r, j: Integer;
@@ -331,7 +291,7 @@ begin
       InvStd := 1.0 / Std;
 
     // 4. Scale row: row := row * (1 / std).
-    cblas_sscal(N, InvStd, @A[r * N], 1);
+      cblas_sscal(N, InvStd, @A[r * N], 1);
     end;
   end;
 end;
@@ -346,7 +306,7 @@ begin
       B[i, j] := Max(0.0, A[i, j]);
 end;
 
-// Apply ReLU if needed for back propagation.
+// Apply ReLU if needed for back propagation. Done in Transform Unit now.
 {procedure ReLUMaskBackward(const Hidden: THiddenMatrix; var dHidden: THiddenMatrix);
 var
   i, j: Integer;

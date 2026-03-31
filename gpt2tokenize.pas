@@ -45,10 +45,10 @@ begin
   end;
 
  if VeryVerbose then begin
-    writeln('Display rawbytes read:');
+    Writeln('Display rawbytes read:');
     for i := 500 to high(result) do
-      writeln(i: 5, ord(Result[i]): 5, '   *', Result[i], '* ');
-    readln;
+      Writeln(i: 5, ord(Result[i]): 5, '   *', Result[i], '* ');
+    Readln;
   end;
 end;
 
@@ -265,12 +265,12 @@ begin
 
   AddChunk(start, Length(Text) - start + 1);
 
-  writeln('Chunks (first 10) Length =', Length(Chunks));
+  Writeln('Chunks (first 10) Length =', Length(Chunks));
   for i := 0 to 9 {High(Chunks)} do begin
-    writeln(i, ' *', Chunks[i], '*  Raw: ');
+    Writeln(i, ' *', Chunks[i], '*  Raw: ');
     for j := 1 to Length(Chunks[i]) do
-      write(' @', ord(Chunks[i][j]), '@   ');
-    readln;
+      Write(' @', ord(Chunks[i][j]), '@   ');
+    Readln;
   end;
 end;}
 
@@ -279,14 +279,14 @@ var
   i, j: Integer;
   s: string;
 begin
- writeln('Vocab ', a, ' to ', b);
+ Writeln('Vocab ', a, ' to ', b);
   for i := a to b do begin
     Write(i, ' ', 'Vocab[i]: ', Vocab[i], ' ');
     Write('Raw bytes: ');
     s := Vocab[i];
     for j := 1 to Length(s) do
       Write(Ord(s[j]), ' ');
-    writeln;
+    Writeln;
   end;
 end;
 
@@ -305,7 +305,7 @@ begin
   Vocab.OwnsObjects := False;
 
   if not FileExists(FileName) then begin
-    writeln('ERROR: File not found.');
+    Writeln('ERROR: File not found.');
     Exit;
   end;
 
@@ -321,12 +321,12 @@ begin
   JSON := GetJSON(Raw);   // Pass RAW bytes.
   try
     if not (JSON is TJSONObject) then begin
-      writeln('Invalid vocab.json.');
+      Writeln('Invalid vocab.json.');
       Halt;
     end;
 
     Obj := JSON as TJSONObject;
-    // writeln('Size of JSON symbol table: ', Obj.count);
+    // Writeln('Size of JSON symbol table: ', Obj.count);
 
     for i := 0 to Obj.Count - 1 do
       Vocab.AddObject(Obj.Names[i], TObject(PtrInt(Obj.Items[i].AsInteger)));
@@ -339,7 +339,7 @@ begin
     DisplayVocab(0, 9);
     DisplayVocab(120, 130);
     DisplayVocab(288, 301);
-    readln;
+    Readln;
   end;
 end;
 
@@ -373,20 +373,20 @@ begin
     SL.Free;
   end;
 
-  writeln('End of loading merges. Length of merges: ', i);
+  Writeln('End of loading merges. Length of merges: ', i);
   if VeryVerbose then begin
-    write('Merges 0: ',Merges[0],'   Raw: ');
+    Write('Merges 0: ',Merges[0],'   Raw: ');
     for i := 1 to Length(Merges[0]) do
-      write(ord(merges[0][i]), ' ');
-    writeln;
-    write('Merges 1: ', Merges[1],'   Raw: ');
+      Write(ord(merges[0][i]), ' ');
+    Writeln;
+    Write('Merges 1: ', Merges[1],'   Raw: ');
     for i := 1 to Length(Merges[1]) do
-      write(ord(merges[1][i]), ' ');
-    writeln;
-    write('Merges 2: ', Merges[2],'   Raw: ');
+      Write(ord(merges[1][i]), ' ');
+    Writeln;
+    Write('Merges 2: ', Merges[2],'   Raw: ');
     for i := 1 to Length(Merges[2]) do
-      write(ord(merges[2][i]), ' ');
-    writeln;
+      Write(ord(merges[2][i]), ' ');
+    Writeln;
   end;
 end;
 
@@ -419,7 +419,7 @@ var
 const
   GPTSpace: AnsiString = #$C4#$A0;  { UTF-8 for Ġ }
  begin
-   writeln('start pre ', Text);
+   Writeln('start pre ', Text);
 
    setlength(words, 1);
    Words[0] := '';
@@ -429,9 +429,9 @@ const
      else
        Words[0] := Words[0] + Text[i];
 
-   writeln('Pretoken result: ', words[0], ' Raw: ');
+   Writeln('Pretoken result: ', words[0], ' Raw: ');
    for k := 1 to High(Words[0]) do
-     write(Words[0][k]);
+     Write(Words[0][k]);
 end;}
 
 function UTF8CharLen(P: PChar): Integer;
@@ -515,10 +515,10 @@ procedure ShowRaw(const x: string);
 var
   j: Integer;
 begin
-  write('Raw: ');
+  Write('Raw: ');
   for j := 1 to Length(x) do
-    write(ord(x[j]), ' ');
-  writeln;
+    Write(ord(x[j]), ' ');
+  Writeln;
 end;
 
 procedure TokenizeFile(const Corpus: String; const Vocab, Merges: TStringList;
@@ -539,9 +539,9 @@ begin
  InputBytes := LoadFileRaw(Corpus);  // This is 1-based.
  EncodedText := EncodeBytesToUnicode(InputBytes); // This is 1-based.
 
- {writeln('In Tokenize, before NextToken. Encodedtext (280 chars):');
+ {Writeln('In Tokenize, before NextToken. Encodedtext (280 chars):');
  for i := 1 to 280 do
-   write('--', EncodedText[i], ' ', ord(EncodedText[i]), ' ');
+   Write('--', EncodedText[i], ' ', ord(EncodedText[i]), ' ');
  Pause;}
  {PreTokenize(Line, Words);
  GPTChunk(EncodedText, Words);}
@@ -555,7 +555,7 @@ begin
    tok := NextToken(EncodedText, i);
    if tok = '' then Break;
    SetLength(Words, iWord + 1);
-   // writeln('iword ', iword, ' tok', tok); readln;
+   // Writeln('iword ', iword, ' tok', tok); Readln;
    Words[iWord] := Tok;
    Inc(iWord);
  end;
@@ -630,11 +630,11 @@ begin
 
   Pause;
   t0 := Now;
-  write('Tokenizing...');
+  Write('Tokenizing...');
   TokenizeFile(FileName, Vocab, Merges, Tokens);
   t1 := Now;
 
-  writeln('End of three routines in tokenizing.');
+  Writeln('End of three routines in tokenizing.');
 
   SetLength(TokenizedCorpus, Length(Tokens));
 
@@ -642,23 +642,23 @@ begin
   for i := 0 to High(Tokens) do
   TokenizedCorpus[i] := Tokens[i];
 
-  writeln('After 3 routines, tokens.');
+  Writeln('After 3 routines, tokens.');
   for i := 0 to High(Tokens) do begin
     Write(' *', i, ' ', Tokens[i], ' ', Vocab[Tokens[i]], '*  ');
     s := Vocab[Tokens[i]];
-    write('=');
+    Write('=');
     for j := 1 to Length(s) do
       Write(Ord(s[j]), ' ');
-    write('=');
+    Write('=');
   end;
-  writeln;
+  Writeln;
   Pause;
 
-  writeln('End of tokenize.');
-  writeln('TokenizedCorpus: ');
+  Writeln('End of tokenize.');
+  Writeln('TokenizedCorpus: ');
   for i := 0 to High(TokenizedCorpus) do
     Write(TokenizedCorpus[i], ' ');
-  writeln;
+  Writeln;
   Pause;
 
   // Report statistics.
@@ -686,9 +686,9 @@ begin
     ChDir('..');
   end;
 
-  // Need to write out TC with j loop to deal with chr183.
-  readln;
-  writeln('Vocabulary for TokenizedCorpus:', High(TokenizedCorpus));
+  // Need to Write out TC with j loop to deal with chr183.
+  Readln;
+  Writeln('Vocabulary for TokenizedCorpus:', High(TokenizedCorpus));
 
   for i := 0 to High(TokenizedCorpus) do begin
     s := Vocab[TokenizedCorpus[i]];
@@ -705,19 +705,19 @@ begin
         Write(s[j]);
     end;
   end;}
-  writeln;
+  Writeln;
   Pause;
 
-  writeln('Decoded First 100 TokenizedCorpus:');
+  Writeln('Decoded First 100 TokenizedCorpus:');
   for i := 0 to 99 do
     Write(DisplayToken(UTF8Decode(Vocab[TokenizedCorpus[i]])));
-  writeln;
+  Writeln;
   Pause;
 
-  writeln('Decoded Last 100 TokenizedCorpus:');
+  Writeln('Decoded Last 100 TokenizedCorpus:');
   for i := High(TokenizedCorpus) - 100 to High(TokenizedCorpus) do
     Write(DisplayToken(UTF8Decode(Vocab[TokenizedCorpus[i]])));
-  writeln;
+  Writeln;
   Pause;
 
   Vocab.Free;

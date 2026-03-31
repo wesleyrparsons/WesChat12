@@ -93,7 +93,7 @@ begin
 
   // Write the Corpus as it is read.
   if VeryVerbose and VerboseTokenize then
-    writeln('--- Original Corpus ---');
+    Writeln('--- Original Corpus ---');
   for i := 0 to Size - 1 do begin
     BlockRead(F, B, 1);
     OneCorpus[i] := B;
@@ -107,13 +107,13 @@ begin
   end;
   CloseFile(F);
   if VeryVerbose and VerboseTokenize then begin
-    writeln('ReadByteFile: ');
+    Writeln('ReadByteFile: ');
     for i := 0 to 150 do
-      write(OneCorpus[i], ' ');
+      Write(OneCorpus[i], ' ');
     Pause;
   end;
   if VeryVerbose and VerboseTokenize then
-    writeln;
+    Writeln;
 
   // Display initial Corpus length.
   Writeln('Read ', Size, ' bytes from ', FileName);
@@ -384,10 +384,10 @@ procedure AddMergeSymbol(NewTok, A, B: Integer);
 begin
 
   if (A < 0) or (A >= Length(SymbolTable)) then
-    writeln('Invalid symbol A=', A);
+    Writeln('Invalid symbol A=', A);
 
   if (B < 0) or (B >= Length(SymbolTable)) then
-    writeln('Invalid symbol B=', B);
+    Writeln('Invalid symbol B=', B);
 
   // Debugging.
   // Writeln('AddMergeSymbol: NewTok=', NewTok, ' A=', A, ' B=', B, ' Len=', Length(Table));
@@ -468,7 +468,7 @@ var
           f := WorkingDir + FormatDateTime('yyyy-mm-dd_hhnnss' + '.sym', Now);
           SaveSymbolTable(f, SymbolTable);
           ChDir('..');
-          writeln('File ', f, ' successfully saved.');
+          Writeln('File ', f, ' successfully saved.');
           Pause;
         end;
     end;
@@ -502,7 +502,7 @@ begin
 
     // Stop if hash table got too full.
     if H.Used > MaxPairCount then begin
-      writeln;
+      Writeln;
       Writeln('Stopping: pair table exceeded ', MaxPairCount, ' entries.');
       Break;
     end;
@@ -511,14 +511,14 @@ begin
 
     // Stop if no useful merges remain.
     if BestCount < 2 then begin
-      writeln;
+      Writeln;
       Writeln('Stopping: no more valid merges at iteration ', m, '.');
       Break;
     end;
 
     // Stop if symbol table is full.
     if Length(SymbolTable) >= MaxVocab then begin
-      writeln;
+      Writeln;
       Writeln('Stopping: symbol table reached ', MaxVocab, ' entries.');
       Break;
     end;
@@ -590,7 +590,7 @@ begin
 
   // Print all symbols with frequency.
   for i := 0 to High(TokenList) do begin
-      writeln(i: 4, '  ', SymbolTable[TokenList[i].Symbol], '   ', TokenList[i].Count);
+      Writeln(i: 4, '  ', SymbolTable[TokenList[i].Symbol], '   ', TokenList[i].Count);
   {  S := TokenList[i].Symbol;
     LS := Length(SymbolTable[S]);
     TST := SymbolTable[S];        // TST is temporary SymbolTable character.
@@ -604,7 +604,7 @@ begin
       // if (k < 32) or (k > 126) then TST[j] := Chr(183);
     end;
     Write(i: 5, S: 5, ' ': (10 - LS), '*', TST, '*', TokenList[i].Count: 5, '          ');
-    if (i mod 4 = 3) then writeln;}
+    if (i mod 4 = 3) then Writeln;}
   end;
 end;}
 
@@ -638,10 +638,10 @@ begin
     Exit;
   end;
 
-  writeln('--- Symbols Statistics ---');
-  writeln('Number of raw byte symbols: ', 256);
-  writeln('Number of special symbols: ', 4);
-  writeln('Number of merged symbols: ', nSymbols - 260);
+  Writeln('--- Symbols Statistics ---');
+  Writeln('Number of raw byte symbols: ', 256);
+  Writeln('Number of special symbols: ', 4);
+  Writeln('Number of merged symbols: ', nSymbols - 260);
 
   { --- First pass: compute lengths, min, max, sum --- }
   SetLength(Lengths, n);
@@ -699,7 +699,7 @@ begin
   WriteLn;
   WriteLn('Mean symbol length: ', SumLen / n: 0: 4);
   WriteLn('Median symbol length: ', Median: 0: 4);
-  writeln('Mean tokens per symbol (compression): ', (nCorpus / nSymbols): 0: 4);
+  Writeln('Mean tokens per symbol (compression): ', (nCorpus / nSymbols): 0: 4);
 end;
 
 // Calculate and report longest symbols.
@@ -726,10 +726,10 @@ begin
   end;
 
   if maxIndex >= 0 then  begin
-    writeln('Longest symbol:');
-    writeln('  Index: ', maxIndex);
-    writeln('  Length: ', maxLen);
-    writeln('  Value: "', SymbolTable[maxIndex], '"');
+    Writeln('Longest symbol:');
+    Writeln('  Index: ', maxIndex);
+    Writeln('  Length: ', maxLen);
+    Writeln('  Value: "', SymbolTable[maxIndex], '"');
   end;
 end;
 
@@ -739,15 +739,15 @@ procedure ReportBasicStatistics;
 var
   i: Integer;
 begin
-  writeln;
+  Writeln;
   Writeln('--- File Information ---');
-  writeln('Files used in symbol table: ');
+  Writeln('Files used in symbol table: ');
   for i := 0 to High(CorpusFileNames) do
-    writeln(CorpusFileNames[i], '  ');
-  writeln;
+    Writeln(CorpusFileNames[i], '  ');
+  Writeln;
 
   Writeln('--- Time Statistics ---');
-  writeln('Start time: ', DateTimetoStr(t0), '     End time: ', DateTimeToStr(t1));
+  Writeln('Start time: ', DateTimetoStr(t0), '     End time: ', DateTimeToStr(t1));
   Writeln('Total elapsed time: ', Hours, ' hours, ', Mins, ' min ', Secs: 4: 4, ' sec');
   Writeln('Number of symbols: ', nSymbols);
   if not FromSymbolTable then begin
@@ -757,7 +757,7 @@ begin
   if not FromSymbolTable then begin
     Writeln('Tokens per second (total): ', nCorpus / (ElapsedMS / 1000): 6: 4);
     Writeln('Tokens per second (merging): ', nCorpus / (MElapsedMS / 1000): 6: 4);
-    writeln;
+    Writeln;
   end;
 end;
 
@@ -783,7 +783,7 @@ begin
 
   // Redirect Output to F.
   Assign(Output, MetaFileName);
-  Rewrite(Output);
+  ReWrite(Output);
 
   ReportStatistics;
 
@@ -791,8 +791,8 @@ begin
   Close(Output);
   Output := SaveOut;
 
-  writeln('File ', MetaFileName, ' successfully saved.');
-  writeln;
+  Writeln('File ', MetaFileName, ' successfully saved.');
+  Writeln;
 end;
 
 // Save merge table.
@@ -802,7 +802,7 @@ var
   i, n: Integer;
 begin
   Assign(F, MergeFileName);
-  Rewrite(F, 1);
+  ReWrite(F, 1);
 
   n := Length(Merges);
   BlockWrite(F, n, SizeOf(n));
@@ -814,7 +814,7 @@ begin
   end;
 
   Close(F);
-  writeln('File ', MergeFileName, ' successfully saved.');
+  Writeln('File ', MergeFileName, ' successfully saved.');
 end;
 
 // Run the tokenizer.
@@ -825,8 +825,8 @@ begin
   StopTime := 0;   // Time to subtract from timing.
 
   // Create the TokenList.
-  writeln('Maximum symbols = ', MaxVocab, '. Maximum merges = ', MaxMerges, '. Maximum pair counts = ', MaxPairCount, '.');
-  writeln('X = Exit program. B = Break out of merge loop. V = toggle Verbose mode. P = Program information. M = Merging information. Merging...');
+  Writeln('Maximum symbols = ', MaxVocab, '. Maximum merges = ', MaxMerges, '. Maximum pair counts = ', MaxPairCount, '.');
+  Writeln('X = Exit program. B = Break out of merge loop. V = toggle Verbose mode. P = Program information. M = Merging information. Merging...');
   BuildTokenListFromCorpus(Corpus);
 
   nCorpus := Length(Corpus);
@@ -854,14 +854,14 @@ begin
   // Save various files.
   if SaveFiles then begin
     ChDir(WorkingDir);
-    writeln('--- Saving Files ---');
+    Writeln('--- Saving Files ---');
     SaveSymbolTable(WorkingName + '.sym', SymbolTable);
     SaveMergeTable(Merges, WorkingName + '.mer');
     SaveMetaData(WorkingName + '.meta');
     ChDir('..');
   end;
 
-  writeln('End of symbolization procedure.');
+  Writeln('End of symbolization procedure.');
   Pause;
 end;
 

@@ -40,6 +40,8 @@ But because counts change after merges, you usually do lazy heap updates:
 push updated (pair, count, version) records
 when popping, discard stale entries. What heap unit to use in FPC?
 
+2. Where does nCorpus live?
+
 4. Corpus array of byte. Use RawByteString. Done, but check.
 
 5. Drop linked lists. So if you later optimize training hard, use
@@ -67,6 +69,10 @@ No, keep it as Embed.
 Transform.
 
 0. Move mult by SqrtD or H into the cblas calls.
+
+a. Create Saxpy wrapper.
+
+b. Use MatMul wrapper for all cblas.
 
 1. Many models reuse the embedding matrix for output projection:
 logits = X_final · Embedding^T.

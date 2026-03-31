@@ -180,13 +180,13 @@ begin
 
   nTokenizedCorpus := Length(TokenizedCorpus);
 
-  writeln('Created ', nTokenizedCorpus, ' tokens from ', TextFileName);
+  Writeln('Created ', nTokenizedCorpus, ' tokens from ', TextFileName);
 
   if VerboseTokenize then Begin
-    writeln('First 50 token of tokenized corpus');
+    Writeln('First 50 token of tokenized corpus');
     for i := 0 to 49 do
-      write(TokenizedCorpus[i], ' ');
-    writeln;
+      Write(TokenizedCorpus[i], ' ');
+    Writeln;
     Pause;
   end;
 end;
@@ -264,12 +264,12 @@ begin
   end;
 
   // Print top 60.
-  writeln('Top 60 most frequent symbols:');
+  Writeln('Top 60 most frequent symbols:');
   for i := 0 to 59 do begin
     k := Index[i];
-    write(i + 1: 8, ': Symbol ', k: 8, '  Count=', Counts[k]: 6, '  ', '"' + CleanUpSymbol(SymbolTable[k]) + '"': 15);
+    Write(i + 1: 8, ': Symbol ', k: 8, '  Count=', Counts[k]: 6, '  ', '"' + CleanUpSymbol(SymbolTable[k]) + '"': 15);
     if ((i + 1) mod 3) = 0 then
-      writeln;
+      Writeln;
   end;
 
   if VerboseTokenize and (TextRec(Output).Handle = StdOutputHandle) then Pause;
@@ -432,15 +432,15 @@ procedure ReportBasicStatistics;
 var
   i: Integer;
 begin
-  writeln;
+  Writeln;
   Writeln('--- File Information ---');
-  writeln('Files used in symbol table: ');
+  Writeln('Files used in symbol table: ');
   for i := 0 to High(CorpusFileNames) do
-    writeln(CorpusFileNames[i], '  ');
-  writeln;
+    Writeln(CorpusFileNames[i], '  ');
+  Writeln;
 
   Writeln('--- Time Statistics ---');
-  writeln('Start time: ', DateTimetoStr(t0), '     End time: ', DateTimeToStr(t1));
+  Writeln('Start time: ', DateTimetoStr(t0), '     End time: ', DateTimeToStr(t1));
   Writeln('Total elapsed time: ', Hours, ' hours, ', Mins, ' min ', Secs: 4: 4, ' sec');
 end;
 
@@ -453,7 +453,7 @@ begin
   Writeln('Compression ratio: ', nCorpus   / nTokenizedCorpus:0: 4);
   if not FromSymbolTable then
     Writeln('Tokens per second: ', nCorpus / (ElapsedMS / 1000): 6: 4);
-  writeln;
+  Writeln;
   end;
 
 // Report all statistics.
@@ -489,18 +489,18 @@ begin
     end;
   end;
 
-  write('Tokenized Corpus, ');
+  Write('Tokenized Corpus, ');
   Case Part of
-    B: write('First 100 bytes: ');
-    E: write('Last 100 bytes: ');
-    F: write('All bytes: ');
+    B: Write('First 100 bytes: ');
+    E: Write('Last 100 bytes: ');
+    F: Write('All bytes: ');
   end;
-  writeln;
+  Writeln;
 
   for i := ib to iE do
     Write(TokenizedCorpus[i], ' ');
-  writeln;
-  writeln('Tokenized corpus length =  ', Length(TokenizedCorpus));
+  Writeln;
+  Writeln('Tokenized corpus length =  ', Length(TokenizedCorpus));
   Pause;
 end;
 
@@ -528,16 +528,16 @@ begin
     end;
   end;
 
-  write('Detokenized Corpus, ');
+  Write('Detokenized Corpus, ');
   Case Part of
-    B: write('First 500 bytes: ');
-    E: write('Last 500 bytes: ');
-    F: write('All bytes: ');
+    B: Write('First 500 bytes: ');
+    E: Write('Last 500 bytes: ');
+    F: Write('All bytes: ');
   end;
-  writeln;
+  Writeln;
   for i := iB to iE do
-    write(SymbolTable[TokenizedCorpus[i]]);
-  writeln;
+    Write(SymbolTable[TokenizedCorpus[i]]);
+  Writeln;
 end;
 
 // Run the tokenizer.
@@ -590,20 +590,20 @@ begin
 
   // Verify by reconstructing.
   if ShowVerification and VerboseTokenize and DisplayCorpus then begin
-    writeln('--- Reconstructed Corpus ---');
+    Writeln('--- Reconstructed Corpus ---');
     DetokenizeToDisplay(TokenizedCorpus, B);
-    writeln;
+    Writeln;
   end;
 
   if VerboseTokenize then Begin
-    writeln('First 150 tokens of tokenized corpus:');
+    Writeln('First 150 tokens of tokenized corpus:');
     for i := 0 to 149 do
-      write(TokenizedCorpus[i], ' ');
-    writeln;
+      Write(TokenizedCorpus[i], ' ');
+    Writeln;
     Pause;
   end;
 
-  writeln('End of tokenization procedure.');
+  Writeln('End of tokenization procedure.');
   Pause;
 
 end;

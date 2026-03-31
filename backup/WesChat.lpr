@@ -3,7 +3,7 @@ program WesChat;
 {$mode ObjFPC}{$H+}{$I proprietary.txt}
 
 { WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wespar.com.}
-{ Note: Edited 3/24/2026 7:59 pm }
+{ Note: Edited 3/30/2026 8 pm}
 uses
   CombineTables,
   Crt,
@@ -18,13 +18,14 @@ uses
   SysUtils,
   Tokenize,
   WesTokenize,
-  Windows;                     // add ncorpus here.
+  Windows;
 
 var
   Corpus: TBVector;                    // Vector of byte.
-  // Names of files for loading.
-  Ch, CorpusFileName, SymbolFileName, TokenFileName, ListFile: string;
-  CombinedSymbolTable: TSymbolTable;   // Combining two symbol tables.
+  Ch: string;                          // For option menu.
+  CorpusFileName, SymbolFileName,      // File names.
+    TokenFileName, ListFile: string;
+  CombinedSymbolTable: TSymbolTable;   // For combining two symbol tables.
   MinSymbols: Integer = 50;            // Minimum for loading.
   MinTokens: Integer = 50;             // Minimum for loading.
   MinCorpus: Integer = 50;             // Minimum for loading.
@@ -38,12 +39,13 @@ begin
   WorkingName := WorkingDir;
   CreateDir(WorkingDir);                    // Create folder of files.
   ChDir(WorkingDir);                        // And go there.
+
   // Save current Output.
   SaveOut := Output;
 
   // Redirect Output.
   Assign(Output, WorkingName + '.log');     // Create log file in folder.
-  Rewrite(Output);
+  ReWrite(Output);
   ReportInfo;                               // Write report of info in folder.
 
   // Restore Output to console.
@@ -62,7 +64,7 @@ var
   Count: Integer;
 begin
   MultipleFileName := EmptyStr;        // This var contains info on input corpuses.
-  write('Enter name of file list: ');
+  Write('Enter name of file list: ');
   readln(ListFile);
   if not FileExists(ListFile) then begin
     Writeln('List file not found: ', ListFile);
@@ -86,7 +88,7 @@ begin
       Continue;
     end;
     if (Count = 0) and SaveFiles then
-        LogFile('Mult' + ListFile);
+      LogFile('Mult' + ListFile);
 
     ReadFileBytes(Line, OneCorpus);     // Read the file into OneCorpus.
     SetLength(CorpusFileNames, Count + 1);
@@ -134,7 +136,7 @@ end;
 // Helper function for proceeding to Embed.
 function QueryEmbed: Boolean;
 begin
-  Write('Do you wish to prceed to training? (y/n) ');
+  Write('Do you wish to proceed to training? (y/n) ');
   Readln(Ch);
   if UpCase(Ch) = 'Y' then
     Result := True
@@ -165,9 +167,11 @@ begin
   Writeln('     tokenization routine.');
   Writeln('  6: Input a token list to be used in training.');
   Writeln('  7: Combine two symbol tables for use with WesChat''s tokenization routine.');
-  Writeln('  8: Create symbol table from input corpus.');
-  Writeln('  9: Input a weight model for funning forward.');
-  Writeln('  10: Run a model forward.');
+  Writeln('  8: Tokenize an input set of corpuses listed one per line in a file, using an input symbol table,');
+  Writeln('     to create a concatenated token list.');
+  Writeln('  9: Create symbol table from input corpus.');
+  Writeln('  10: Input a weight model for funning forward.');
+  Writeln('  11: Run a model forward.');
   Writeln('  H: Help.');
   Writeln('  X: Exit.');
   Writeln;
@@ -178,10 +182,11 @@ begin
   Writeln('Model dimensions are 160 or 256. The activation stage expands dimensionality fourfold.');
   Writeln('Precision is single. Sequence length is 128 or 256 bytes. Pre-layer normalization');
   Writeln('standardizes for means and standard deviations. Attention and residual dropouts are 0.1.');
+  Writeln('The softmax function normalizes exponentially with a temperature of 1.0. The learning rate is 0.01.');
   Writeln('All output files will be contained in a folder or file named with the input file name,');
   Writeln('appended with a timestamp.');
   while True do begin
-    write('W> ');
+    Write('W> ');
     readln(Ch);
     Case UpperCase(Ch) of
       '1': begin
@@ -210,7 +215,7 @@ begin
         if SaveFiles then
           LogFile(CorpusFileName);
 
-        // Rum WesChat Symbolizer.
+        // Rum WesChat symbolizer.
         RunSymbolize(Corpus);
         RunWesTokenize(Corpus, TokenizedCorpus);
 
@@ -228,28 +233,8 @@ begin
         // Process multiple corpuses.
         ProcessFileList(ListFile, Corpus);
 
-        // Check for existence of listfile.
-        if not FileExists(ListFile) then Continue;
-
-        // Ask user for symbol table file.
-        write('Input symbol table file name: ');
-        Readln(SymbolFileName);
-        FromSymbolTable := True;
-
-        // Check for existence of symboltable.
-        if not FileExists(SymbolFileName) then begin
-          Writeln('Symbol table file not found: ', SymbolFileName, '. Aborting...');
-          Continue;
-        end;
-
-        // Read symboltable.
-        LoadSymbolTable(SymbolFileName, SymbolTable);
-
-        // Check size of symboltable.
-        if Length(SymbolTable) < MinSymbols then begin
-          Writeln('Too few symbols found. Aborting...');
-          Continue;
-        end;
+        // Run WesChat symbolizer.
+        RunSymbolize(Corpus);
 
         // Display symboltable.
         DisplayByteSymbolTable(SymbolTable);
@@ -282,7 +267,7 @@ begin
       end;
       '4': begin
         // Ask user for corpus file.
-        write('Input corpus file name: ');
+        Write('Input corpus file name: ');
         Readln(CorpusFileName);
 
         // Check existence and size of corpus file.
@@ -296,7 +281,7 @@ begin
         end;
 
         // Ask user for symbol file.
-        write('Input symbol table file name: ');
+        Write('Input symbol table file name: ');
         Readln(SymbolFileName);
         FromSymbolTable := True;  // Do I need this var. Length(ST) = 0.
 
@@ -364,7 +349,7 @@ begin
         // Check tokenized corpus.
         Writeln('First 200 token of tokenized corpus: ');
         for i := 0 to 199 do
-          write(TokenizedCorpus[i], ' ');
+          Write(TokenizedCorpus[i], ' ');
         Writeln;
         Pause;
 
@@ -416,6 +401,38 @@ begin
         Writeln;
       end;
       '8': begin
+        // Process multiple corpuses.
+        ProcessFileList(ListFile, Corpus);
+
+        // Ask user for symbol table file.
+        Write('Input symbol table file name: ');
+        Readln(SymbolFileName);
+        FromSymbolTable := True;
+
+        // Check for existence of symboltable.
+        if not FileExists(SymbolFileName) then begin
+          Writeln('Symbol table file not found: ', SymbolFileName, '. Aborting...');
+          Continue;
+        end;
+
+        // Read symboltable.
+        LoadSymbolTable(SymbolFileName, SymbolTable);
+
+        // Check size of symboltable.
+        if Length(SymbolTable) < MinSymbols then begin
+          Writeln('Too few symbols found. Aborting...');
+          Continue;
+        end;
+
+        // Display symboltable.
+        DisplayByteSymbolTable(SymbolTable);
+
+        // Run WesChat tokenizer.
+        RunWesTokenize(Corpus, TokenizedCorpus);
+        If QueryEmbed then
+          RunEmbed(TokenizedCorpus)
+      end;
+      '9': begin
         // Ask user for corpus file.
         Write('Enter corpus file name: ');
         Readln(CorpusFileName);
@@ -453,18 +470,19 @@ begin
         // Display symbol table.
         DisplayByteSymbolTable(SymbolTable);
       end;
-      'X': Exit;
-      'H': Help;
-      'VTO': VerboseTokenize := True;
-      'VV': VeryVerbose := True;
-      'VTR': VerboseTransform := True;
-      'NVTO': VerboseTokenize := False;
-      'NVV': VeryVerbose := False;
-      'NVTR': VerboseTransform := False;
-      'DNP': DoNotPause := True;
-      'DP': DoNotPause := False;
-      'SF': SaveFiles := True;
-      'NSF': SaveFiles := False;
+      '10', '11': Writeln('Not yet available.');
+      'X':     Exit;
+      'H':     Help;
+      'VTO':   VerboseTokenize := True;
+      'VV':    VeryVerbose := True;
+      'VTR':   VerboseTransform := True;
+      'NVTO':  VerboseTokenize := False;
+      'NVV':   VeryVerbose := False;
+      'NVTR':  VerboseTransform := False;
+      'DNP':   DoNotPause := True;
+      'DP':    DoNotPause := False;
+      'SF':    SaveFiles := True;
+      'NSF':   SaveFiles := False;
       'M': begin
         Write('Maximum merges: ');
         Readln(MaxMerges);
@@ -480,6 +498,5 @@ begin
       else Writeln('Invalid input');
     end;
   end;
-
 end.
 

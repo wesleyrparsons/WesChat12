@@ -9,7 +9,7 @@ interface
 uses
   Global;
 
-// Puase procedures.
+// Pause procedures.
 procedure HardPause;
 procedure Pause;
 
@@ -24,8 +24,6 @@ procedure DisplayByteSymbolTable(const SymbolTable: TSymbolTable);
 procedure DisplayVector(const V: TIVector);
 procedure DisplayX(const X: TSeqMatrix; const Part: TPart = B); overload;
 procedure VTPDisplayX(const Mess: string; const X: TSeqMatrix; const Part: TPart = B); overload;
-procedure DisplayX(const X: TSeqHeadMatrix; const Part: TPart = B); overload;
-procedure VTPDisplayX(const Mess: string; const X: TSeqHeadMatrix; const Part: TPart = B); overload;
 procedure DisplayX(const X: THiddenMatrix; const Part: TPart = B); overload;
 procedure VTPDisplayX(const Mess: string; const X: THiddenMatrix; const Part: TPart = B); overload;
 procedure DisplayX(const X: TSeqVocabMatrix; const Part: TPart = B); overload;
@@ -224,76 +222,6 @@ begin
   end;
 end;
 
-// Display an XHead matrix, B, E, F, or G.
-procedure DisplayX(const X: TSeqHeadMatrix; const Part: TPart = B); overload;
-const
-  tStride = 10;
-var
-  i, j, iB, iE, jB, jE: Integer;
-  vStride: Integer = 1;
-  hStride: Integer = 1;
-begin
-  Case Part of
-    B: begin
-      iB := 0;
-      iE := 9;
-      jB := 0;
-      jE := 9;
-    end;
-    E: begin
-      iB := High(X) - 9;
-      iE := High(X);
-      jB := High(X[0]) - 9;
-      jE := High(X[0]);
-    end;
-    F: begin
-      iB := 0;
-      iE := High(X);
-      jB := 0;
-      jE := High(X[0]);
-    end;
-    G: begin
-      vStride := Floor(Length(X) / tStride);
-      hStride := Floor(Length(X[0]) / tStride);
-      iB := 0;
-      iE := tStride;
-      jB := 0;
-      jE := tStride;
-    end;
-  end;
-  Write('       ');
-  for j := jB to jE do
-    Write(j * hStride: 8, '    ');
-  if Part = G then
-    Write(High(X[0]): 8, '    ');
-  Writeln;
-  for i := iB to iE do begin
-    Write(i * vStride: 4);
-    for j := jB to jE do
-      Write(X[i * vStride, j * hStride]: 11: 5, ' ');
-    if Part = G then
-      Write(X[i * vStride, High(X[0])]: 11: 5, ' ');
-    Writeln;
-  end;
-  if Part = G then begin
-    Write(High(X): 4);
-    for j := jB to jE do
-      Write(X[High(X), j * hStride]: 11: 5, ' ');
-    Write(X[High(X), High(X[0])]: 11: 5, ' ');
-    Writeln;
-  end;
-end;
-
-// Conditional form of DisplayX.
-procedure VTPDisplayX(const Mess: string; const X: TSeqHeadMatrix; const Part: TPart = B); overload;
-begin
-  if VerboseTransform then begin
-    Writeln(Mess);
-    DisplayX(X, Part);
-    Pause;
-  end;
-end;
-
 // Display a Hidden matrix, B, E, F, or G.
 procedure DisplayX(const X: THiddenMatrix; const Part: TPart = B); overload;
 const
@@ -358,7 +286,8 @@ end;
 procedure VTPDisplayX(const Mess: string; const X: THiddenMatrix; const Part: TPart = B); overload;
 begin
   if VerboseTransform then begin
-    Writeln(Mess);
+    Write(Mess);
+    PartScope(Part);
     DisplayX(X, Part);
     Pause;
   end;
@@ -428,7 +357,8 @@ end;
 procedure VTPDisplayX(const Mess: string; const X: TVocabWeightMatrix; const Part: TPart = B); overload;
 begin
   if VerboseTransform then begin
-    Writeln(Mess);
+    Write(Mess);
+    PartScope(Part);
     DisplayX(X, Part);
     Pause;
   end;
@@ -498,7 +428,8 @@ end;
 procedure VTPDisplayX(const Mess: string; const X: TSeqVocabMatrix; const Part: TPart = B); overload;
 begin
   if VerboseTransform then begin
-    Writeln(Mess);
+    Write(Mess);
+    PartScope(Part);
     DisplayX(X, Part);
     Pause;
   end;
@@ -568,7 +499,8 @@ end;
 procedure VTPDisplayX(const Mess: string; const X: TScoresMatrix; const Part: TPart = B); overload;
 begin
   if VerboseTransform then begin
-    Writeln(Mess);
+    Write(Mess);
+    PartScope(Part);
     DisplayX(X, Part);
     Pause;
   end;

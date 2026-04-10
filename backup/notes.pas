@@ -6,16 +6,7 @@ unit Notes;
 
 General
 
-1. Better model architecture.
-  type
-    TModel = record
-      Embedding : TEmbeddingMatrix;
-      Wq : TMatrix; Actually tensor.
-      Wk : TMatrix;
-      Wv : TMatrix;
-      Wo : TMatrix;
-      ...
-    end;
+1. Check why W1 W2 W0 in optimizerm with non-trainable params.
 
 2. In main program: Read Corpus, Read Files (vocab and merge), Tokenize, Embed, Transform.
 One proc: display merge/token info. One proc: display transform/embed info.
@@ -39,6 +30,8 @@ Instead of scanning all pairs every iteration, keep a heap ordered by count.
 But because counts change after merges, you usually do lazy heap updates:
 push updated (pair, count, version) records
 when popping, discard stale entries. What heap unit to use in FPC?
+
+2. Where does nCorpus live?
 
 4. Corpus array of byte. Use RawByteString. Done, but check.
 

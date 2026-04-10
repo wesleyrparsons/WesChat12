@@ -506,16 +506,4 @@ begin
   end;
 end;
 
-// Display for ScoresHead1 and 2, 0..20, 0..15.
-procedure DisplayScoresHead(const ScoresHead: TScoresMatrix);
-var
-  i, j:Integer;
-begin
-  for i := 0 to 20 do
-    for j := 0 to 15 do
-      Write(ScoresHead[i, j]: 11: 6);
-  Writeln;
-  Pause;
-end;
-
 end.

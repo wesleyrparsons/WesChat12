@@ -9,39 +9,13 @@ interface
 uses
   Display,
   Global,
-  Matrix;
+  Matrix,
+  Util;
 
 const
-  InvSqrtHeadDim: Single = 1 / Sqrt(HeadDim);              // Used in softmax.
+  InvSqrtHeadDim: Single = 1 / Sqrt(HeadDim);         // Used in softmax.
 
-var
-  // Non-trainable parameters.
-  X1, X2, X3, X4, X5,
-    X6, X7, X8, U:                TSeqTensor;              // X's at all stages.
-  X1q, X1v, X1k:                  TSeqTensor;              // X's for Q, K, V.
-  Q, K, V:                        TSeqTensor;              // Q is X*Wq, K is X*Wk, V is X*Wv.
-  ScoresHead1, ScoresHead2:       array[0..nHead - 1] of TScoresHeadTensor;    // Scores partitioned into nHeads.
-  Hidden1, Hidden2:               THiddenTensor;           // Neural net payer.
-  WVocab:                         TVocabWeightTensor;      // ModelDim x MaxVocab. Vocab is dimensioned as MaxVocab, but only uses nVocab.
-  Logits, TopGradient:            TSeqVocabMatrix;         // Logit and Gradient.
-  // Trainable parameters.
-  Wq, Wk, Wv, W0:                 TWeightTensor;
-  W1:                             TWeightProjTensor;       // Weights.
-  W2:                             TWeightProjTensorT;      // Weights.
-  b1:                             TSeqVectorProjTensor;    // Biases.
-  b2:                             TSeqVectorTensor;        // Biases.
-  Gamma1, Beta1, Gamma2, Beta2:   TSeqVectorTensor;        // Weights.
-  // Caches.
-  LNInvStd1:  TFSVector;          // Caches for Layer-Norm.
-  LNXhat1:    TSeqMatrix;
-  LNInvStd2:  TFSVector;
-  LNXhat2:    TSeqMatrix;
-  // Other.
-  TestVector: TFSVector;          // Vector for testing. [0..SeqLen] of Single.
-  InvFreq:    TFVector;           // For RoPE.
-
-procedure InitializeTransformer;
-procedure RunTransform;
+procedure RunTransform(var WesModel: ModelType);
 
 implementation
 
@@ -55,17 +29,6 @@ for i := 0 to SeqLen - 1 do
 end;
 
 // Rotary positional encoding.
-// Apply at initialization of transformer.
-procedure InitRoPE(var InvFreq: TFVector; ModelDim: Integer);
-var
-  j: Integer;
-begin
-  // ModelDim must be even.
-  SetLength(InvFreq, ModelDim div 2);
-  for j := 0 to (ModelDim div 2) - 1 do
-    InvFreq[j] := Exp( - (2.0 * j) / ModelDim * Ln(10000.0) );
-end;
-
 // Apply RoPE to both Q and K, [0..SeqLen - 1, 0..ModelDim - 1]
 // Apply before head-splitting, immediately after computing Q and K.
 procedure ApplyRoPE(var H: TSeqMatrix;  const InvFreq: TFVector; SeqLen, ModelDim: Integer);
@@ -87,141 +50,6 @@ begin
       H[i, 2 * j]   :=  x0 * c - x1 * s;
       H[i, 2 * j + 1] :=  x0 * s + x1 * c;
     end;
-end;
-
-// Xavier-Glorot initialization on W0 matrix.
-procedure XGUniformW(var W: TWeightMatrix; FanIn, FanOut: Integer);
-var
-  Limit, r: Single;
-  i, j: Integer;
-begin
-  Limit := Sqrt(6.0 / (FanIn + FanOut));
-
-  for i := 0 to ModelDim - 1 do
-    for j := 0 to ModelDim - 1 do begin
-      r := Random;              // 0..1.
-      W[i, j] := (2 * r - 1) * Limit;
-    end;
-end;
-
-// Xavier-Glorot initialization on WHead matrix.
-procedure XGUniformWHead(var W: TWeightHeadMatrix; FanIn, FanOut: Integer);
-var
-  Limit, r: Single;
-  i, j: Integer;
-begin
-  Limit := Sqrt(6.0 / (FanIn + FanOut));
-
-  for i := 0 to HeadDim - 1 do
-    for j := 0 to HeadDim - 1 do begin
-      r := Random;              // 0..1.
-      W[i, j] := (2 * r - 1) * Limit;
-    end;
-end;
-
-// Xavier-Glorot initialization on W1 matrix.
-procedure XGUniformW1(var W: TWeightProjMatrix; FanIn, FanOut: Integer);
-var
-  Limit, r: Single;
-  i, j: Integer;
-begin
-  Limit := Sqrt(6.0 / (FanIn + FanOut));
-
-  for i := 0 to ModelDim - 1 do
-    for j := 0 to ModelDimProj - 1 do begin
-      r := Random;              // 0..1.
-      W[i, j] := (2 * r - 1) * Limit;
-    end;
-end;
-
-// Xavier-Glorot initialization on W2 matrix.
-procedure XGUniformW2(var W: TWeightProjMatrixT; FanIn, FanOut: Integer);
-var
-  Limit, r: Single;
-  i, j: Integer;
-begin
-  Limit := Sqrt(6.0 / (FanIn + FanOut));
-
-  for i := 0 to ModelDim - 1 do
-    for j := 0 to ModelDimProj - 1 do begin
-      r := Random;              // 0..1.
-      W[j, i] := (2 * r - 1) * Limit;
-    end;
-end;
-
-// Xavier-Glorot initialization on WVocab matrix.
-procedure XGUniformWVocab(var W: TVocabWeightMatrix; FanIn, FanOut: Integer);
-var
-  Limit, r: Single;
-  i, j: Integer;
-begin
-  Limit := Sqrt(6.0 / (FanIn + FanOut));
-
-  for i := 0 to ModelDim - 1 do
-    for j := 0 to nVocab - 1 do begin
-      r := Random;              // 0..1.
-      W[i, j] := (2 * r - 1) * Limit;
-    end;
-end;
-
-// Initialize the transformer stage.
-procedure InitializeTransformer;
-var
-  j: Integer;
-begin
-  // InitTestVector(TestVector);
-  // Initialize RoPE.
-  InitRoPE(InvFreq, HeadDim);
-
-  // Initialize weight matrix W0.
-  XGUniformW(W0.Value, ModelDim, ModelDim);
-
-  // Initialize the weights with Xavier-Glorot function.
-  XGUniformW(Wq.Value, ModelDim, ModelDim);
-  XGUniformW(Wk.Value, ModelDim, ModelDim);
-  XGUniformW(Wv.Value, ModelDim, ModelDim);
-
-  // Initialize W1 and W2 weight matrices.
-  XGUniformW1(W1.Value, ModelDim, ModelDimProj);
-  XGUniformW2(W2.Value, ModelDimProj, ModelDim);
-
-  // Initialize WVocab weight matrices.
-  XGUniformWVocab(WVocab.Value, ModelDim, nVocab);
-
-  // Initialize b1 and b2.
-  FillChar(b1.Value, SizeOf(b1.Value), 0);
-  FillChar(b2.Value, SizeOf(b2.Value), 0);
-
-  // Initialize Beta and Gamma, LN 1 and 2, with SD and mean.
-  FillChar(Beta1.Value, SizeOf(Beta1.Value), 0);
-  FillChar(Beta2.Value, SizeOf(Beta2.Value), 0);
-  for j := 0 to ModelDim - 1 do begin
-    Gamma1.Value[j] := 1.0;
-    Gamma2.Value[j] := 1.0;
-  end;
-end;
-
-// Zero out all gradients.
-procedure ZeroGradients;
-begin
-  FillChar(X1.Grad, SizeOf(X1.Grad), 0);
-  FillChar(X2.Grad, SizeOf(X2.Grad), 0);
-  FillChar(X3.Grad, SizeOf(X3.Grad), 0);
-  FillChar(X4.Grad, SizeOf(X4.Grad), 0);
-  FillChar(X5.Grad, SizeOf(X5.Grad), 0);
-  FillChar(X6.Grad, SizeOf(X6.Grad), 0);
-  FillChar(X7.Grad, SizeOf(X7.Grad), 0);
-  FillChar(X8.Grad, SizeOf(X8.Grad), 0);
-  FillChar(W0.Grad, SizeOf(W0.Grad), 0);
-  FillChar(W1.Grad, SizeOf(W1.Grad), 0);
-  FillChar(W2.Grad, SizeOf(W2.Grad), 0);
-  FillChar(WVocab.Grad, SizeOf(WVocab.Grad), 0);
-  FillChar(b1.Grad, SizeOf(b1.Grad), 0);
-  FillChar(b2.Grad, SizeOf(b2.Grad), 0);
-  FillChar(Gamma1.Grad, SizeOf(Gamma1.Grad), 0);
-  FillChar(Gamma2.Grad, SizeOf(Gamma2.Grad), 0);
-  FillChar(Beta1.Grad, SizeOf(Beta1.Grad), 0);
-  FillChar(Beta2.Grad, SizeOf(Beta2.Grad), 0);
 end;
 
 // Simple autoregressive masking.
@@ -368,35 +196,8 @@ begin
     end;
 end;
 
-// Update the weights and biases.
-procedure Optimization;
-begin
-  // W0 weights: main attention output.
-  cblas_saxpy(ModelDim * ModelDim, -LearningRate, @W0.Grad[0, 0], 1, @W0.Value[0, 0], 1);
-
-  // Wq, Wk, Wv weights: Q, K, V.
-  cblas_saxpy(ModelDim * ModelDim, -LearningRate, @Wq.Grad[0, 0], 1, @Wq.Value[0, 0], 1);
-  cblas_saxpy(ModelDim * ModelDim, -LearningRate, @Wk.Grad[0, 0], 1, @Wk.Value[0, 0], 1);
-  cblas_saxpy(ModelDim * ModelDim, -LearningRate, @Wv.Grad[0, 0], 1, @Wv.Value[0, 0], 1);
-
-  // W1, W2: feed-forward and vocab projection.
-  cblas_saxpy(ModelDim * ModelDimProj, -LearningRate, @W1.Grad[0, 0], 1, @W1.Value[0, 0], 1);
-  cblas_saxpy(ModelDimProj * ModelDim, -LearningRate, @W2.Grad[0, 0], 1, @W2.Value[0, 0], 1);
-  cblas_saxpy(ModelDim * nVocab, -LearningRate, @WVocab.Grad[0, 0], 1, @WVocab.Value[0, 0], 1);
-
-  // b1, b2: biases.
-  cblas_saxpy(ModelDimProj, -LearningRate, @b1.Grad[0], 1, @b1.Value[0], 1);
-  cblas_saxpy(ModelDim, -LearningRate, @b2.Grad[0], 1, @b2.Value[0], 1);
-
-  // Gamma1, Gamm2, Beta1, Beta2: Layer-Norm parameters.
-  cblas_saxpy(ModelDim, -LearningRate, @Gamma1.Grad[0], 1, @Gamma1.Value[0], 1);
-  cblas_saxpy(ModelDim, -LearningRate, @Gamma2.Grad[0], 1, @Gamma2.Value[0], 1);
-  cblas_saxpy(ModelDim, -LearningRate, @Beta1.Grad[0], 1, @Beta1.Value[0], 1);
-  cblas_saxpy(ModelDim, -LearningRate, @Beta2.Grad[0], 1, @Beta2.Value[0], 1);
-end;
-
 // Run the transformer.
-procedure RunTransform;
+procedure RunTransform(var WesModel: ModelType);
 var
   h, i, j, HeadOffset: Integer;
 begin
@@ -404,16 +205,16 @@ begin
   writeln('Entering Transformer/FFN/Head Output');
 
   // Zero gradients.
-  ZeroGradients;
+  ZeroGradients(WesModel);
 
   // Display X matrix.
-  VTPDisplayX('Display X, beginning, in transform, before any action.', X, G);
+  VTPDisplayX('Display X.Value, beginning, in transform, before any action.', X.Value, G);
 {  if VerboseTransform then begin
     writeln('Display X, beginning, in transform, before any action.');
     DisplayX(X, G);
     Pause;
   end;}
-
+  with WesModel do begin
   // BLOCK 0.
 
   // 1. FORWARD STAGE: ATTENTION.
@@ -424,10 +225,10 @@ begin
     // Obtain input X from Tokenizer for Transformer stage.
     // Purpose: Normalization.
     // Equation: X1 = LayerNorm(X). X, X1 in R^{L × D}. Gamma1, Beta1 in R^{D}.
-    LayerNormForward(X, X1.Value, SeqLen, Gamma1.Value, Beta1.Value, LNXhat1, LNInvStd1);
+    LayerNormForward(X.Value, X1.Value, SeqLen, Gamma1.Value, Beta1.Value, LNXhat1, LNInvStd1);
 
     // Display X1 matrix.
-    VTPDisplayX('Display X1, beginning, after layer-norming.', X, B);
+    VTPDisplayX('Display X1.Value, beginning, after layer-norming.', X1.Value, B);
     {if VerboseTransform then begin
       writeln('Display X1, beginning, after layer-norming.');
       DisplayX(X1.Value, B);
@@ -998,25 +799,26 @@ begin
 
     // 1A. Backprop Layer-Norm: Input X1.Value, X1.Grad. Output X.Grad, Gamma1.Grad, Beta1.Grad.
     writeln('Stage 1A');
-    // Equation: X1.Grad, Gamma1.Grad, Beta1.Grad = LayerNorm(X1.Value, X1.Grad, Gamma1.Value, Beta1.Value). X.Grad, X1.Grad in R^{L x D}. Gamma1.Grad, Beta1.Grad in R^{D}.
-    LayerNormBackward(X1.Grad, X1.Grad, Gamma1.Grad, Beta1.Grad, SeqLen, Gamma1.Value, LNXhat1, LNInvStd1);
+    // Equation: X.Grad, Gamma1.Grad, Beta1.Grad = LayerNorm(X1.Value, X1.Grad, Gamma1.Value, Beta1.Value). X.Grad, X1.Grad in R^{L x D}. Gamma1.Grad, Beta1.Grad in R^{D}.
+    LayerNormBackward(X1.Grad, X.Grad, Gamma1.Grad, Beta1.Grad, SeqLen, Gamma1.Value, LNXhat1, LNInvStd1);
 
     if VerboseTransform then begin
-      writeln('Display X1.Grad, grid, in transform, at end.');
-      DisplayX(X1.Grad, G);
+      writeln('Display X.Grad, grid, in transform, at end.');
+      DisplayX(X.Grad, G);
       Pause;
     end;
 
-  // Modify weights and biases.
-  Optimization;
+    // Modify weights and biases.
+    Optimization(WesModel);
 
-  // Place X1 in X for next block.
-  CopyXMatrix(X1.Value, X, SeqLen, ModelDim);
-  If VerboseTransform then begin
-    writeln('End of tranformer block.');
-    Pause;
-  end;
-end;
+    // Place X1 in X for next block.
+    CopyXMatrix(X1.Value, X.Value, SeqLen, ModelDim);
+    If VerboseTransform then begin
+      writeln('End of tranformer block.');
+      Pause;
+    end;
+  end;   // End with WesModel.
+end;     // End RunTransform.
 
 end.
 

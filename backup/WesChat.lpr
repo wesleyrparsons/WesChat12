@@ -3,7 +3,8 @@ program WesChat;
 {$mode ObjFPC}{$H+}{$I proprietary.txt}
 
 { WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wespar.com.}
-{ Note: Edited 3/30/2026 8 pm}
+{ Note: Edited 4/10/2026 3 pm}
+{ Notes: TC comes from WesSymbolizeor or ChatGPTTokenize; let's make WesModel come from Embed }
 uses
   CombineTables,
   Crt,
@@ -18,7 +19,7 @@ uses
   SysUtils,
   Tokenize,
   WesTokenize,
-  Windows;
+  Windows, Unit1;
 
 var
   Corpus: TBVector;                    // Vector of byte.
@@ -65,7 +66,7 @@ var
 begin
   MultipleFileName := EmptyStr;        // This var contains info on input corpuses.
   Write('Enter name of file list: ');
-  readln(ListFile);
+  Readln(ListFile);
   if not FileExists(ListFile) then begin
     Writeln('List file not found: ', ListFile);
     Exit;
@@ -187,7 +188,7 @@ begin
   Writeln('appended with a timestamp.');
   while True do begin
     Write('W> ');
-    readln(Ch);
+    Readln(Ch);
     Case UpperCase(Ch) of
       '1': begin
         // Ask user for corpus file.

@@ -23,11 +23,11 @@ procedure SaveTokenList(const TokenizedCorpus: TIVector; const TokenFileName: St
 implementation
 
 var
-  BOS: Integer = 256;
+  BOS: Integer = 256;                                 // Meta-symbols.
   EOS: Integer = 257;
   PAD: Integer = 258;
   UNK: Integer = 259;
-  Magic: array[0..3] of Char = ('S', 'Y', 'M', 'T');  // For saving symbol table.
+  Magic: array[0..3] of Char = ('S', 'Y', 'M', 'T');  // Magic, for saving symbol table.
 
 procedure ReadFileBytes(const FileName: String; var OneCorpus: TBVector);
 var
@@ -55,6 +55,7 @@ begin
           Write(Chr(B));
   end;
   CloseFile(F);
+
   if VeryVerbose and VerboseTokenize then begin
     Writeln('ReadByteFile: ');
     for i := 0 to 150 do
@@ -100,7 +101,7 @@ begin
   BlockRead(F, nSymbols, SizeOf(nSymbols));
   SetLength(SymbolTable, NSymbols);
 
-  // Special token IDs.
+  // Meta symbol IDs.
   BlockRead(F, BOS, SizeOf(BOS));
   BlockRead(F, EOS, SizeOf(EOS));
   BlockRead(F, PAD, SizeOf(PAD));

@@ -7,7 +7,7 @@ unit CombineTables;
 
 interface
 
-{uses
+uses
   Display,
   Global,
   IOHandler,
@@ -106,7 +106,7 @@ begin
         CombinedTable[j] := Temp;
       end;
 end;
- } implementation
+
 end.
 
 

@@ -155,7 +155,7 @@ begin
     C, ldc);
 end;
 
-// Full matrix multiplication (lda, ldb, ldc), B transpose, overwrite, row-major.
+// Full matrix multiplication (lda, ldb, ldc), B transpose, overWrite, row-major.
 procedure MatMulFullTN(const A, B: PSingle; C: PSingle; M, N, K, lda, ldb, ldc: Integer);
 begin
   cblas_sgemm(RowMajor, NoTrans, Trans,

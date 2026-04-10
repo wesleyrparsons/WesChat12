@@ -13,7 +13,6 @@ uses
   Display,
   FileUtil,
   Global,
-  IOHandler,
   SysUtils;
 
 type

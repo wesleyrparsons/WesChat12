@@ -11,12 +11,12 @@ uses
   Global,
   Math,
   SysUtils,
-  Transform;
+  Transform,
+  Util;
 
- {From the tokenization stage:
-  TokenizedCorpus are vector of Integers, which become InputTokens and TargetTokens.
+ {TokenizedCorpus is a vector of Integers, which become InputTokens and TargetTokens.
   Arrays are nSymbols x ModelDim of Single.
-  nSymbols is vocabulary size. ModelDim is the dimension of the models, the loads.}
+  nSymbols (nVocab) is vocabulary size. ModelDim is the dimension of the models, the loads.}
 
 procedure RunEmbed(const TokenizedCorpus: TIVector);
 
@@ -26,8 +26,8 @@ const
   Scale = Sqrt(ModelDim);    // Optional transformer-style embedding scaling by sqrt(d_model).
 
 var
-  Embeddings: array of array of Single;     // Row is token, column is weights.
   Block: Integer;
+  WesModel: ModelType;
 
 // Create the target vector for use in head output.
 procedure BuildTargetVector(var Target: TIDimVector; const TokenizedCorpus: TIVector;
@@ -61,46 +61,46 @@ begin
 
     // Copy embedding vector.
     for j := 0 to ModelDim - 1 do
-      X[i, j] := Embeddings[id, j];
+      X[i, j] := WesModel.Embeddings[id, j];
   end;
 end;
 
-// Run the training.                          Make this a Raw Byte Vector.
+// Run the training.
 procedure RunEmbed(const TokenizedCorpus: TIVector);
 var
   i, j, k: Integer;
   Start, EmbedLoop: Integer;
   Stride: Integer = 64;
-  f: string;
 
   procedure ReadEmbedIfKeyPressed;
   var
     key: char;
+    f: string;
   begin
     key := CheckForControlKey;
     case key of
       'x', 'X': begin
-          writeln('Exit requested. Stopping execution.');
+          Writeln('Exit requested. Stopping execution.');
           Pause;
           Halt;              // Immediately terminate program.
         end;
       'b', 'B': begin
-          writeln('Break requested. Exiting loop.');
+          Writeln('Break requested. Exiting loop.');
           Pause;
           Block := nBlock;   // Break out of the loop cleanly.
         end;
       'v', 'V': begin
         VeryVerbose := not VeryVerbose;
-        writeln('Very verbose mode: ', VeryVerbose);
+        Writeln('Very verbose mode: ', VeryVerbose);
         Pause;
       end;                   // Change verbosity.
       'i', 'I': begin
-        writeln;
+        Writeln;
         ReportInfo;          // Report program info.
         Pause;
       end;
       't', 'T': begin
-        writeln('Training. nVocab = ', nVocab, ' nSymbols = ', nSymbols, ' ModelDim = ', ModelDim,
+        Writeln('Training. nVocab = ', nVocab, ' nSymbols = ', nSymbols, ' ModelDim = ', ModelDim,
           '  Start = ', Start, ' Stride = ', Stride, ' SeqLen = ', SeqLen, ' Length of TokenizedCorpus = ', Length(TokenizedCorpus));
         Write(DateTimeToStr(Now), '  X = Exit program. B = Break out of loop. V = toggle Verbose mode. P = Pause.');
         Writeln('  W = WesChat Information. T = Training information. S = Save. Training...');
@@ -112,7 +112,7 @@ var
           f := WorkingDir + FormatDateTime('yyyy-mm-dd_hhnnss' + '.sym', Now);
           // SaveModel;
           ChDir('..');
-          // writeln('File ', f, ' successfully saved.');
+          // Writeln('File ', f, ' successfully saved.');
           Pause;
         end;
 
@@ -121,30 +121,32 @@ var
 
 begin
   if VeryVerbose then
-    writeln('Start Training. nVocab = ', nVocab, ' nSymbols = ', nSymbols, ' ModelDim = ', ModelDim,
+    Writeln('Start Training. nVocab = ', nVocab, ' nSymbols = ', nSymbols, ' ModelDim = ', ModelDim,
        ' SeqLen = ', SeqLen, ' Length of TokenizedCorpus = ', Length(TokenizedCorpus));
 
   // Set the dimensions of the embedding matrix.
-  SetLength(Embeddings, nSymbols);
+  SetLength(WesModel.Embeddings, nSymbols);
   for i := 0 to nSymbols - 1 do
-    SetLength(Embeddings[i], ModelDim);
+    SetLength(WesModel.Embeddings[i], ModelDim);
 
   // Seed the weights with random numbers.
   for i := 0 to nSymbols - 1 do             // Random normal distribution.
     for j := 0 to ModelDim - 1 do           // Mean = 0, SD = 0.02.
-      Embeddings[i, j] := RandG(0.0, 0.02); // Only time I use this randomizer.
+      WesModel.Embeddings[i, j] := RandG(0.0, 0.02); // Only time I use this randomizer.
 
-  writeln('First quarter of two rows of embeddings.');
+  Writeln('First quarter of two rows of embeddings.');
   for k := 0 to ModelDim div 4 - 1 do
-    write(Embeddings[1, k]: 8: 6, ' ');
-  writeln;
+    Write(WesModel.Embeddings[1, k]: 8: 6, ' ');
+  Writeln;
   for k := 0 to ModelDim div 4 - 1 do
-    write(Embeddings[2, k]: 8: 6, ' ');
-  writeln;
+    Write(WesModel.Embeddings[2, k]: 8: 6, ' ');
+  Writeln;
   Pause;
 
   // Initialize.
-  InitializeTransformer;
+  InitializeTransformer(WesModel);
+  SetLength(TokenID, Length(TokenizedCorpus));
+  TokenID := TokenizedCorpus;
 
   // Stride loop thru Sequence.
   Start := 0;
@@ -153,35 +155,36 @@ begin
 
     // Display number of loops thru embed loop.
     Inc(EmbedLoop);
-    writeln('&&& Loop thru Embed: start ', Start, ' and loop number ', EmbedLoop, ' &&&');
-    writeln(DateTimeToStr(Now), '  X = Exit program. B = Break out of merge loop. V = toggle Verbose mode.');
-    writeln('  P = Program information. E = Embedding information. Embedding & transforming...');
+    Writeln('&&& Loop thru Embed: start ', Start, ' and loop number ', EmbedLoop, ' &&&');
+    Writeln(DateTimeToStr(Now), '  X = Exit program. B = Break out of merge loop. V = toggle Verbose mode.');
+    Writeln('  P = Program information. E = Embedding information. Embedding & transforming...');
 
     if VerboseTransform then Pause;
 
     // Build X from TokenizedCorpus[start .. start + SeqLen - 1].
-    BuildInputMatrix(X, TokenizedCorpus, Start, SeqLen);
+    BuildInputMatrix(X.Value, TokenizedCorpus, Start, SeqLen);
 
     // Optional transformer-style embedding scaling by sqrt(d_model).
     for i := 0 to SeqLen - 1 do
       for j := 0 to ModelDim - 1 do
-        X[i, j] := X[i, j] * Scale;
+        X.Value[i, j] := X.Value[i, j] * Scale;
 
     // Build the target vector, one ahead, for the loss stage.
     BuildTargetVector(TargetTokens, TokenizedCorpus, Start + 1, SeqLen);
 
-    if VerboseTokenize then begin
-      writeln('Display X, beginning, after PE, before transform.');
+    VTPDisplayX('Display X.Value before transform.', X.Value, G);
+    {if VerboseTokenize then begin
+      Writeln('Display X, beginning, before transform.');
       DisplayX(X, G);
       Pause;
-    end;
+    end;}
 
     // Forward and backward pass thru transformer.
     for Block := 0 to nBlock - 1 do begin
-      writeln('$$$ Starting Block ', Block, '  Sequence Start ', Start, ' $$$');
+      Writeln('$$$ Starting Block ', Block, '  Sequence Start ', Start, ' $$$');
       if VerboseTransform then Pause;
 
-      RunTransform;
+      RunTransform(var WesModel: ModelType);
 
       if PauseIfKeyPressed then
         ReadEmbedIfKeyPressed;
@@ -191,7 +194,7 @@ begin
   end;
 
   nVocab := nSymbols;    // Need nVocab (second name for variable) for Transform.
-  writeln('End of training. Press <CR> to continue.');
+  Writeln('End of training. Press <CR> to continue.');
   Readln;
 end;
 

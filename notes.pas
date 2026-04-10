@@ -6,16 +6,7 @@ unit Notes;
 
 General
 
-1. Better model architecture.
-  type
-    TModel = record
-      Embedding : TEmbeddingMatrix;
-      Wq : TMatrix; Actually tensor.
-      Wk : TMatrix;
-      Wv : TMatrix;
-      Wo : TMatrix;
-      ...
-    end;
+1. Check why W1 W2 W0 in optimize or zerogradients with non-trainable params.
 
 2. In main program: Read Corpus, Read Files (vocab and merge), Tokenize, Embed, Transform.
 One proc: display merge/token info. One proc: display transform/embed info.

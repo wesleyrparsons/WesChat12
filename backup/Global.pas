@@ -106,27 +106,58 @@ type                                                                           /
   TPart = (B, E, F, G);                // Length = VocabSize * Dimension. But only use nSymbols in rows.
   TSymbolTable = TRBSVector;           // Array of symbols. So index of array is a symbol string.
 
+  ModelType = record                   //  Model of trainable parameters.
+    Embeddings: TFMatrix;              // Row is token, column is weights.
+    Wq, Wk, Wv, W0:                 TWeightTensor;
+    W1:                             TWeightProjTensor;     // Weights.
+    W2:                             TWeightProjTensorT;    // Weights.
+    b1:                             TSeqVectorProjTensor;  // Biases.
+    b2:                             TSeqVectorTensor;      // Biases.
+    Gamma1, Beta1, Gamma2, Beta2:   TSeqVectorTensor;      // Weights.
+  end;
+
 var
+  { General }
   CorpusFileNames: TSVector;
   SymbolTable: TSymbolTable;
   WorkingName, WorkingDir: string;               // Saving data.
   CorpusFileInfo: string;                        // Saving lon string of info on corpus.
   nSymbols: Integer;                             // Number of symbols = Length(SymbolTable);
   nTokenizedCorpus: Integer;                     // Length of tokenized corpus.
-  X: TSeqMatrix;                                 // Original X matrix. (Not a tensor.)
+  TokenID: TIVector;                             // Same as TokenizedCorpus.
   TargetTokens: TIDimVector;                     // Input and target tokenns. Input lags by one.
   nVocab: Integer = DimVocab;                    // nVocab is also nSymbol. Number of symbol items.
   Mt0, Mt1, t0, t1, StopTime: TDateTime;         // For timing.
   Version: ShortString = '1.2';                  // Version 1.2.
   FromSymbolTable: Boolean = False;              // Operating from input Symbol Table rather than from tokenization.
-  MultipleFileName: String;                      // Using multiple corpuses and outputting single file name.
+  MultipleFileName: string;                      // Using multiple corpuses and outputting single file name.
   XSize: Integer = SeqLen * ModelDim;            // Size of X matrices.
   HiddenSize: Integer = SeqLen * ModelDimProj;   // Size of Hidden matrices.
   LearningRate: Single = 0.01;                   // LearningRate for Gradient.
   Temperature: Single = 1.0;                     // Temperature for softmax.
   Training: Boolean = True;                      // In training as opposed to inference mode.
 
+  // Non-trainable parameters.
+  WesModel: ModelType;
+  X, X1, X2, X3, X4, X5,
+    X6, X7, X8, U:                TSeqTensor;              // X's at all stages.
+  X1q, X1v, X1k:                  TSeqTensor;              // X's for Q, K, V.
+  Q, K, V:                        TSeqTensor;              // Q is X*Wq, K is X*Wk, V is X*Wv.
+  ScoresHead1, ScoresHead2:       array[0..nHead - 1] of TScoresHeadTensor;    // Scores partitioned into nHeads.
+  Hidden1, Hidden2:               THiddenTensor;           // Neural net payer.
+  WVocab:                         TVocabWeightTensor;      // ModelDim x MaxVocab. Vocab is dimensioned as MaxVocab, but only uses nVocab.
+  Logits, TopGradient:            TSeqVocabMatrix;         // Logit and Gradient.
+  // Caches.
+  LNInvStd1:  TFSVector;          // Caches for Layer-Norm.
+  LNXhat1:    TSeqMatrix;         // Caches for Layer-Norm.
+  LNInvStd2:  TFSVector;          // Caches for Layer-Norm.
+  LNXhat2:    TSeqMatrix;         // Caches for Layer-Norm.
+  // Other.
+  TestVector: TFSVector;          // Vector for testing. [0..SeqLen] of Single.
+  InvFreq:    TFVector;           // For RoPE.
+
 implementation
+begin
 
 end.
 

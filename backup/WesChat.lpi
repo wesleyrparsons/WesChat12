@@ -103,6 +103,11 @@
         <IsPartOfProject Value="True"/>
         <UnitName Value="IOHandler"/>
       </Unit>
+      <Unit>
+        <Filename Value="util.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="Util"/>
+      </Unit>
     </Units>
   </ProjectOptions>
   <CompilerOptions>

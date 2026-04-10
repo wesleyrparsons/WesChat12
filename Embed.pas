@@ -11,7 +11,8 @@ uses
   Global,
   Math,
   SysUtils,
-  Transform;
+  Transform,
+  Util;
 
  {TokenizedCorpus is a vector of Integers, which become InputTokens and TargetTokens.
   Arrays are nSymbols x ModelDim of Single.
@@ -25,8 +26,8 @@ const
   Scale = Sqrt(ModelDim);    // Optional transformer-style embedding scaling by sqrt(d_model).
 
 var
-  Embeddings: array of array of Single;     // Row is token, column is weights.
   Block: Integer;
+  WesModel: ModelType;
 
 // Create the target vector for use in head output.
 procedure BuildTargetVector(var Target: TIDimVector; const TokenizedCorpus: TIVector;
@@ -60,7 +61,7 @@ begin
 
     // Copy embedding vector.
     for j := 0 to ModelDim - 1 do
-      X[i, j] := Embeddings[id, j];
+      X[i, j] := WesModel.Embeddings[id, j];
   end;
 end;
 
@@ -70,11 +71,11 @@ var
   i, j, k: Integer;
   Start, EmbedLoop: Integer;
   Stride: Integer = 64;
-  f: string;
 
   procedure ReadEmbedIfKeyPressed;
   var
     key: char;
+    f: string;
   begin
     key := CheckForControlKey;
     case key of
@@ -124,26 +125,28 @@ begin
        ' SeqLen = ', SeqLen, ' Length of TokenizedCorpus = ', Length(TokenizedCorpus));
 
   // Set the dimensions of the embedding matrix.
-  SetLength(Embeddings, nSymbols);
+  SetLength(WesModel.Embeddings, nSymbols);
   for i := 0 to nSymbols - 1 do
-    SetLength(Embeddings[i], ModelDim);
+    SetLength(WesModel.Embeddings[i], ModelDim);
 
   // Seed the weights with random numbers.
   for i := 0 to nSymbols - 1 do             // Random normal distribution.
     for j := 0 to ModelDim - 1 do           // Mean = 0, SD = 0.02.
-      Embeddings[i, j] := RandG(0.0, 0.02); // Only time I use this randomizer.
+      WesModel.Embeddings[i, j] := RandG(0.0, 0.02); // Only time I use this randomizer.
 
   Writeln('First quarter of two rows of embeddings.');
   for k := 0 to ModelDim div 4 - 1 do
-    Write(Embeddings[1, k]: 8: 6, ' ');
+    Write(WesModel.Embeddings[1, k]: 8: 6, ' ');
   Writeln;
   for k := 0 to ModelDim div 4 - 1 do
-    Write(Embeddings[2, k]: 8: 6, ' ');
+    Write(WesModel.Embeddings[2, k]: 8: 6, ' ');
   Writeln;
   Pause;
 
   // Initialize.
-  InitializeTransformer;
+  InitializeTransformer(WesModel);
+  SetLength(TokenID, Length(TokenizedCorpus));
+  TokenID := TokenizedCorpus;
 
   // Stride loop thru Sequence.
   Start := 0;
@@ -159,17 +162,17 @@ begin
     if VerboseTransform then Pause;
 
     // Build X from TokenizedCorpus[start .. start + SeqLen - 1].
-    BuildInputMatrix(X, TokenizedCorpus, Start, SeqLen);
+    BuildInputMatrix(X.Value, TokenizedCorpus, Start, SeqLen);
 
     // Optional transformer-style embedding scaling by sqrt(d_model).
     for i := 0 to SeqLen - 1 do
       for j := 0 to ModelDim - 1 do
-        X[i, j] := X[i, j] * Scale;
+        X.Value[i, j] := X.Value[i, j] * Scale;
 
     // Build the target vector, one ahead, for the loss stage.
     BuildTargetVector(TargetTokens, TokenizedCorpus, Start + 1, SeqLen);
 
-    VTPDisplayX('Display X before transform.', X, G);
+    VTPDisplayX('Display X.Value before transform.', X.Value, G);
     {if VerboseTokenize then begin
       Writeln('Display X, beginning, before transform.');
       DisplayX(X, G);
@@ -181,7 +184,7 @@ begin
       Writeln('$$$ Starting Block ', Block, '  Sequence Start ', Start, ' $$$');
       if VerboseTransform then Pause;
 
-      RunTransform;
+      RunTransform(WesModel);
 
       if PauseIfKeyPressed then
         ReadEmbedIfKeyPressed;

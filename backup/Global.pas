@@ -117,7 +117,7 @@ type                                                                           /
   end;
 
 var
-  { General }
+  // General.
   CorpusFileNames: TSVector;
   SymbolTable: TSymbolTable;
   WorkingName, WorkingDir: string;               // Saving data.
@@ -136,9 +136,7 @@ var
   LearningRate: Single = 0.01;                   // LearningRate for Gradient.
   Temperature: Single = 1.0;                     // Temperature for softmax.
   Training: Boolean = True;                      // In training as opposed to inference mode.
-
   // Non-trainable parameters.
-  WesModel: ModelType;
   X, X1, X2, X3, X4, X5,
     X6, X7, X8, U:                TSeqTensor;              // X's at all stages.
   X1q, X1v, X1k:                  TSeqTensor;              // X's for Q, K, V.

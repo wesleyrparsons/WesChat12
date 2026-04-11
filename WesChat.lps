@@ -8,8 +8,8 @@
       <Unit>
         <Filename Value="WesChat.lpr"/>
         <IsPartOfProject Value="True"/>
-        <TopLine Value="97"/>
-        <CursorPos X="35" Y="123"/>
+        <TopLine Value="254"/>
+        <CursorPos X="19" Y="266"/>
         <UsageCount Value="233"/>
         <Loaded Value="True"/>
       </Unit>
@@ -17,7 +17,7 @@
         <Filename Value="matrix.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="Matrix"/>
-        <EditorIndex Value="10"/>
+        <EditorIndex Value="9"/>
         <CursorPos X="3" Y="10"/>
         <UsageCount Value="205"/>
         <Loaded Value="True"/>
@@ -26,7 +26,7 @@
         <Filename Value="test.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="Test"/>
-        <EditorIndex Value="14"/>
+        <EditorIndex Value="13"/>
         <CursorPos X="83" Y="5"/>
         <UsageCount Value="213"/>
         <Loaded Value="True"/>
@@ -34,19 +34,17 @@
       <Unit>
         <Filename Value="Tokenize.pas"/>
         <IsPartOfProject Value="True"/>
-        <EditorIndex Value="7"/>
-        <TopLine Value="1001"/>
-        <CursorPos X="23" Y="1027"/>
+        <EditorIndex Value="-1"/>
+        <TopLine Value="978"/>
+        <CursorPos X="5" Y="978"/>
         <UsageCount Value="210"/>
-        <Loaded Value="True"/>
       </Unit>
       <Unit>
         <Filename Value="Embed.pas"/>
         <IsPartOfProject Value="True"/>
-        <IsVisibleTab Value="True"/>
-        <EditorIndex Value="8"/>
-        <TopLine Value="172"/>
-        <CursorPos X="28" Y="187"/>
+        <EditorIndex Value="7"/>
+        <TopLine Value="133"/>
+        <CursorPos X="50" Y="163"/>
         <UsageCount Value="210"/>
         <Loaded Value="True"/>
       </Unit>
@@ -54,16 +52,16 @@
         <Filename Value="notes.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="Notes"/>
-        <EditorIndex Value="13"/>
+        <EditorIndex Value="12"/>
         <TopLine Value="6"/>
-        <CursorPos X="51" Y="9"/>
+        <CursorPos X="2" Y="15"/>
         <UsageCount Value="209"/>
         <Loaded Value="True"/>
       </Unit>
       <Unit>
         <Filename Value="Extras.pas"/>
         <IsPartOfProject Value="True"/>
-        <EditorIndex Value="15"/>
+        <EditorIndex Value="14"/>
         <TopLine Value="899"/>
         <CursorPos X="5" Y="915"/>
         <UsageCount Value="313"/>
@@ -72,9 +70,9 @@
       <Unit>
         <Filename Value="Display.pas"/>
         <IsPartOfProject Value="True"/>
-        <EditorIndex Value="12"/>
-        <TopLine Value="457"/>
-        <CursorPos X="79" Y="460"/>
+        <EditorIndex Value="11"/>
+        <TopLine Value="197"/>
+        <CursorPos X="8" Y="228"/>
         <UsageCount Value="218"/>
         <Loaded Value="True"/>
       </Unit>
@@ -82,9 +80,9 @@
         <Filename Value="transform.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="Transform"/>
-        <EditorIndex Value="9"/>
-        <TopLine Value="3"/>
-        <CursorPos X="48" Y="18"/>
+        <EditorIndex Value="8"/>
+        <TopLine Value="112"/>
+        <CursorPos X="15" Y="127"/>
         <UsageCount Value="211"/>
         <Loaded Value="True"/>
       </Unit>
@@ -93,8 +91,7 @@
         <IsPartOfProject Value="True"/>
         <UnitName Value="GPT2Tokenize"/>
         <EditorIndex Value="5"/>
-        <TopLine Value="615"/>
-        <CursorPos X="31" Y="621"/>
+        <CursorPos X="31"/>
         <UsageCount Value="215"/>
         <Loaded Value="True"/>
       </Unit>
@@ -120,8 +117,7 @@
         <IsPartOfProject Value="True"/>
         <UnitName Value="Symbolize"/>
         <EditorIndex Value="3"/>
-        <TopLine Value="270"/>
-        <CursorPos X="22" Y="277"/>
+        <CursorPos X="17"/>
         <UsageCount Value="218"/>
         <Loaded Value="True"/>
       </Unit>
@@ -130,8 +126,7 @@
         <IsPartOfProject Value="True"/>
         <UnitName Value="WesTokenize"/>
         <EditorIndex Value="2"/>
-        <TopLine Value="16"/>
-        <CursorPos X="13" Y="42"/>
+        <CursorPos X="45"/>
         <UsageCount Value="218"/>
         <Loaded Value="True"/>
       </Unit>
@@ -140,8 +135,7 @@
         <IsPartOfProject Value="True"/>
         <UnitName Value="IOHandler"/>
         <EditorIndex Value="4"/>
-        <TopLine Value="154"/>
-        <CursorPos X="47" Y="168"/>
+        <CursorPos X="19"/>
         <UsageCount Value="218"/>
         <Loaded Value="True"/>
       </Unit>
@@ -151,26 +145,26 @@
         <EditorIndex Value="-1"/>
         <TopLine Value="991"/>
         <CursorPos Y="1012"/>
-        <UsageCount Value="88"/>
+        <UsageCount Value="82"/>
       </Unit>
       <Unit>
         <Filename Value="unit1.pas"/>
         <UnitName Value="Unit1"/>
         <EditorIndex Value="-1"/>
         <CursorPos X="24" Y="16"/>
-        <UsageCount Value="10"/>
+        <UsageCount Value="4"/>
       </Unit>
       <Unit>
         <Filename Value="Global.pas"/>
+        <IsVisibleTab Value="True"/>
         <EditorIndex Value="6"/>
-        <TopLine Value="126"/>
-        <CursorPos Y="141"/>
+        <CursorPos X="111" Y="15"/>
         <UsageCount Value="118"/>
         <Loaded Value="True"/>
       </Unit>
       <Unit>
         <Filename Value="TNotes.txt"/>
-        <EditorIndex Value="16"/>
+        <EditorIndex Value="15"/>
         <CursorPos X="87" Y="10"/>
         <UsageCount Value="100"/>
         <Loaded Value="True"/>
@@ -180,86 +174,14 @@
         <Filename Value="util.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="Util"/>
-        <EditorIndex Value="11"/>
-        <TopLine Value="3"/>
-        <CursorPos X="48" Y="21"/>
-        <UsageCount Value="112"/>
+        <EditorIndex Value="10"/>
+        <TopLine Value="148"/>
+        <CursorPos X="45" Y="151"/>
+        <UsageCount Value="168"/>
         <Loaded Value="True"/>
       </Unit>
     </Units>
     <JumpHistory HistoryIndex="29">
-      <Position>
-        <Filename Value="Global.pas"/>
-        <Caret Line="142" TopLine="132"/>
-      </Position>
-      <Position>
-        <Filename Value="Global.pas"/>
-        <Caret Line="118" Column="6" TopLine="97"/>
-      </Position>
-      <Position>
-        <Filename Value="util.pas"/>
-        <Caret Line="167" Column="3" TopLine="146"/>
-      </Position>
-      <Position>
-        <Filename Value="util.pas"/>
-        <Caret Line="173" TopLine="153"/>
-      </Position>
-      <Position>
-        <Filename Value="util.pas"/>
-        <Caret Line="211" Column="7" TopLine="183"/>
-      </Position>
-      <Position>
-        <Filename Value="Embed.pas"/>
-        <Caret Line="63" Column="27" TopLine="48"/>
-      </Position>
-      <Position>
-        <Filename Value="Embed.pas"/>
-        <Caret Line="169" Column="26" TopLine="149"/>
-      </Position>
-      <Position>
-        <Filename Value="Tokenize.pas"/>
-        <Caret Column="37"/>
-      </Position>
-      <Position>
-        <Filename Value="Tokenize.pas"/>
-        <Caret Line="1012" Column="30" TopLine="1002"/>
-      </Position>
-      <Position>
-        <Filename Value="Tokenize.pas"/>
-        <Caret Line="1027" Column="23" TopLine="1001"/>
-      </Position>
-      <Position>
-        <Filename Value="util.pas"/>
-        <Caret Line="189" Column="35" TopLine="183"/>
-      </Position>
-      <Position>
-        <Filename Value="util.pas"/>
-        <Caret Line="20" Column="15" TopLine="4"/>
-      </Position>
-      <Position>
-        <Filename Value="WesChat.lpr"/>
-        <Caret Line="338" Column="16" TopLine="307"/>
-      </Position>
-      <Position>
-        <Filename Value="WesChat.lpr"/>
-        <Caret Line="479" Column="32" TopLine="453"/>
-      </Position>
-      <Position>
-        <Filename Value="WesChat.lpr"/>
-        <Caret Line="482" Column="32" TopLine="456"/>
-      </Position>
-      <Position>
-        <Filename Value="WesChat.lpr"/>
-        <Caret Line="17" Column="12"/>
-      </Position>
-      <Position>
-        <Filename Value="Embed.pas"/>
-        <Caret Line="199" Column="25" TopLine="171"/>
-      </Position>
-      <Position>
-        <Filename Value="util.pas"/>
-        <Caret Line="116" Column="25" TopLine="99"/>
-      </Position>
       <Position>
         <Filename Value="util.pas"/>
         <Caret Line="11" Column="3"/>
@@ -307,6 +229,78 @@
       <Position>
         <Filename Value="Embed.pas"/>
         <Caret Line="199" TopLine="172"/>
+      </Position>
+      <Position>
+        <Filename Value="iohandler.pas"/>
+        <Caret Line="234" TopLine="207"/>
+      </Position>
+      <Position>
+        <Filename Value="iohandler.pas"/>
+        <Caret Line="222" Column="46" TopLine="205"/>
+      </Position>
+      <Position>
+        <Filename Value="iohandler.pas"/>
+        <Caret Line="226" Column="18" TopLine="224"/>
+      </Position>
+      <Position>
+        <Filename Value="iohandler.pas"/>
+        <Caret Line="207" Column="68" TopLine="206"/>
+      </Position>
+      <Position>
+        <Filename Value="transform.pas"/>
+        <Caret Line="68" Column="60" TopLine="56"/>
+      </Position>
+      <Position>
+        <Filename Value="transform.pas"/>
+        <Caret Line="318" Column="10" TopLine="299"/>
+      </Position>
+      <Position>
+        <Filename Value="transform.pas"/>
+        <Caret Line="313" Column="99" TopLine="298"/>
+      </Position>
+      <Position>
+        <Filename Value="transform.pas"/>
+        <Caret Line="454" Column="8" TopLine="428"/>
+      </Position>
+      <Position>
+        <Filename Value="transform.pas"/>
+        <Caret Line="550" Column="14" TopLine="537"/>
+      </Position>
+      <Position>
+        <Filename Value="util.pas"/>
+        <Caret Line="21" Column="48" TopLine="3"/>
+      </Position>
+      <Position>
+        <Filename Value="Global.pas"/>
+        <Caret Line="41" Column="44" TopLine="37"/>
+      </Position>
+      <Position>
+        <Filename Value="Global.pas"/>
+        <Caret Line="94" Column="11" TopLine="68"/>
+      </Position>
+      <Position>
+        <Filename Value="Embed.pas"/>
+        <Caret Line="6" Column="50"/>
+      </Position>
+      <Position>
+        <Filename Value="transform.pas"/>
+        <Caret Column="64"/>
+      </Position>
+      <Position>
+        <Filename Value="util.pas"/>
+        <Caret Line="16" Column="41"/>
+      </Position>
+      <Position>
+        <Filename Value="util.pas"/>
+        <Caret Line="20" Column="15"/>
+      </Position>
+      <Position>
+        <Filename Value="util.pas"/>
+        <Caret Line="151" Column="45" TopLine="148"/>
+      </Position>
+      <Position>
+        <Filename Value="transform.pas"/>
+        <Caret Line="608" Column="78" TopLine="593"/>
       </Position>
     </JumpHistory>
     <RunParams>

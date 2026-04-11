@@ -26,8 +26,8 @@ type
 // Use in Trie.
   PTrieNode = ^TTrieNode;
   TTrieNode = record
-    Children: array[0..255] of PTrieNode; // ASCII.
-    TokenID: Integer;                     // -1 if not terminal.
+    Children: array[0..255] of PTrieNode;   // ASCII.
+    TokenID: Integer;                       // -1 if not terminal.
   end;
 
 // Use in token statistics.

@@ -16,9 +16,9 @@ procedure XGUniformWHead(var W: TWeightHeadMatrix; FanIn, FanOut: Integer);
 procedure XGUniformW1(var W: TWeightProjMatrix; FanIn, FanOut: Integer);
 procedure XGUniformW2(var W: TWeightProjMatrixT; FanIn, FanOut: Integer);
 procedure XGUniformWVocab(var W: TVocabWeightMatrix; FanIn, FanOut: Integer);
-procedure InitializeTransformer(WesModel);
-procedure ZeroGradients(WesModel);
-procedure Optimization(WesModel);
+procedure InitializeTransformer(var WesModel: ModelType);
+procedure ZeroGradients(var WesModel: ModelType);
+procedure Optimization(var WesModel: ModelType);
 
 implementation
 

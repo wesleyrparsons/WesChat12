@@ -187,7 +187,7 @@ begin
   Writeln('All output files will be contained in a folder or file named with the input file name,');
   Writeln('appended with a timestamp.');
   while True do begin
-    Write('W> ');
+    Write('W>');
     Readln(Ch);
     Case UpperCase(Ch) of
       '1': begin
@@ -265,6 +265,9 @@ begin
 
         // Run WesChat tokenizer.
         RunWesTokenize(Corpus, TokenizedCorpus);
+        // Run Embed.
+        If QueryEmbed then
+            RunEmbed(TokenizedCorpus)
       end;
       '4': begin
         // Ask user for corpus file.

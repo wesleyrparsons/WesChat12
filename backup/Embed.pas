@@ -26,8 +26,8 @@ const
   Scale = Sqrt(ModelDim);    // Optional transformer-style embedding scaling by sqrt(d_model).
 
 var
-  Block: Integer;
-  WesModel: ModelType;
+  WesModel: ModelType;       // WesModel is declared here. (Change to WModel.)
+  Block: Integer;            // Number of iterations sequentially of Transform.
 
 // Create the target vector for use in head output.
 procedure BuildTargetVector(var Target: TIDimVector; const TokenizedCorpus: TIVector;
@@ -70,7 +70,7 @@ procedure RunEmbed(const TokenizedCorpus: TIVector);
 var
   i, j, k: Integer;
   Start, EmbedLoop: Integer;
-  Stride: Integer = 64;
+  Stride: Integer = 64;      // Stride 64 toekns every sequence.
 
   procedure ReadEmbedIfKeyPressed;
   var
@@ -184,7 +184,7 @@ begin
       Writeln('$$$ Starting Block ', Block, '  Sequence Start ', Start, ' $$$');
       if VerboseTransform then Pause;
 
-      RunTransform(var WesModel: ModelType);
+      RunTransform(WesModel);
 
       if PauseIfKeyPressed then
         ReadEmbedIfKeyPressed;

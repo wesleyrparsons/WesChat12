@@ -26,7 +26,7 @@ const
   Scale = Sqrt(ModelDim);    // Optional transformer-style embedding scaling by sqrt(d_model).
 
 var
-  WModel: WModelType;       // WModel is declared here. (Change to WModel.)
+  WModel: WModelType;        // WModel is declared here. (Change to WModel.)
   Block: Integer;            // Number of iterations sequentially of Transform.
 
 // Create the target vector for use in head output.

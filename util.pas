@@ -19,8 +19,27 @@ procedure XGUniformWVocab(var W: TVocabWeightMatrix; FanIn, FanOut: Integer);
 procedure InitializeTransformer(var WModel: WModelType);
 procedure ZeroGradients(var WesModel: WModelType);
 procedure Optimization(var WesModel: WModelType);
+procedure ApplyRoPE(var H: TSeqMatrix;  const InvFreq: TFVector; SeqLen, ModelDim: Integer);
+procedure ApplyAutoregressiveMask(var ScoresHead: TScoresMatrix; const L: Integer);
+procedure SoftmaxForward(const x: TFVector; out y: array of Single);
+procedure SoftmaxBackward(const y, dy:  TFVector; out dx: array of Single);
+procedure LayerNormForward(const InX: TSeqMatrix; var OutX: TSeqMatrix; SeqLen: Integer;
+  const Gamma, Beta: TSeqVector; var LNXhat: TSeqMatrix; var LNInvStd: TFSVector);
+procedure LayerNormBackward(const dY: TSeqMatrix; var dX: TSeqMatrix; var dGamma, dBeta: TSeqVector;
+  SeqLen: Integer; const Gamma: TSeqVector; var LNXhat: TSeqMatrix; var LNInvStd: TFSVector);
+procedure GradientFromProbabilities;
+procedure BackpropAdd(const dOut: TSeqMatrix; var dA, dB: TSeqMatrix; const L, D: Integer);
 
 implementation
+
+// Initialize test vector.
+procedure InitTestVector(var N: TFSVector);           // Test procedure, not used.
+var
+  i: Integer;
+begin
+for i := 0 to SeqLen - 1 do
+  N[i] := 0.0;
+end;
 
 // Apply at initialization of transformer.
 procedure InitRoPE(var InvFreq: TFVector; ModelDim: Integer);
@@ -210,6 +229,172 @@ begin
       cblas_saxpy(ModelDim, -LearningRate, @X.Grad[i,0], 1, @Embeddings[0, v], 1);
     end;
   end;
+end;
+
+// Rotary positional encoding.
+// Apply RoPE to both Q and K, [0..SeqLen - 1, 0..ModelDim - 1]
+// Apply before head-splitting, immediately after computing Q and K.
+procedure ApplyRoPE(var H: TSeqMatrix;  const InvFreq: TFVector; SeqLen, ModelDim: Integer);
+var
+  i, j: Integer;
+  Angle, c, s, x0, x1: Single;
+begin
+  for i := 0 to SeqLen - 1 do
+    for j := 0 to (ModelDim div 2) - 1 do begin
+      Angle := i * InvFreq[j];
+      c := Cos(Angle);
+      s := Sin(Angle);
+
+      // Original pair.
+      x0 := H[i, 2 * j];
+      x1 := H[i, 2 * j + 1];
+
+      // Rotated pair.
+      H[i, 2 * j]   :=  x0 * c - x1 * s;
+      H[i, 2 * j + 1] :=  x0 * s + x1 * c;
+    end;
+end;
+
+// Simple autoregressive masking.
+procedure ApplyAutoregressiveMask(var ScoresHead: TScoresMatrix; const L: Integer);
+var
+  i, j: Integer;
+const
+  NEG_INF: Single = -1e30;
+begin
+  for i := 0 to L - 1 do
+    for j := i + 1 to L - 1 do
+      ScoresHead[i, j] := NEG_INF;
+end;
+
+// Softmax procedure forward.
+procedure SoftmaxForward(const x: TFVector; out y: array of Single);
+var
+  i: Integer;
+  MaxVal, SumVal, InvT: Single;
+begin
+  // Find max for numerical stability.
+  InvT := 1.0 / Temperature;
+  MaxVal := x[0] * InvT;
+  for i := 1 to High(x) do
+    if (x[i] * InvT) > MaxVal then
+      MaxVal := x[i] * InvT;
+
+  // Compute exp(x - max).
+  SumVal := 0;
+  for i := 0 to High(x) do begin
+    y[i] := Exp((x[i] * InvT) - MaxVal);
+    SumVal := SumVal + y[i];
+  end;
+
+  // Normalize.
+  SumVal := 1.0 / SumVal;
+  for i := 0 to High(x) do
+    y[i] := y[i] * SumVal;
+end;
+
+// Softmax procedure backward.
+procedure SoftmaxBackward(const y, dy:  TFVector; out dx: array of Single);
+var
+  j, D: Integer;
+  dot: Single;
+begin
+  D := Length(y);
+
+  // dot = sum_j dy[j] * y[j].
+  dot := 0.0;
+  for j := 0 to D - 1 do
+    dot := dot + dy[j] * y[j];
+
+  // dx[j] = y[j] * (dy[j] - dot).
+  for j := 0 to D - 1 do
+    dx[j] := y[j] * (dy[j] - dot);
+end;
+
+// Layer-Norm matrix.
+procedure LayerNormForward(const InX: TSeqMatrix; var OutX: TSeqMatrix; SeqLen: Integer;
+  const Gamma, Beta: TSeqVector; var LNXhat: TSeqMatrix; var LNInvStd: TFSVector);
+var
+  i, j: Integer;
+  MeanL, VarL, InvStd: Single;
+const
+  EPS = 1e-5;
+begin
+  for i := 0 to SeqLen - 1 do begin
+    MeanL := 0.0;
+    for j := 0 to ModelDim - 1 do
+      MeanL := MeanL + InX[i, j];
+    MeanL := MeanL / ModelDim;
+
+    VarL := 0.0;
+    for j := 0 to ModelDim - 1 do
+      VarL := VarL + Sqr(InX[i, j] - MeanL);
+    VarL := VarL / ModelDim;
+
+    InvStd := 1.0 / Sqrt(VarL + EPS);
+
+    for j := 0 to ModelDim - 1 do
+      OutX[i, j] := (InX[i, j] - MeanL) * InvStd * Gamma[j] + Beta[j];
+    LNInvStd[i] := InvStd;
+    for j := 0 to ModelDim - 1 do
+      LNXhat[i, j] := (InX[i, j] - MeanL) * InvStd;
+  end;
+end;
+
+// Layer-Norm matrix on back propagation. dY is upstream gradient. dX is output gradient.
+// dGamma, dBeta are accumulated over all rows.
+procedure LayerNormBackward(const dY: TSeqMatrix; var dX: TSeqMatrix; var dGamma, dBeta: TSeqVector;
+  SeqLen: Integer; const Gamma: TSeqVector; var LNXhat: TSeqMatrix; var LNInvStd: TFSVector);
+var
+  i, j: Integer;
+  sum1, sum2, scale: Single;
+  dHat: TSeqVector;
+begin
+  for i := 0 to SeqLen - 1 do begin
+    // Step 1: dHat = dY * Gamma.
+    sum1 := 0.0;
+    sum2 := 0.0;
+    for j := 0 to ModelDim - 1 do begin
+      dHat[j] := dY[i, j] * Gamma[j];
+      sum1 := sum1 + dHat[j];
+      sum2 := sum2 + dHat[j] * LNXhat[i][j];
+    end;
+
+    // Step 2: compute dX.
+    scale := LNInvStd[i] / ModelDim;
+    for j := 0 to ModelDim - 1 do
+      dX[i, j] := scale * (ModelDim * dHat[j] - sum1 - LNXhat[i, j] * sum2);
+
+    // Step 3: accumulate dGamma and dBeta.
+    for j := 0 to ModelDim - 1 do begin
+      dGamma[j] := dGamma[j] + dY[i, j] * LNXhat[i][j];
+      dBeta[j]  := dBeta[j]  + dY[i, j];
+    end;
+  end;
+end;
+
+// Calculate gradient from logits and target. ??Gradient should just be a tseqmatrix
+procedure GradientFromProbabilities;
+var
+  i, v: Integer;
+begin
+  for i := 0 to SeqLen - 1 do begin
+    for v := 0 to nVocab - 1 do
+      TopGradient[i, v] := Logits[i, v];
+    TopGradient[i, TargetTokens[i]] := Logits[i, TargetTokens[i]] - 1.0;
+  end;
+end;
+
+// Back propagation addition.
+procedure BackpropAdd(const dOut: TSeqMatrix; var dA, dB: TSeqMatrix; const L, D: Integer);
+var
+  i, j: Integer;
+begin
+  for i := 0 to L - 1 do
+    for j := 0 to D - 1 do begin
+      dA[i, j] := dA[i, j] + dOut[i, j];
+      dB[i, j] := dB[i, j] + dOut[i, j];
+    end;
 end;
 
 end.

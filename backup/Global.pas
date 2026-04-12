@@ -106,7 +106,7 @@ type                                                                           /
   TPart = (B, E, F, G);                // Length = VocabSize * Dimension. But only use nSymbols in rows.
   TSymbolTable = TRBSVector;           // Array of symbols. So index of array is a symbol string.
 
-  ModelType = record                   //  Model of trainable parameters.
+  WModelType = record                  //  Model of trainable parameters.
     Embeddings: TFMatrix;              // Row is token, column is weights.
     Wq, Wk, Wv, W0:                 TWeightTensor;
     W1:                             TWeightProjTensor;     // Weights.

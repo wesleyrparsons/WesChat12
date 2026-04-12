@@ -42,10 +42,9 @@
       <Unit>
         <Filename Value="Embed.pas"/>
         <IsPartOfProject Value="True"/>
-        <IsVisibleTab Value="True"/>
         <EditorIndex Value="7"/>
         <TopLine Value="14"/>
-        <CursorPos X="12" Y="29"/>
+        <CursorPos Y="17"/>
         <UsageCount Value="210"/>
         <Loaded Value="True"/>
       </Unit>
@@ -82,8 +81,8 @@
         <IsPartOfProject Value="True"/>
         <UnitName Value="Transform"/>
         <EditorIndex Value="8"/>
-        <TopLine Value="182"/>
-        <CursorPos X="37" Y="198"/>
+        <TopLine Value="20"/>
+        <CursorPos Y="22"/>
         <UsageCount Value="211"/>
         <Loaded Value="True"/>
       </Unit>
@@ -169,9 +168,9 @@
         <Filename Value="util.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="Util"/>
+        <IsVisibleTab Value="True"/>
         <EditorIndex Value="10"/>
-        <TopLine Value="100"/>
-        <CursorPos X="9" Y="116"/>
+        <CursorPos Y="32"/>
         <UsageCount Value="229"/>
         <Loaded Value="True"/>
       </Unit>

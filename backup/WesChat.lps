@@ -43,8 +43,8 @@
         <Filename Value="Embed.pas"/>
         <IsPartOfProject Value="True"/>
         <EditorIndex Value="7"/>
-        <TopLine Value="161"/>
-        <CursorPos X="40" Y="171"/>
+        <TopLine Value="14"/>
+        <CursorPos Y="17"/>
         <UsageCount Value="210"/>
         <Loaded Value="True"/>
       </Unit>
@@ -80,10 +80,8 @@
         <Filename Value="transform.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="Transform"/>
-        <IsVisibleTab Value="True"/>
         <EditorIndex Value="8"/>
-        <TopLine Value="182"/>
-        <CursorPos X="37" Y="198"/>
+        <CursorPos Y="22"/>
         <UsageCount Value="211"/>
         <Loaded Value="True"/>
       </Unit>
@@ -169,18 +167,14 @@
         <Filename Value="util.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="Util"/>
+        <IsVisibleTab Value="True"/>
         <EditorIndex Value="10"/>
-        <TopLine Value="100"/>
-        <CursorPos X="9" Y="116"/>
+        <CursorPos Y="30"/>
         <UsageCount Value="229"/>
         <Loaded Value="True"/>
       </Unit>
     </Units>
     <JumpHistory HistoryIndex="29">
-      <Position>
-        <Filename Value="transform.pas"/>
-        <Caret Line="290" Column="9" TopLine="265"/>
-      </Position>
       <Position>
         <Filename Value="transform.pas"/>
         <Caret Line="318" Column="24" TopLine="294"/>
@@ -296,6 +290,10 @@
       <Position>
         <Filename Value="transform.pas"/>
         <Caret Line="18" Column="37" TopLine="3"/>
+      </Position>
+      <Position>
+        <Filename Value="transform.pas"/>
+        <Caret Line="198" Column="37" TopLine="182"/>
       </Position>
     </JumpHistory>
     <RunParams>

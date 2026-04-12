@@ -261,7 +261,7 @@ begin
 
         // Write to log file.
         if SaveFiles then
-            LogFile('bela.txt');
+          LogFile('bela.txt');
 
         // Run WesChat tokenizer.
         RunWesTokenize(Corpus, TokenizedCorpus);
@@ -456,7 +456,7 @@ begin
         nCorpus := Length(Corpus);
         SetLength(CorpusFileNames, 1);
         CorpusFileNames[0] := CorpusFileName + '   ' + IntToStr(FileSize(CorpusFileName))
-         + ' bytes   ' + DateTimeToStr(FileDateToDateTime(FileAge(CorpusFileName)));
+          + ' bytes   ' + DateTimeToStr(FileDateToDateTime(FileAge(CorpusFileName)));
 
         // Write to Log file.
         if SaveFiles then

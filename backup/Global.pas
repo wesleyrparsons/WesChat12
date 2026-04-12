@@ -118,8 +118,8 @@ type                                                                           /
 
 var
   // General.
-  CorpusFileNames: TSVector;
-  SymbolTable: TSymbolTable;
+  CorpusFileNames: TSVector;                     // Name of corpus file.
+  SymbolTable: TSymbolTable;                     // Symbol table.
   WorkingName, WorkingDir: string;               // Saving data.
   CorpusFileInfo: string;                        // Saving lon string of info on corpus.
   nSymbols: Integer;                             // Number of symbols = Length(SymbolTable);
@@ -128,7 +128,7 @@ var
   TargetTokens: TIDimVector;                     // Input and target tokenns. Input lags by one.
   nVocab: Integer = DimVocab;                    // nVocab is also nSymbol. Number of symbol items.
   Mt0, Mt1, t0, t1, StopTime: TDateTime;         // For timing.
-  Version: ShortString = '1.2';                  // Version 1.2.
+  Version: shortString = '1.2';                  // Version 1.2.
   FromSymbolTable: Boolean = False;              // Operating from input Symbol Table rather than from tokenization.
   MultipleFileName: string;                      // Using multiple corpuses and outputting single file name.
   XSize: Integer = SeqLen * ModelDim;            // Size of X matrices.
@@ -155,6 +155,7 @@ var
   InvFreq:    TFVector;           // For RoPE.
 
 implementation
+
 begin
 
 end.

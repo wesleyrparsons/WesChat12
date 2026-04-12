@@ -16,9 +16,9 @@ procedure XGUniformWHead(var W: TWeightHeadMatrix; FanIn, FanOut: Integer);
 procedure XGUniformW1(var W: TWeightProjMatrix; FanIn, FanOut: Integer);
 procedure XGUniformW2(var W: TWeightProjMatrixT; FanIn, FanOut: Integer);
 procedure XGUniformWVocab(var W: TVocabWeightMatrix; FanIn, FanOut: Integer);
-procedure InitializeTransformer(var WesModel: ModelType);
-procedure ZeroGradients(var WesModel: ModelType);
-procedure Optimization(var WesModel: ModelType);
+procedure InitializeTransformer(var WModel: WModelType);
+procedure ZeroGradients(var WesModel: WModelType);
+procedure Optimization(var WesModel: WModelType);
 
 implementation
 
@@ -109,11 +109,11 @@ begin
 end;
 
 // Initialize the transformer stage.
-procedure InitializeTransformer(var WesModel: ModelType);
+procedure InitializeTransformer(var WModel: WModelType);
 var
   j: Integer;
 begin
-  with WesModel do begin
+  with WModel do begin
     // InitTestVector(TestVector);
     // Initialize RoPE.
     InitRoPE(InvFreq, HeadDim);
@@ -149,7 +149,7 @@ end;
 
 // Zero out all gradients.
 // Do I need Wq, Wv, Wk, and ScoresHead1 & 2?
-procedure ZeroGradients(var WesModel: ModelType);
+procedure ZeroGradients(var WesModel: WModelType);
 begin
   FillChar(X.Grad, SizeOf(X.Grad), 0);
   FillChar(X1.Grad, SizeOf(X1.Grad), 0);
@@ -176,7 +176,7 @@ end;
 
 { Optimization }
 // Update the weights and biases.
-procedure Optimization(var WesModel: ModelType);
+procedure Optimization(var WesModel: WModelType);
 var
   i, v: Integer;
 begin

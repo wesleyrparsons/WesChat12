@@ -26,7 +26,7 @@ const
   Scale = Sqrt(ModelDim);    // Optional transformer-style embedding scaling by sqrt(d_model).
 
 var
-  WesModel: ModelType;       // WesModel is declared here. (Change to WModel.)
+  WModel: WModelType;        // WModel is declared here. (Change to WModel.)
   Block: Integer;            // Number of iterations sequentially of Transform.
 
 // Create the target vector for use in head output.
@@ -61,7 +61,7 @@ begin
 
     // Copy embedding vector.
     for j := 0 to ModelDim - 1 do
-      X[i, j] := WesModel.Embeddings[id, j];
+      X[i, j] := WModel.Embeddings[id, j];
   end;
 end;
 
@@ -124,26 +124,26 @@ begin
       ' SeqLen = ', SeqLen, ' Length of TokenizedCorpus = ', Length(TokenizedCorpus));
 
   // Set the dimensions of the embedding matrix.
-  SetLength(WesModel.Embeddings, nSymbols);
+  SetLength(WModel.Embeddings, nSymbols);
   for i := 0 to nSymbols - 1 do
-    SetLength(WesModel.Embeddings[i], ModelDim);
+    SetLength(WModel.Embeddings[i], ModelDim);
 
   // Seed the weights with random numbers.
   for i := 0 to nSymbols - 1 do             // Random normal distribution.
     for j := 0 to ModelDim - 1 do           // Mean = 0, SD = 0.02.
-      WesModel.Embeddings[i, j] := RandG(0.0, 0.02); // Only time I use this randomizer.
+      WModel.Embeddings[i, j] := RandG(0.0, 0.02); // Only time I use this randomizer.
 
   Writeln('First quarter of two rows of embeddings.');
   for k := 0 to ModelDim div 4 - 1 do
-    Write(WesModel.Embeddings[1, k]: 8: 6, ' ');
+    Write(WModel.Embeddings[1, k]: 8: 6, ' ');
   Writeln;
   for k := 0 to ModelDim div 4 - 1 do
-    Write(WesModel.Embeddings[2, k]: 8: 6, ' ');
+    Write(WModel.Embeddings[2, k]: 8: 6, ' ');
   Writeln;
   Pause;
 
   // Initialize.
-  InitializeTransformer(WesModel);
+  InitializeTransformer(WModel);
   SetLength(TokenID, Length(TokenizedCorpus));
   TokenID := TokenizedCorpus;
 
@@ -183,7 +183,7 @@ begin
       Writeln('$$$ Starting Block ', Block, '  Sequence Start ', Start, ' $$$');
       if VerboseTransform then Pause;
 
-      RunTransform(WesModel);
+      RunTransform(WModel);
 
       if PauseIfKeyPressed then
         ReadEmbedIfKeyPressed;

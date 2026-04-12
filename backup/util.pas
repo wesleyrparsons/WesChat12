@@ -148,6 +148,7 @@ begin
 end;
 
 // Zero out all gradients.
+// Do I need Wq, Wv, Wk, and ScoresHead1 & 2?
 procedure ZeroGradients(var WesModel: ModelType);
 begin
   FillChar(X.Grad, SizeOf(X.Grad), 0);

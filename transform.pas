@@ -207,11 +207,7 @@ begin
 
   // Display X matrix.
   VTPDisplayX('Display X.Value, beginning, in transform, before any action.', X.Value, G);
-{  if VerboseTransform then begin
-    writeln('Display X, beginning, in transform, before any action.');
-    DisplayX(X, G);
-    Pause;
-  end;}
+
   with WesModel do begin
   // BLOCK 0.
 
@@ -227,11 +223,6 @@ begin
 
     // Display X1 matrix.
     VTPDisplayX('Display X1.Value, beginning, after layer-norming.', X1.Value, B);
-    {if VerboseTransform then begin
-      writeln('Display X1, beginning, after layer-norming.');
-      DisplayX(X1.Value, B);
-      Pause;
-    end;}
 
     // 1B. Split. Implicit split into X1 and accumulate into X4.
 
@@ -243,11 +234,6 @@ begin
 
     // Display Q matrix.
     VTPDisplayX('Display Q in transform.', Q.Value, G);
-    {if VerboseTransform then begin
-      writeln('Display Q, sample, in transform.');
-      DisplayX(Q.Value, G);
-      Pause;
-    end;}
 
     // Full Size Multiplication/Overwrite: Input X1, Wk. Output K.
     // Equation: K = X1 · Wk. K in R^{L x D}. X1 in R^{L · D}. Wk in R^{D x D}. M=SeqLen N=ModelDim K=ModelDim.
@@ -255,11 +241,6 @@ begin
 
     // Display K matrix.
     VTPDisplayX('Display Q, end, in transform.', K.Value, E);
-    {if VerboseTransform then begin
-      writeln('Display K, end, in transform.');
-      DisplayX(K.Value, E);
-      Pause;
-    end;}
 
     // Full Size Multiplication/Overwrite: Input X1, Wv. Output V.
     // Equation: V = X1 · Wv. V in R^{L x D}. X1 in R^{L · D}. Wv in R^{D x D}. M=SeqLen N=ModelDim K=ModelDim.
@@ -288,11 +269,6 @@ begin
     end;
 
     VTPDisplayX('Display ScoresHead1[0] before standardizing.', ScoresHead1[0].Value, B);
-    {if VerboseTransform then begin
-      writeln('Display ScoresHead1[0], beginning, before standardizing.');
-      DisplayX(ScoresHead1[0].Value, B);
-      Pause;
-    end;}
 
     // 1F. Mask & Softmax & Dropout. Obtain Scores2.
 
@@ -311,11 +287,6 @@ begin
 
     // Display Scores1Head2[1] matrix.
     VTPDisplayX('Display ScoresHead2[1] after softmax, in transform, before any action.', ScoresHead2[1].Value, G);
-    {if VerboseTransform then begin
-      writeln('Display ScoresHead2[1], sample, after softmax.');
-      DisplayX(ScoresHead2[1].Value, G);
-      Pause;
-    end;}
 
     // Do attention dropout.
     // Equation: ScoresHead2 = Dropout(ScoresHead2). ScoresHead in R^{L x L}.
@@ -345,11 +316,6 @@ begin
 
     // Display X2 matrix.
     VTPDisplayX('Display X2, after Softmax, and concatenation.', X2.Value, B);
-    {if VerboseTransform then begin
-      writeln('Display X2, beginning, in transform, after Softmax, and concatenation.');
-      DisplayX(X2.Value, B);
-      Pause;
-    end;}
 
     // 1H. Mutiplication/Overwrite. Obtain X3 by weighting X2 by W0.
 
@@ -359,11 +325,6 @@ begin
 
     // Display X3 matrix.
     VTPDisplayX('Display X3, in transform.', X2.Value, B);
-    {if VerboseTransform then begin
-      writeln('Display X3, beginning, in transform.');
-      DisplayX(X3.Value, B);
-      Pause;
-    end;}
 
     // 1I. Merge. Obtain X4 from X1 and X3.
 
@@ -373,11 +334,6 @@ begin
 
     // Display X4 matrix.
     VTPDisplayX('Display X4.Value, in transform, after residual added to X3.', X4.Value, G);
-    {if VerboseTransform then begin
-      writeln('Display X4, sample, in transform, after residual added to X3.');
-      DisplayX(X4.Value, G);
-      Pause;
-    end;}
 
     // 1J. Layer-Norm. Obtain X5 from X4.
 
@@ -387,11 +343,6 @@ begin
 
     // Display X5 matrix.
     VTPDisplayX('Display X5.Value, in transform, before FFN.', X5.Value, G);
-    {if VerboseTransform then begin
-      writeln('Display X5, beginning, in transform, before FFN.');
-      DisplayX(X5.Value, G);
-      Pause;
-    end;}
 
       // 2. STAGE FORWARD FFN.
 
@@ -411,11 +362,6 @@ begin
 
       // Display Hidden1 matrix.
       VTPDisplayX('Display Hidden1.Value, in transform,  after adding b1, and before ReLU.', Hidden1.Value, G);
-      {if VerboseTransform then begin
-        writeln('Display Hidden1, grid, in transform, after adding b1, and before ReLU.');
-        DisplayX(Hidden1.Value, G);
-        Pause;
-      end;}
 
       // 2C. ReLU. Obtain Hidden2 from Hidden1.
 
@@ -448,11 +394,6 @@ begin
 
       // Display X6 matrix.
       VTPDisplayX('Display X6, in transform, after contraction.', X6.Value, B);
-      {if VerboseTransform then begin
-        writeln('Display X6, beginning, in transform, after contraction.');
-        DisplayX(X6.Value, B);
-        Pause;
-      end;}
 
       // 2F. Addition/Merge. Obtain X7 from X5 and X6.
 
@@ -462,11 +403,6 @@ begin
 
       // Display X7 matrix.
       VTPDisplayX('Display X7.Value, in transform, after residual added to X6.', X7.Value, B);
-      {if VerboseTransform then begin
-        writeln('Display X7, beginning, in transform, after residual added to X6.');
-        DisplayX(X7.Value, B);
-        Pause;
-      end;}
 
       // 3. FORWARD HEAD OUTPUT STAGE.
 
@@ -478,19 +414,9 @@ begin
 
         // Display Logits matrix.
         VTPDisplayX('Display Logits, in transform, before softmax.', Logits, B);
-        {if VerboseTransform then begin
-          writeln('Display Logits, beginning, in transform, before softmax.');
-          DisplayX(Logits, B);
-          Pause;
-        end;}
 
         // Display WVocab matrix.
         VTPDisplayX('Display WVocab.Value, in transform, before computing Logit.', WVocab.Value, B);
-        {if VerboseTransform then begin
-          writeln('Display WVocab, beginning, in transform, before computing Logit.');
-          DisplayX(WVocab.Value, B);
-          Pause;
-        end;}
 
         // 3B. Softmax. Obtain Logits from Logits.
 
@@ -501,11 +427,6 @@ begin
 
         // Display Logits matrix.
         VTPDisplayX('Display Logits, in transform, after softmax.', Logits, B);
-        {if VerboseTransform then begin
-          writeln('Display Logits, beginning, in transform, after softmax.');
-          DisplayX(Logits, B);
-          Pause;
-        end;}
 
         // 3C. Cross-Entropy Loss. Obtain TopGradient from Logits.
         // Gradient: Input Logits. Output TopGradient.
@@ -514,11 +435,6 @@ begin
 
         // Display TopGradient matrix.
         VTPDisplayX('Display TopGradient, in transform, after Logit calculation.', TopGradient, B);
-        {if VerboseTransform then begin
-          writeln('Display TopGradient, beginning, in transform, after Logit calculation.');
-          DisplayX(TopGradient, B);
-          Pause;
-        end;}
 
       // BACK PROPAGATION. FEED BACKWARD NETWORK.
 
@@ -527,23 +443,18 @@ begin
       // Equation: X7.Grad = TopGradient · WVocabᵀ.Value. X7.Grad in R^{L x D}. TopGradient in R^{L x nVocab}. WVocabᵀ in R^{nVocab x D}.
       writeln('Stage 2F');
       cblas_sgemm(101, 111, 112,  SeqLen, ModelDim, nVocab,  1.0,   // 112 = Transposed.
-        @TopGradient[0, 0], MaxVocab,  @WVocab.Value[0, 0], MaxVocab, 0.0,  @X7.Grad[0, 0], ModelDim);
+        @TopGradient[0, 0], DimVocab,  @WVocab.Value[0, 0], DimVocab, 0.0,  @X7.Grad[0, 0], ModelDim);
 
       // Backprop TopGradient modifies/overwrites WVocab: Input X7ᵀ, TopGradient. Output WVocab.Grad.
       // Equation: WVocab.Grad = X7ᵀ · TopGradient. WVocab.Grad in R^{D x nVocab}. X7ᵀ in R^(D x L}. TopGradient in R^{L x nVocab}.
-      cblas_sgemm(101, 112, 111,  ModelDim, nVocab, SeqLen,  1.0,  @X7.Value[0,0], ModelDim,
-        @TopGradient[0,0], MaxVocab,  1.0,  @WVocab.Grad[0,0], MaxVocab);
+      cblas_sgemm(101, 112, 111,  ModelDim, nVocab, SeqLen,  1.0,  @X7.Value[0, 0], ModelDim,
+        @TopGradient[0,0], DimVocab,  1.0,  @WVocab.Grad[0,0], DimVocab);
 
       // Backprop Split X7 Grad into X5 and X6: Input X5.Grad, X7.Grad. Output dX.Grad.
       // Equation: X5.Grad = X5.Grad + X7.Grad. All in R^{L x D}.
       GradSplit(X7.Grad, X5.Grad, X6.Grad, SeqLen, ModelDim);
 
       VTPDisplayX('Display X7.Grad, in transform, after stage 2D.', X7.Grad, G);
-      {if VerboseTransform then begin
-        writeln('Display X7.Grad, sample, in transform, after stage 2D.');
-        DisplayX(X7.Grad, G);
-        Pause;
-      end;}
 
       // 2E. Backprop Addition/Accumulation. Obtain b2 from X6.
 
@@ -606,11 +517,6 @@ begin
     LayerNormBackward(X5.Grad, X4.Grad, Gamma2.Grad, Beta2.Grad, SeqLen, Gamma2.Value, LNXhat2, LNInvStd2);
 
     VTPDisplayX('Display X4.Grad, in transform, after stage 1J, layer-norm.', X4.Grad, G);
-    {if VerboseTransform then begin
-      Writeln('Display X4.Grad, sample, in transform, after stage 1J, layer-norm.');
-      DisplayX(X4.Grad, G);
-      Pause;
-    end;}
 
     // 1I. Backprop Split. Input: X1.Grad. Output: X3.Grad. Output X4.Grad,
 
@@ -633,11 +539,6 @@ begin
     MatMulNT(@X3.Grad, @W0.Value, @X2.Grad, SeqLen, ModelDim, ModelDim);
 
     VTPDisplayX('Display X3.Grad, in transform, before stage 1G.', X3.Grad, G);
-    {if VerboseTransform then begin
-      Writeln('Display X3.Grad, grid, in transform, before stage 1G, obtain scores2.');
-      DisplayX(X3.Grad, G);
-      Pause;
-    end;}
 
     // 1G. Backprop Multiplication/Overwrite. Obtain Scores2.Grad from X2.Grad: Input X2.Grad, Vᵀ.Value. Output: Scores2.Grad.
 

@@ -18,7 +18,7 @@ var
   DisplayCorpus: Boolean = True;       // one set for real tokenizing and one set for debug
   VeryVerbose: Boolean = False;
   VerboseTokenize: Boolean = True;
-  VerboseTransform: Boolean = False;
+  VerboseTransform: Boolean = True;
   ShowTokenWork: Boolean = True;
   ShowMergeWork: Boolean = True;
   ShowVerification: Boolean = True;

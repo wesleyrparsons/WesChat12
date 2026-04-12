@@ -204,7 +204,7 @@ begin
   Writeln;
 end;
 
-procedure SaveMatrix(var F: File; const M: array of array of Single);
+{procedure SaveMatrix(var F: File; const M: array of array of Single);
 var
   R, C: LongInt;
 begin
@@ -252,6 +252,6 @@ begin
   SaveMatrix(F, WesModel.Beta2);
 
   Close(F);
-end;
+end;}
 
 end.

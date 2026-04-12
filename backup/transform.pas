@@ -242,7 +242,7 @@ begin
      MatMulNN(@X1.Value[0, 0], @Wq.Value[0, 0], @Q.Value[0, 0], SeqLen, ModelDim, ModelDim);
 
     // Display Q matrix.
-    VTPDisplayX('Display Q, sample, in transform.', Q.Value, G);
+    VTPDisplayX('Display Q in transform.', Q.Value, G);
     {if VerboseTransform then begin
       writeln('Display Q, sample, in transform.');
       DisplayX(Q.Value, G);
@@ -513,7 +513,7 @@ begin
         GradientFromProbabilities;
 
         // Display TopGradient matrix.
-        VTPDisplayX('Display TopGradient, in transform, after Logit calculation.', TopGradient, B);
+        //VTPDisplayX('Display TopGradient, in transform, after Logit calculation.', TopGradient, B);
         {if VerboseTransform then begin
           writeln('Display TopGradient, beginning, in transform, after Logit calculation.');
           DisplayX(TopGradient, B);
@@ -527,16 +527,25 @@ begin
       // Equation: X7.Grad = TopGradient · WVocabᵀ.Value. X7.Grad in R^{L x D}. TopGradient in R^{L x nVocab}. WVocabᵀ in R^{nVocab x D}.
       writeln('Stage 2F');
       cblas_sgemm(101, 111, 112,  SeqLen, ModelDim, nVocab,  1.0,   // 112 = Transposed.
-        @TopGradient[0, 0], MaxVocab,  @WVocab.Value[0, 0], MaxVocab, 0.0,  @X7.Grad[0, 0], ModelDim);
-
+        @TopGradient[0, 0], DimVocab,  @WVocab.Value[0, 0], DimVocab, 0.0,  @X7.Grad[0, 0], ModelDim);
+      writeln('a');
+      writeln('a');
+      writeln('a');
+      writeln('a');  readln;
       // Backprop TopGradient modifies/overwrites WVocab: Input X7ᵀ, TopGradient. Output WVocab.Grad.
       // Equation: WVocab.Grad = X7ᵀ · TopGradient. WVocab.Grad in R^{D x nVocab}. X7ᵀ in R^(D x L}. TopGradient in R^{L x nVocab}.
-      cblas_sgemm(101, 112, 111,  ModelDim, nVocab, SeqLen,  1.0,  @X7.Value[0,0], ModelDim,
-        @TopGradient[0,0], MaxVocab,  1.0,  @WVocab.Grad[0,0], MaxVocab);
+      cblas_sgemm(101, 112, 111,  ModelDim, nVocab, SeqLen,  1.0,  @X7.Value[0, 0], ModelDim,
+        @TopGradient[0,0], DimVocab,  1.0,  @WVocab.Grad[0,0], DimVocab);       //here is sgemm error $$$$$$$$$$$$  param 8
+      writeln('b');
+      writeln('b');
+      writeln('b');         readln;
 
       // Backprop Split X7 Grad into X5 and X6: Input X5.Grad, X7.Grad. Output dX.Grad.
       // Equation: X5.Grad = X5.Grad + X7.Grad. All in R^{L x D}.
       GradSplit(X7.Grad, X5.Grad, X6.Grad, SeqLen, ModelDim);
+      writeln('c');
+      writeln('c');
+      writeln('c');                readln;
 
       VTPDisplayX('Display X7.Grad, in transform, after stage 2D.', X7.Grad, G);
       {if VerboseTransform then begin

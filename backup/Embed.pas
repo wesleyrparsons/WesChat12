@@ -80,15 +80,15 @@ var
     key := CheckForControlKey;
     case key of
       'x', 'X': begin
-          Writeln('Exit requested. Stopping execution.');
-          Pause;
-          Halt;              // Immediately terminate program.
-        end;
+        Writeln('Exit requested. Stopping execution.');
+        Pause;
+        Halt;                // Immediately terminate program.
+      end;
       'b', 'B': begin
-          Writeln('Break requested. Exiting loop.');
-          Pause;
-          Block := nBlock;   // Break out of the loop cleanly.
-        end;
+        Writeln('Break requested. Exiting loop.');
+        Pause;
+        Block := nBlock;     // Break out of the loop cleanly.
+      end;
       'v', 'V': begin
         VeryVerbose := not VeryVerbose;
         Writeln('Very verbose mode: ', VeryVerbose);
@@ -106,15 +106,14 @@ var
         Writeln('  W = WesChat Information. T = Training information. S = Save. Training...');
         Pause;
       end;
-      's', 'S':
-        begin
-          ChDir(WorkingDir);
-          f := WorkingDir + FormatDateTime('yyyy-mm-dd_hhnnss' + '.sym', Now);
-          // SaveModel;
-          ChDir('..');
-          // Writeln('File ', f, ' successfully saved.');
-          Pause;
-        end;
+      's', 'S': begin
+        ChDir(WorkingDir);
+        f := WorkingDir + FormatDateTime('yyyy-mm-dd_hhnnss' + '.sym', Now);
+        // SaveModel;
+        ChDir('..');
+        // Writeln('File ', f, ' successfully saved.');
+        Pause;
+      end;
 
     end;
   end;
@@ -122,7 +121,7 @@ var
 begin
   if VeryVerbose then
     Writeln('Start Training. nVocab = ', nVocab, ' nSymbols = ', nSymbols, ' ModelDim = ', ModelDim,
-       ' SeqLen = ', SeqLen, ' Length of TokenizedCorpus = ', Length(TokenizedCorpus));
+      ' SeqLen = ', SeqLen, ' Length of TokenizedCorpus = ', Length(TokenizedCorpus));
 
   // Set the dimensions of the embedding matrix.
   SetLength(WesModel.Embeddings, nSymbols);

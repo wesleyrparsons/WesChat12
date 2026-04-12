@@ -6,7 +6,7 @@ unit Notes;
 
 General
 
-1. Check why W1 W2 W0 in optimize or zerogradients with non-trainable params.
+1. Check why W1 W2 W0 in zerogradients with non-trainable params. Why not ScoresHead>
 
 2. Change WesModel to WModel.
 

@@ -178,7 +178,6 @@ begin
   FillChar(X5.Grad, SizeOf(X5.Grad), 0);
   FillChar(X6.Grad, SizeOf(X6.Grad), 0);
   FillChar(X7.Grad, SizeOf(X7.Grad), 0);
-  FillChar(X8.Grad, SizeOf(X8.Grad), 0);
   with WesModel do begin
     FillChar(W0.Grad, SizeOf(W0.Grad), 0);
     FillChar(W1.Grad, SizeOf(W1.Grad), 0);

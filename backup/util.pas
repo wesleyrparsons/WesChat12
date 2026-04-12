@@ -27,6 +27,8 @@ procedure LayerNormForward(const InX: TSeqMatrix; var OutX: TSeqMatrix; SeqLen: 
   const Gamma, Beta: TSeqVector; var LNXhat: TSeqMatrix; var LNInvStd: TFSVector);
 procedure LayerNormBackward(const dY: TSeqMatrix; var dX: TSeqMatrix; var dGamma, dBeta: TSeqVector;
   SeqLen: Integer; const Gamma: TSeqVector; var LNXhat: TSeqMatrix; var LNInvStd: TFSVector);
+procedure GradientFromProbabilities;
+procedure BackpropAdd(const dOut: TSeqMatrix; var dA, dB: TSeqMatrix; const L, D: Integer);
 
 implementation
 
@@ -369,6 +371,30 @@ begin
       dBeta[j]  := dBeta[j]  + dY[i, j];
     end;
   end;
+end;
+
+// Calculate gradient from logits and target. ??Gradient should just be a tseqmatrix
+procedure GradientFromProbabilities;
+var
+  i, v: Integer;
+begin
+  for i := 0 to SeqLen - 1 do begin
+    for v := 0 to nVocab - 1 do
+      TopGradient[i, v] := Logits[i, v];
+    TopGradient[i, TargetTokens[i]] := Logits[i, TargetTokens[i]] - 1.0;
+  end;
+end;
+
+// Back propagation addition.
+procedure BackpropAdd(const dOut: TSeqMatrix; var dA, dB: TSeqMatrix; const L, D: Integer);
+var
+  i, j: Integer;
+begin
+  for i := 0 to L - 1 do
+    for j := 0 to D - 1 do begin
+      dA[i, j] := dA[i, j] + dOut[i, j];
+      dB[i, j] := dB[i, j] + dOut[i, j];
+    end;
 end;
 
 end.

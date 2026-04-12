@@ -8,8 +8,7 @@
       <Unit>
         <Filename Value="WesChat.lpr"/>
         <IsPartOfProject Value="True"/>
-        <TopLine Value="284"/>
-        <CursorPos X="11" Y="284"/>
+        <CursorPos Y="17"/>
         <UsageCount Value="233"/>
         <Loaded Value="True"/>
       </Unit>
@@ -53,8 +52,7 @@
         <IsPartOfProject Value="True"/>
         <UnitName Value="Notes"/>
         <EditorIndex Value="12"/>
-        <TopLine Value="6"/>
-        <CursorPos Y="11"/>
+        <CursorPos X="34"/>
         <UsageCount Value="209"/>
         <Loaded Value="True"/>
       </Unit>
@@ -81,7 +79,8 @@
         <IsPartOfProject Value="True"/>
         <UnitName Value="Transform"/>
         <EditorIndex Value="8"/>
-        <CursorPos Y="22"/>
+        <TopLine Value="199"/>
+        <CursorPos X="39" Y="224"/>
         <UsageCount Value="211"/>
         <Loaded Value="True"/>
       </Unit>
@@ -145,13 +144,14 @@
         <EditorIndex Value="-1"/>
         <TopLine Value="991"/>
         <CursorPos Y="1012"/>
-        <UsageCount Value="76"/>
+        <UsageCount Value="75"/>
       </Unit>
       <Unit>
         <Filename Value="Global.pas"/>
+        <IsVisibleTab Value="True"/>
         <EditorIndex Value="6"/>
-        <TopLine Value="97"/>
-        <CursorPos X="33" Y="97"/>
+        <TopLine Value="124"/>
+        <CursorPos X="33" Y="140"/>
         <UsageCount Value="118"/>
         <Loaded Value="True"/>
       </Unit>
@@ -167,18 +167,13 @@
         <Filename Value="util.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="Util"/>
-        <IsVisibleTab Value="True"/>
         <EditorIndex Value="10"/>
-        <CursorPos Y="30"/>
+        <CursorPos X="55" Y="9"/>
         <UsageCount Value="229"/>
         <Loaded Value="True"/>
       </Unit>
     </Units>
     <JumpHistory HistoryIndex="29">
-      <Position>
-        <Filename Value="transform.pas"/>
-        <Caret Line="318" Column="24" TopLine="294"/>
-      </Position>
       <Position>
         <Filename Value="transform.pas"/>
         <Caret Line="319" Column="9" TopLine="294"/>
@@ -295,10 +290,25 @@
         <Filename Value="transform.pas"/>
         <Caret Line="198" Column="37" TopLine="182"/>
       </Position>
+      <Position>
+        <Filename Value="transform.pas"/>
+        <Caret Line="28" Column="53" TopLine="20"/>
+      </Position>
     </JumpHistory>
     <RunParams>
       <FormatVersion Value="2"/>
       <Modes ActiveMode=""/>
     </RunParams>
   </ProjectSession>
+  <Debugging>
+    <BreakPoints>
+      <Item>
+        <Kind Value="bpkSource"/>
+        <WatchScope Value="wpsLocal"/>
+        <WatchKind Value="wpkWrite"/>
+        <Source Value="WesChat.lpr"/>
+        <Line Value="17"/>
+      </Item>
+    </BreakPoints>
+  </Debugging>
 </CONFIG>

@@ -8,8 +8,6 @@ General
 
 1. Check why W1 W2 W0 in zerogradients with non-trainable params. Why not ScoresHead>
 
-2. Change WesModel to WModel.
-
 3. Add SaveModel and LoadModel procedures.
 
 4. In main program: Read Corpus, Read Files (vocab and merge), Tokenize, Embed, Transform.
@@ -45,7 +43,7 @@ Tok[i], Prev[i], Next[i], Alive[i].
 6. Avoid repeated trie rebuilds.
 If the symbol table is fixed, build the trie once after loading. ??
 
-7. Use nSymbols, except use nVocab in Transform.
+7. Use nSymbols, except use nVocab in Transform. Done.
 
 8. Add a regex pretokenizer. Nope, not necessary.
 
@@ -71,14 +69,11 @@ b. Use MatMul wrapper for all cblas.
 
 1. Many models reuse the embedding matrix for output projection:
 logits = X_final · Embedding^T.
-This is called weight tying. Don't need WVocab.
+This is called weight tying. WVocab not needed.
 The gradient has to hit the embedding matrix after X0.
 
 2. What to do with nTokens and append proc.
-Should SeqLen be a BVectorType. Good question!
-In Tokenize, add maxheap with a hash table to speed up tokenization.
-Store attention softmax outputs.
-Do I need them intact for backprop through softmax.
+Store attention softmax outputs. Do I need them intact for backprop through softmax.
 
 3. Put Hidden on the heap; make it a dynamically allocated variable. No. cblas will not work.
 

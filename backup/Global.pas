@@ -137,8 +137,7 @@ var
   Temperature: Single = 1.0;                     // Temperature for softmax.
   Training: Boolean = True;                      // In training as opposed to inference mode.
   // Non-trainable parameters.
-  X, X1, X2, X3, X4, X5,
-    X6, X7, X8, U:                TSeqTensor;              // X's at all stages.
+  X, X1, X2, X3, X4, X5, X6, X7:  TSeqTensor;              // X's at all stages.
   X1q, X1v, X1k:                  TSeqTensor;              // X's for Q, K, V.
   Q, K, V:                        TSeqTensor;              // Q is X*Wq, K is X*Wk, V is X*Wv.
   ScoresHead1, ScoresHead2:       array[0..nHead - 1] of TScoresHeadTensor;    // Scores partitioned into nHeads.

@@ -8,8 +8,6 @@ General
 
 1. Check why W1 W2 W0 in zerogradients with non-trainable params. Why not ScoresHead>
 
-2. Change WesModel to WModel.
-
 3. Add SaveModel and LoadModel procedures.
 
 4. In main program: Read Corpus, Read Files (vocab and merge), Tokenize, Embed, Transform.
@@ -45,7 +43,7 @@ Tok[i], Prev[i], Next[i], Alive[i].
 6. Avoid repeated trie rebuilds.
 If the symbol table is fixed, build the trie once after loading. ??
 
-7. Use nSymbols, except use nVocab in Transform.
+7. Use nSymbols, except use nVocab in Transform. Done.
 
 8. Add a regex pretokenizer. Nope, not necessary.
 

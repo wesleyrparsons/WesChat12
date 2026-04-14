@@ -43,8 +43,8 @@
         <IsPartOfProject Value="True"/>
         <IsVisibleTab Value="True"/>
         <EditorIndex Value="7"/>
-        <TopLine Value="116"/>
-        <CursorPos Y="130"/>
+        <TopLine Value="117"/>
+        <CursorPos Y="146"/>
         <UsageCount Value="210"/>
         <Loaded Value="True"/>
       </Unit>
@@ -176,10 +176,6 @@
     </Units>
     <JumpHistory HistoryIndex="29">
       <Position>
-        <Filename Value="util.pas"/>
-        <Caret Line="239" Column="78" TopLine="225"/>
-      </Position>
-      <Position>
         <Filename Value="transform.pas"/>
         <Caret Line="252" Column="94" TopLine="237"/>
       </Position>
@@ -294,6 +290,10 @@
       <Position>
         <Filename Value="Embed.pas"/>
         <Caret Line="147" Column="40" TopLine="118"/>
+      </Position>
+      <Position>
+        <Filename Value="Embed.pas"/>
+        <Caret Line="130" TopLine="116"/>
       </Position>
     </JumpHistory>
     <RunParams>

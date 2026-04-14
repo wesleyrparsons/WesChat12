@@ -8,7 +8,8 @@
       <Unit>
         <Filename Value="WesChat.lpr"/>
         <IsPartOfProject Value="True"/>
-        <CursorPos Y="17"/>
+        <IsVisibleTab Value="True"/>
+        <CursorPos X="27" Y="6"/>
         <UsageCount Value="233"/>
         <Loaded Value="True"/>
       </Unit>
@@ -41,7 +42,6 @@
       <Unit>
         <Filename Value="Embed.pas"/>
         <IsPartOfProject Value="True"/>
-        <IsVisibleTab Value="True"/>
         <EditorIndex Value="7"/>
         <TopLine Value="117"/>
         <CursorPos Y="146"/>
@@ -53,7 +53,7 @@
         <IsPartOfProject Value="True"/>
         <UnitName Value="Notes"/>
         <EditorIndex Value="12"/>
-        <CursorPos X="34"/>
+        <CursorPos X="124" Y="11"/>
         <UsageCount Value="209"/>
         <Loaded Value="True"/>
       </Unit>

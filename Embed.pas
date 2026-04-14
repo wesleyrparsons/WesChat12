@@ -61,7 +61,7 @@ begin
 
     // Copy embedding vector.
     for j := 0 to ModelDim - 1 do
-      X[i, j] := WModel.Embeddings[id, j];
+      X[i, j] := WModel.Embeddings.Value[id, j];
   end;
 end;
 
@@ -118,27 +118,43 @@ var
     end;
   end;
 
+procedure InitEmbeddings(var E: TEmbeddingsTensor);
+var
+  i, j: Integer;
+begin
+  for i := 0 to DimVocab - 1 do
+    for j := 0 to ModelDim - 1 do begin
+      E.Value[i][j] := 0.0;
+      E.Grad[i][j]  := 0.0;
+    end;
+end;
+
 begin
   if VeryVerbose then
     Writeln('Start Training. nVocab = ', nVocab, ' nSymbols = ', nSymbols, ' ModelDim = ', ModelDim,
       ' SeqLen = ', SeqLen, ' Length of TokenizedCorpus = ', Length(TokenizedCorpus));
 
-  // Set the dimensions of the embedding matrix.
-  SetLength(WModel.Embeddings, nSymbols);
-  for i := 0 to nSymbols - 1 do
-    SetLength(WModel.Embeddings[i], ModelDim);
+{  // Set the dimensions of the WVocab matrix.
+  SetLength(WModel.Embeddings.Value, nSymbols);
+  SetLength(WModel.Embeddings.Grad, nSymbols);
+
+  for i := 0 to nSymbols-1 do begin
+    SetLength(WModel.Embeddings.Value[i], ModelD);
+    SetLength(WModel.Embeddings.Grad[i],  ModelDim);
+  end; }
+  InitEmbeddings(WModel.Embeddings);
 
   // Seed the weights with random numbers.
   for i := 0 to nSymbols - 1 do             // Random normal distribution.
     for j := 0 to ModelDim - 1 do           // Mean = 0, SD = 0.02.
-      WModel.Embeddings[i, j] := RandG(0.0, 0.02); // Only time I use this randomizer.
+      WModel.Embeddings.Value[i, j] := RandG(0.0, 0.02); // Only time I use this randomizer.
 
   Writeln('First quarter of two rows of embeddings.');
   for k := 0 to ModelDim div 4 - 1 do
-    Write(WModel.Embeddings[1, k]: 8: 6, ' ');
+    Write(WModel.Embeddings.Value[1, k]: 8: 6, ' ');
   Writeln;
   for k := 0 to ModelDim div 4 - 1 do
-    Write(WModel.Embeddings[2, k]: 8: 6, ' ');
+    Write(WModel.Embeddings.Value[2, k]: 8: 6, ' ');
   Writeln;
   Pause;
 

@@ -57,6 +57,7 @@ type                                                                           /
   TVocabWeightMatrix = array[0..ModelDim - 1] of TVocabVector;                 // D x MaxVocab
   TSeqVocabMatrix = array [0..SeqLen - 1] of TVocabVector;                     // L x MaxVocab
   TFSVector = array[0..SeqLen - 1] of Single;                                  // L
+  TEmbeddingsMatrix = array[0..DimVocab - 1] of TSeqVector;                    // Array for embeddings matrix.
 
   TSeqTensor = record
     Value, Grad:  TSeqMatrix;
@@ -94,6 +95,9 @@ type                                                                           /
   TScoresHeadTensor = record
     Value, Grad:  TScoresMatrix;
   end;
+  TEmbeddingsTensor = record
+    Value, Grad:  TEmbeddingsMatrix;
+  end;
 
   TBooleanVector = array of Boolean;   // Array of Boolean.
   TIVector = array of Integer;         // Array of integers for corpuses.
@@ -102,12 +106,11 @@ type                                                                           /
   TFVector = array of Single;          // Array of single for embedding matrix.
   TFMatrix = array of TFVector;        // Array of array of single for embedding matrix.
   TSVector = array of String;          // Array of string.
-  TEmbeddingMatrix = array[0..DimVocab - 1] of TSeqVector; // Array for embedding matrix.
   TPart = (B, E, F, G);                // Length = VocabSize * Dimension. But only use nSymbols in rows.
   TSymbolTable = TRBSVector;           // Array of symbols. So index of array is a symbol string.
 
   WModelType = record                  //  Model of trainable parameters.
-    Embeddings: TFMatrix;              // Row is token, column is weights.
+    Embeddings:                     TEmbeddingsTensor;     // Row is token, column is weights.
     Wq, Wk, Wv, W0:                 TWeightTensor;
     W1:                             TWeightProjTensor;     // Weights.
     W2:                             TWeightProjTensorT;    // Weights.
@@ -142,7 +145,7 @@ var
   Q, K, V:                        TSeqTensor;              // Q is X*Wq, K is X*Wk, V is X*Wv.
   ScoresHead1, ScoresHead2:       array[0..nHead - 1] of TScoresHeadTensor;    // Scores partitioned into nHeads.
   Hidden1, Hidden2:               THiddenTensor;           // Neural net payer.
-  WVocab:                         TVocabWeightTensor;      // ModelDim x MaxVocab. Vocab is dimensioned as MaxVocab, but only uses nVocab.
+  //WVocab:                         TVocabWeightTensor;      // ModelDim x MaxVocab. Vocab is dimensioned as MaxVocab, but only uses nVocab.
   Logits, TopGradient:            TSeqVocabMatrix;         // Logit and Gradient.
   // Caches.
   LNInvStd1:  TFSVector;          // Caches for Layer-Norm.

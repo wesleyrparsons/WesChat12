@@ -235,14 +235,22 @@ begin
         // 3A. Multiplication/Overwrite. Obtain Logits from X7 and Vocab.
 
         // Multiplication: Input X7, Vocab. Output Logits.
-        // Equation: Logits = X7 · WVocab. Logits in R^{L x nVocab}. X in R^{L x D}.  WVocab in R^{D x nVocab}.
-        MatMulNN(@X7.Value[0, 0], @WVocab.Value[0, 0], @Logits[0, 0], SeqLen, nVocab, ModelDim);
+      { // Equation: Logits = X7 · WVocab. Logits in R^{L x nVocab}. X in R^{L x D}.  WVocab in R^{D x nVocab}.
+           MatMulNN(@X7.Value[0, 0], @WVocab.Value[0, 0], @Logits[0, 0], SeqLen, nVocab, ModelDim);}
 
+        { Use Embeddings {nVocab x D}, instead of WVocab, doing weight-tying }
+        // Equation: Logits = X7 · Embeddings-T. Logits in R^{L x nVocab}. X in R^{L x D}.  Embeddingsin R^{nVocab x D}.
+           MatMulNT(@X7.Value[0, 0], @Embeddings.Value[0, 0], @Logits[0, 0], SeqLen, nVocab, ModelDim);
+                             // chnage last 2 params above??
         // Display Logits matrix.
         VTPDisplayX('Display Logits, in transform, before softmax.', Logits, B);
 
-        // Display WVocab.Value matrix.
-        VTPDisplayX('Display WVocab.Value, in transform, before computing Logit.', WVocab.Value, B);
+        { // Display WVocab.Value matrix.
+        VTPDisplayX('Display WVocab.Value in transform, before computing Logit.', WVocab.Value, B); }
+
+        // Display Embeddings.Value matrix.
+        // VTPDisplayX('Display Embeddings.Value in transform, before computing Logit.', Embeddings.Value, B);
+           //Need display for Embeddings.
 
         // 3B. Softmax. Obtain Logits from Logits.
 
@@ -259,22 +267,32 @@ begin
         // Equation: TopGradient in R^{L x nVocab}. Logits in R^{L x nVocab}.
         GradientFromProbabilities;
 
-        // Display TopGradient matrix.
+   //fis this.     // Display TopGradient matrix.
         VTPDisplayX('Display TopGradient, in transform, after Logit calculation.', TopGradient, B);
 
       // BACK PROPAGATION. FEED BACKWARD NETWORK.
 
       // 2F. Backprop TopGradient creates X7 Grad: Input TopGradient, WVocabᵀ. Output X7.Grad.
 
-      // Equation: X7.Grad = TopGradient · WVocabᵀ.Value. X7.Grad in R^{L x D}. TopGradient in R^{L x nVocab}. WVocabᵀ in R^{nVocab x D}.
+      { // Equation: X7.Grad = TopGradient · WVocabᵀ.Value. X7.Grad in R^{L x D}. TopGradient in R^{L x nVocab}. WVocabᵀ in R^{nVocab x D}.
       writeln('Stage 2F');
       cblas_sgemm(101, 111, 112,  SeqLen, ModelDim, nVocab,  1.0,   // 112 = Transposed.
-        @TopGradient[0, 0], DimVocab,  @WVocab.Value[0, 0], DimVocab, 0.0,  @X7.Grad[0, 0], ModelDim);
+        @TopGradient[0, 0], DimVocab,  @WVocab.Value[0, 0], DimVocab, 0.0,  @X7.Grad[0, 0], ModelDim); }
+
+      // Equation: X7.Grad = TopGradient · Embeddings.Value. X7.Grad in R^{L x D}. TopGradient in R^{L x nVocab}. Embeddings in R^{D x nVocab}.
+      writeln('Stage 2F');
+      cblas_sgemm(101, 111, 111,  SeqLen, ModelDim, nVocab,  1.0,
+        @TopGradient[0, 0], DimVocab,  @Embeddings.Value[0, 0], DimVocab, 0.0,  @X7.Grad[0, 0], ModelDim);
 
       // Backprop TopGradient modifies/overwrites WVocab: Input X7ᵀ, TopGradient. Output WVocab.Grad.
-      // Equation: WVocab.Grad = X7ᵀ · TopGradient. WVocab.Grad in R^{D x nVocab}. X7ᵀ in R^(D x L}. TopGradient in R^{L x nVocab}.
+      // Equation: WVocab.Grad = X7ᵀ · TopGradient. WVocab.Grad in R^{D x nVocab}. X7ᵀ in R^(D x L). TopGradient in R^{L x nVocab}.
+      { cblas_sgemm(101, 112, 111,  ModelDim, nVocab, SeqLen,  1.0,  @X7.Value[0, 0], ModelDim,
+        @TopGradient[0,0], DimVocab,  1.0,  @.Grad[0,0], DimVocab); }
+
+      // Backprop TopGradient modifies/overwrites Embeddings-T: Input X7ᵀ, TopGradient. Output Embeddings-T.Grad.
+      // Equation: Embeddings-T.Grad = X7ᵀ · TopGradient. Embeddings-T.Grad in R^{nVocab x D}. X7ᵀ in R^(D x L}. TopGradient in R^{L x nVocab}.
       cblas_sgemm(101, 112, 111,  ModelDim, nVocab, SeqLen,  1.0,  @X7.Value[0, 0], ModelDim,
-        @TopGradient[0,0], DimVocab,  1.0,  @WVocab.Grad[0,0], DimVocab);
+        @TopGradient[0,0], DimVocab,  1.0,  @Embeddings.Grad[0,0], DimVocab);
 
       // Backprop Split X7 Grad into X5 and X6: Input X5.Grad, X7.Grad. Output dX.Grad.
       // Equation: X5.Grad = X5.Grad + X7.Grad. All in R^{L x D}.

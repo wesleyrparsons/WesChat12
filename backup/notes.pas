@@ -69,14 +69,11 @@ b. Use MatMul wrapper for all cblas.
 
 1. Many models reuse the embedding matrix for output projection:
 logits = X_final · Embedding^T.
-This is called weight tying. Don't need WVocab.
+This is called weight tying. WVocab not needed.
 The gradient has to hit the embedding matrix after X0.
 
 2. What to do with nTokens and append proc.
-Should SeqLen be a BVectorType. Good question!
-In Tokenize, add maxheap with a hash table to speed up tokenization.
-Store attention softmax outputs.
-Do I need them intact for backprop through softmax.
+Store attention softmax outputs. Do I need them intact for backprop through softmax.
 
 3. Put Hidden on the heap; make it a dynamically allocated variable. No. cblas will not work.
 

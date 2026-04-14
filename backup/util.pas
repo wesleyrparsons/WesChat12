@@ -150,7 +150,7 @@ begin
     XGUniformW2(W2.Value, ModelDimProj, ModelDim);
 
     // Initialize WVocab weight matrices.
-    XGUniformWVocab(WVocab.Value, ModelDim, nVocab);
+    //XGUniformWVocab(Embeddings.Value, nVocab, ModelDim);
 
     // Initialize b1 and b2.
     FillChar(b1.Value, SizeOf(b1.Value), 0);
@@ -178,12 +178,22 @@ begin
   FillChar(X5.Grad, SizeOf(X5.Grad), 0);
   FillChar(X6.Grad, SizeOf(X6.Grad), 0);
   FillChar(X7.Grad, SizeOf(X7.Grad), 0);
-  FillChar(X8.Grad, SizeOf(X8.Grad), 0);
+  FillChar(X1k.Grad, SizeOf(X1k.Grad), 0);
+  FillChar(X1q.Grad, SizeOf(X1q.Grad), 0);
+  FillChar(X1v.Grad, SizeOf(X1v.Grad), 0);
+  FillChar(K.Grad, SizeOf(K.Grad), 0);
+  FillChar(Q.Grad, SizeOf(Q.Grad), 0);
+  FillChar(V.Grad, SizeOf(V.Grad), 0);
+  FillChar(Hidden1.Grad, SizeOf(Hidden1.Grad), 0);
+  FillChar(Hidden2.Grad, SizeOf(Hidden2.Grad), 0);
   with WesModel do begin
+    FillChar(Wk.Grad, SizeOf(Wk.Grad), 0);
+    FillChar(Wq.Grad, SizeOf(Wq.Grad), 0);
+    FillChar(Wv.Grad, SizeOf(Wv.Grad), 0);
     FillChar(W0.Grad, SizeOf(W0.Grad), 0);
     FillChar(W1.Grad, SizeOf(W1.Grad), 0);
     FillChar(W2.Grad, SizeOf(W2.Grad), 0);
-    FillChar(WVocab.Grad, SizeOf(WVocab.Grad), 0);
+    FillChar(Embeddings.Grad, SizeOf(Embeddings.Grad), 0);
     FillChar(b1.Grad, SizeOf(b1.Grad), 0);
     FillChar(b2.Grad, SizeOf(b2.Grad), 0);
     FillChar(Gamma1.Grad, SizeOf(Gamma1.Grad), 0);
@@ -211,7 +221,7 @@ begin
     // W1, W2: feed-forward and vocab projection.
     cblas_saxpy(ModelDim * ModelDimProj, -LearningRate, @W1.Grad[0, 0], 1, @W1.Value[0, 0], 1);
     cblas_saxpy(ModelDimProj * ModelDim, -LearningRate, @W2.Grad[0, 0], 1, @W2.Value[0, 0], 1);
-    cblas_saxpy(ModelDim * nVocab, -LearningRate, @WVocab.Grad[0, 0], 1, @WVocab.Value[0, 0], 1);
+    //cblas_saxpy(ModelDim * nVocab, -LearningRate, @WVocab.Grad[0, 0], 1, @WVocab.Value[0, 0], 1);
 
     // b1, b2: biases.
     cblas_saxpy(ModelDimProj, -LearningRate, @b1.Grad[0], 1, @b1.Value[0], 1);

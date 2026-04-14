@@ -54,7 +54,7 @@ type                                                                           /
   TWeightProjMatrixT = array[0..ModelDimProj - 1] of TSeqVector;               // DB x D
   THiddenMatrix = array[0..SeqLen - 1] of TSeqVectorProj;                      // L x DB
   TScoresMatrix = array[0..SeqLen - 1] of TDimVector;                          // L x L
-  TVocabWeightMatrix = array[0..ModelDim - 1] of TVocabVector;                 // D x MaxVocab
+  //TVocabWeightMatrix = array[0..ModelDim - 1] of TVocabVector;                 // D x MaxVocab
   TSeqVocabMatrix = array [0..SeqLen - 1] of TVocabVector;                     // L x MaxVocab
   TFSVector = array[0..SeqLen - 1] of Single;                                  // L
   TEmbeddingsMatrix = array[0..DimVocab - 1] of TSeqVector;                    // Array for embeddings matrix.
@@ -86,12 +86,12 @@ type                                                                           /
   TWeightProjTensorT = record
     Value, Grad:  TWeightProjMatrixT;
   end;
-  TVocabWeightTensor = record
+  {TVocabWeightTensor = record
     Value, Grad:  TVocabWeightMatrix;
   end;
   TSeqVocabTensor = record
     Value, Grad:  TSeqVocabMatrix;
-  end;
+  end; }
   TScoresHeadTensor = record
     Value, Grad:  TScoresMatrix;
   end;
@@ -110,7 +110,7 @@ type                                                                           /
   TSymbolTable = TRBSVector;           // Array of symbols. So index of array is a symbol string.
 
   WModelType = record                  //  Model of trainable parameters.
-    Embeddings:                     TEmbeddingsTensor      // Row is token, column is weights.
+    Embeddings:                     TEmbeddingsTensor;     // Row is token, column is weights.
     Wq, Wk, Wv, W0:                 TWeightTensor;
     W1:                             TWeightProjTensor;     // Weights.
     W2:                             TWeightProjTensorT;    // Weights.

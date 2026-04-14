@@ -31,7 +31,7 @@ begin
   ZeroGradients(WModel);
 
   // Display X.Value matrix.
-  VTPDisplayX('Display X.Value, beginning, in transform, before any action.', X.Value, G);
+  VTPDisplayX('Display X.Value in transform, before any action.', X.Value, G);
 
   with WModel do begin
   // BLOCK 0.
@@ -47,7 +47,7 @@ begin
     LayerNormForward(X.Value, X1.Value, SeqLen, Gamma1.Value, Beta1.Value, LNXhat1, LNInvStd1);
 
     // Display X1.Value matrix.
-    VTPDisplayX('Display X1.Value, beginning, after layer-norming.', X1.Value, B);
+    VTPDisplayX('Display X1.Value after layer-norming.', X1.Value, B);
 
     // 1B. Split. Implicit split into X1 and accumulate into X4.
 
@@ -281,7 +281,7 @@ begin
 
       // Equation: X7.Grad = TopGradient · Embeddings.Value. X7.Grad in R^{L x D}. TopGradient in R^{L x nVocab}. Embeddings in R^{D x nVocab}.
       writeln('Stage 2F');
-      cblas_sgemm(101, 111, 111,  SeqLen, ModelDim, nVocab,  1.0,
+      cblas_sgemm(101, 111, 112,  SeqLen, ModelDim, nVocab,  1.0,
         @TopGradient[0, 0], DimVocab,  @Embeddings.Value[0, 0], DimVocab, 0.0,  @X7.Grad[0, 0], ModelDim);
 
       // Backprop TopGradient modifies/overwrites WVocab: Input X7ᵀ, TopGradient. Output WVocab.Grad.

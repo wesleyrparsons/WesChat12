@@ -28,8 +28,10 @@ procedure DisplayX(const X: THiddenMatrix; const Part: TPart = B); overload;
 procedure VTPDisplayX(const Mess: string; const X: THiddenMatrix; const Part: TPart = B); overload;
 procedure DisplayX(const X: TSeqVocabMatrix; const Part: TPart = B); overload;
 procedure VTPDisplayX(const Mess: string; const X: TSeqVocabMatrix; const Part: TPart = B); overload;
-procedure DisplayX(const X: TVocabWeightMatrix; const Part: TPart = B); overload;
-procedure VTPDisplayX(const Mess: string; const X: TVocabWeightMatrix; const Part: TPart = B); overload;
+//procedure DisplayX(const X: TVocabWeightMatrix; const Part: TPart = B); overload;
+//procedure VTPDisplayX(const Mess: string; const X: TVocabWeightMatrix; const Part: TPart = B); overload;
+procedure DisplayX(const X: TEmbeddingsMatrix; const Part: TPart = B); overload;
+procedure VTPDisplayX(const Mess: string; const X: TEmbeddingsMatrix; const Part: TPart = B); overload;
 procedure DisplayX(const X: TScoresMatrix; const Part: TPart = B); overload;
 procedure VTPDisplayX(const Mess: string; const X: TScoresMatrix; const Part: TPart = B); overload;
 
@@ -355,6 +357,77 @@ end;
 
 // Conditional form of DisplayX.
 procedure VTPDisplayX(const Mess: string; const X: TVocabWeightMatrix; const Part: TPart = B); overload;
+begin
+  if VerboseTransform then begin
+    Write(Mess);
+    PartScope(Part);
+    DisplayX(X, Part);
+    Pause;
+  end;
+end;
+
+// Display a Embeddings matrix, B, E, F, or G.
+procedure DisplayX(const X: TEmbeddingsMatrix; const Part: TPart = B); overload;
+const
+  tStride = 10;
+var
+  i, j, iB, iE, jB, jE: Integer;
+  vStride: Integer = 1;
+  hStride: Integer = 1;
+begin
+  Case Part of
+    B: begin
+      iB := 0;
+      iE := 9;
+      jB := 0;
+      jE := 9;
+    end;
+    E: begin
+      iB := nVocab - 9;
+      iE := nVocab;
+      jB := High(X[0]) - 9;;
+      jE := High(X[0]);
+    end;
+    F: begin
+      iB := 0;
+      iE := nVocab;
+      jB := 0;
+      jE := High(X[0]);
+    end;
+    G: begin
+      vStride := Floor(nVocab / tStride);
+      hStride := Floor(Length(X[0]) / tStride);
+      iB := 0;
+      iE := tStride;
+      jB := 0;
+      jE := tStride;
+    end;
+  end;
+  Write('       ');
+  for j := jB to jE do
+    Write(j * hStride: 8, '    ');
+  if Part = G then
+    Write(High(X[0]): 8, '    ');
+  Writeln;
+  for i := iB to iE do begin
+    Write(i * vStride: 4);
+    for j := jB to jE do
+      Write(X[i * vStride, j * hStride]: 11: 5, ' ');
+    if Part = G then
+      Write(X[i * vStride, High(X[0])]: 11: 5, ' ');
+    Writeln;
+  end;
+  if Part = G then begin
+    Write(nVocab: 4);
+    for j := jB to jE do
+      Write(X[nVocab, j * hStride]: 11: 5, ' ');
+    Write(X[nVocab, High(X[0])]: 11: 5, ' ');
+    Writeln;
+  end;
+end;
+
+// Conditional form of DisplayX.
+procedure VTPDisplayX(const Mess: string; const X: TEmbeddingsMatrix; const Part: TPart = B); overload;
 begin
   if VerboseTransform then begin
     Write(Mess);

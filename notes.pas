@@ -6,9 +6,8 @@ unit Notes;
 
 General
 
-1. Check why W1 W2 W0 in zerogradients with non-trainable params. Why not ScoresHead>
+1. Check whixh trainable and non-t params need to be in zerogradients.
 
-2. Check init of Emebddings. Once for sure (both Value and Grad) in Transform. Also in Embeddings. Also Grad in Grad inits.
 3. Add SaveModel and LoadModel procedures.
 
 4. In main program: Read Corpus, Read Files (vocab and merge), Tokenize, Embed, Transform.

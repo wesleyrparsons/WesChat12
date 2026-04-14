@@ -86,12 +86,12 @@ type                                                                           /
   TWeightProjTensorT = record
     Value, Grad:  TWeightProjMatrixT;
   end;
-  TVocabWeightTensor = record
+  {TVocabWeightTensor = record
     Value, Grad:  TVocabWeightMatrix;
   end;
   TSeqVocabTensor = record
     Value, Grad:  TSeqVocabMatrix;
-  end;
+  end; }
   TScoresHeadTensor = record
     Value, Grad:  TScoresMatrix;
   end;

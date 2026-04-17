@@ -3,7 +3,7 @@ program WesChat;
 {$mode ObjFPC}{$H+}{$I proprietary.txt}
 
 { WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wespar.com.}
-{ Note: Edited 4/14/2026 3 pm}
+{ Note: Edited 4/17/2026 7 am}
 { Notes: TC comes from WesSymbolizeor or ChatGPTTokenize; let's make WesModel come from Embed }
 uses
   CombineTables,

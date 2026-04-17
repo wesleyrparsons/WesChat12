@@ -27,7 +27,8 @@ procedure LayerNormForward(const InX: TSeqMatrix; var OutX: TSeqMatrix; SeqLen: 
   const Gamma, Beta: TSeqVector; var LNXhat: TSeqMatrix; var LNInvStd: TFSVector);
 procedure LayerNormBackward(const dY: TSeqMatrix; var dX: TSeqMatrix; var dGamma, dBeta: TSeqVector;
   SeqLen: Integer; const Gamma: TSeqVector; var LNXhat: TSeqMatrix; var LNInvStd: TFSVector);
-procedure GradientFromProbabilities;
+procedure GradientFromKLDivergence;
+procedure GradientFromCEProbabilities;
 procedure BackpropAdd(const dOut: TSeqMatrix; var dA, dB: TSeqMatrix; const L, D: Integer);
 
 implementation
@@ -383,8 +384,8 @@ begin
   end;
 end;
 
-// Calculate cross-entropy gradient from logits and target. ??Gradient should just be a tseqmatrix
-procedure GradientFromProbabilities;
+// Calculate cross-entropy gradient from logits and target.
+procedure GradientFromCEProbabilities;
 var
   i, v: Integer;
 begin
@@ -395,14 +396,34 @@ begin
   end;
 end;
 
+// Return the one-hot probability for timestep i and vocab index v.
+// TargetTokens[i] is the correct token ID for timestep i.
+function TargetDist(i, v: Integer): Single;
+begin
+  if v = TargetTokens[i] then
+    Result := 1.0
+  else
+    Result := 0.0;
+end;
+
 // Calculate Kullback-Leibler gradient from logits and target.
+// Gradient for KL divergence: dL/dLogits = Q - P
+// Gradient for KL divergence with one-hot targets:
+// dL/dLogits = Q - P
 procedure GradientFromKLDivergence;
 var
-  i, v: Integer;
+  i, v, t: Integer;
 begin
-  for i := 0 to SeqLen - 1 do
-    for v := 0 to nVocab - 1 do
-      TopGradient[i, v] := Logits[i, v] - TargetDist[i, v];
+  for i := 0 to SeqLen - 1 do begin
+    t := TargetTokens[i];  // correct token ID for this timestep
+
+    for v := 0 to nVocab - 1 do begin
+      if v = t then
+        TopGradient[i, v] := Logits[i, v] - 1.0   // Q - 1
+      else
+        TopGradient[i, v] := Logits[i, v] - 0.0;  // Q - 0
+    end;
+  end;
 end;
 
 // Back propagation addition.

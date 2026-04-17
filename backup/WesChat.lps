@@ -144,8 +144,8 @@
         <UnitName Value="Util"/>
         <IsVisibleTab Value="True"/>
         <EditorIndex Value="10"/>
-        <TopLine Value="384"/>
-        <CursorPos Y="418"/>
+        <TopLine Value="378"/>
+        <CursorPos X="60" Y="413"/>
         <UsageCount Value="229"/>
         <Loaded Value="True"/>
       </Unit>

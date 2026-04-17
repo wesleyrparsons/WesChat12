@@ -139,10 +139,10 @@ function QueryEmbed: Boolean;
 begin
   Write('Do you wish to proceed to training? (y/n) ');
   Readln(Ch);
-  if UpCase(Ch) = 'Y' then
-    Result := True
+  if UpCase(Ch) = 'N' then
+    Result := False
   else
-    Result := False;
+    Result := True;
 end;
 
 // Start of main program.

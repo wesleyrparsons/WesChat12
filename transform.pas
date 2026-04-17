@@ -263,9 +263,9 @@ begin
         VTPDisplayX('Display Logits, in transform, after softmax.', Logits, B);
 
         // 3C. Cross-Entropy Loss. Obtain TopGradient from Logits.
-        // Gradient: Input Logits. Output TopGradient.
+        // Gradient: Input Logits. Output TopGradient. Also option of CalculateGradient from KLDivergence.
         // Equation: TopGradient in R^{L x nVocab}. Logits in R^{L x nVocab}.
-        GradientFromProbabilities;
+        GradientFromCEProbabilities;
 
    //fis this.     // Display TopGradient matrix.
         VTPDisplayX('Display TopGradient, in transform, after Logit calculation.', TopGradient, B);

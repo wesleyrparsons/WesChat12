@@ -236,7 +236,7 @@ begin
     // Embeddings.
     for i := 0 to SeqLen - 1 do begin
       v := TokenID[i];    // Same as TokenizedCorpus;
-      cblas_saxpy(ModelDim, -LearningRate, @X.Grad[i,0], 1, @Embeddings[0, v], 1);
+      cblas_saxpy(ModelDim, -LearningRate, @X.Grad[i,0], 1, @Embeddings.Value[0, v], 1);
     end;
   end;
 end;
@@ -383,7 +383,7 @@ begin
   end;
 end;
 
-// Calculate gradient from logits and target. ??Gradient should just be a tseqmatrix
+// Calculate cross-entropy gradient from logits and target. ??Gradient should just be a tseqmatrix
 procedure GradientFromProbabilities;
 var
   i, v: Integer;
@@ -393,6 +393,16 @@ begin
       TopGradient[i, v] := Logits[i, v];
     TopGradient[i, TargetTokens[i]] := Logits[i, TargetTokens[i]] - 1.0;
   end;
+end;
+
+// Calculate Kullback-Leibler gradient from logits and target.
+procedure GradientFromKLDivergence;
+var
+  i, v: Integer;
+begin
+  for i := 0 to SeqLen - 1 do
+    for v := 0 to nVocab - 1 do
+      TopGradient[i, v] := Logits[i, v] - TargetDist[i, v];
 end;
 
 // Back propagation addition.

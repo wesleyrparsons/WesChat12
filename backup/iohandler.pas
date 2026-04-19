@@ -19,6 +19,8 @@ procedure LoadSymbolTable(const FileName: string; var SymbolTable: TSymbolTable)
 procedure LoadTokenList(const TokenFileName: string; var TokenizedCorpus: TIVector);
 procedure SaveSymbolTable(const SymbolFileName: string; const SymbolTable: TSymbolTable);
 procedure SaveTokenList(const TokenizedCorpus: TIVector; const TokenFileName: String);
+procedure SaveModel(const FileName: string; const Model: WModelType; var Success: Boolean);
+procedure LoadModel(const FileName: string; var Model: WModelType; var Success: Boolean);
 
 implementation
 
@@ -202,6 +204,37 @@ begin
   CloseFile(F);
   Writeln('File ', TokenFileName, ' successfully saved.');
   Writeln;
+end;
+
+procedure SaveModel(const FileName: string; const Model: WModelType; var Success: Boolean);
+var
+  F: file of WModelType;
+begin
+  Success := False;   // Ddefault.
+  Assign(F, FileName);
+
+  try
+    Rewrite(F);       // May err.
+    Write(F, Model);  // May err.
+    Success := True;  // Only reached if both succeed.
+  except
+    Success := False;
+  end;
+
+  Close(F);           // Safe even if Rewrite failed.
+end;
+
+procedure LoadModel(const FileName: string; var Model: WModelType; var Success: Boolean);
+var
+  F: file of WModelType;
+begin
+  Assign(F, FileName);
+  Reset(F);
+  try
+    Read(F, Model);
+  finally
+    Close(F);
+  end;
 end;
 
 {procedure SaveMatrix(var F: File; const M: array of array of Single);

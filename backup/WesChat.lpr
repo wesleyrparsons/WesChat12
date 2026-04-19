@@ -2,9 +2,9 @@ program WesChat;
 
 {$mode ObjFPC}{$H+}{$I proprietary.txt}
 
-{ WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wespar.com.}
-{ Note: Edited 4/17/2026 7 am}
-{ Notes: TC comes from WesSymbolizeor or ChatGPTTokenize; let's make WesModel come from Embed }
+{ WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wespar.com}
+{ Note: Edited 4/19/2026 2 pm on CruiseK Kopia}
+{ Notes: TC comes from WesSymbolizeor or ChatGPTTokenize; WesModel (with Embeddings) comes from Embed }
 uses
   CombineTables,
   Crt,
@@ -14,12 +14,10 @@ uses
   FileUtil,
   Global,
   IOHandler,
-  Transform,
   Symbolize,
   SysUtils,
-  Tokenize,
   WesTokenize,
-  Windows, Unit1;
+  Windows;
 
 var
   Corpus: TBVector;                    // Vector of byte.
@@ -139,10 +137,10 @@ function QueryEmbed: Boolean;
 begin
   Write('Do you wish to proceed to training? (y/n) ');
   Readln(Ch);
-  if UpCase(Ch) = 'Y' then
-    Result := True
+  if UpCase(Ch) = 'N' then
+    Result := False
   else
-    Result := False;
+    Result := True;
 end;
 
 // Start of main program.
@@ -504,3 +502,15 @@ begin
   end;
 end.
 
+{        ChDir(WorkingDir);   // Save model.
+        Write('Enter filename: ');
+        Readln(ModelFileName);
+        SaveModel(ModelFileName, WModel, Success);
+        ChDir('..');
+        if Success then
+          Writeln('File ', f, ' successfully saved.')
+        else
+          Writeln('File not saved.');
+        Pause;
+      end;
+}

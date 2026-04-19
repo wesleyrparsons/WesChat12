@@ -22,9 +22,13 @@ const
 procedure MatMulFullNN(const A, B: PSingle; C: PSingle; M, N, K, lda, ldb, ldc: Integer);
 procedure MatMulFullTN(const A, B: PSingle; C: PSingle; M, N, K, lda, ldb, ldc: Integer);
 procedure MatMulFullNT(const A, B: PSingle; C: PSingle; M, N, K, lda, ldb, ldc: Integer);
+procedure MatMulFullAccNN(const A, B: PSingle; C: PSingle; M, N, K, lda, ldb, ldc: Integer);
+procedure MatMulFullAccNT(const A, B: PSingle; C: PSingle; M, N, K, lda, ldb, ldc: Integer);
+procedure MatMulFullAccTN(const A, B: PSingle; C: PSingle; M, N, K, lda, ldb, ldc: Integer);
 procedure MatMulNN(const A, B: PSingle; C: PSingle; M, N, K: Integer);
 procedure MatMulNT(const A, B: PSingle; C: PSingle; M, N, K: Integer);
 procedure MatMulTN(const A, B: PSingle; C: PSingle; M, N, K: Integer);
+procedure AddScaled(const N: Integer; const Alpha: Single; const X: PSingle; Y: PSingle);
 procedure MatAdd(const A, B: TSeqMatrix; var C: TSeqMatrix; Rows, Cols: Integer);
 
 // Partition and concatenate procedures.
@@ -167,6 +171,53 @@ begin
     C, ldc);
 end;
 
+// Full matrix multiply, no transpose/no transpose, accumulate.
+// C := C + A * B
+procedure MatMulFullAccNN(const A, B: PSingle; C: PSingle;
+  M, N, K, lda, ldb, ldc: Integer);
+begin
+  cblas_sgemm(RowMajor,
+    NoTrans, NoTrans,
+    M, N, K,
+    1.0,
+    A, lda,
+    B, ldb,
+    1.0,     // accumulate
+    C, ldc);
+end;
+
+
+// Full matrix multiply, A transpose, B no transpose, accumulate.
+// C := C + A^T * B
+procedure MatMulFullAccNT(const A, B: PSingle; C: PSingle;
+  M, N, K, lda, ldb, ldc: Integer);
+begin
+  cblas_sgemm(RowMajor,
+    Trans, NoTrans,
+    M, N, K,
+    1.0,
+    A, lda,
+    B, ldb,
+    1.0,     // accumulate
+    C, ldc);
+end;
+
+
+// Full matrix multiply, A no transpose, B transpose, accumulate.
+// C := C + A * B^T
+procedure MatMulFullAccTN(const A, B: PSingle; C: PSingle;
+  M, N, K, lda, ldb, ldc: Integer);
+begin
+  cblas_sgemm(RowMajor,
+    NoTrans, Trans,
+    M, N, K,
+    1.0,
+    A, lda,
+    B, ldb,
+    1.0,     // accumulate
+    C, ldc);
+end;
+
 // Matrix multiplication, no transpose, overwrite, row-major.
 procedure MatMulNN(const A, B: PSingle; C: PSingle; M, N, K: Integer);
 begin
@@ -225,6 +276,15 @@ begin
     B, K,
     1.0,
     C, N);
+end;
+
+procedure AddScaled(const N: Integer; const Alpha: Single; const X: PSingle; Y: PSingle);
+begin
+  cblas_saxpy(N,
+    Alpha,
+    X, 1,
+    Y, 1
+  );
 end;
 
 // Matrix addition, overwrite.

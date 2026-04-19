@@ -9,6 +9,7 @@ interface
 uses
   Display,
   Global,
+  IOHandler,
   Math,
   SysUtils,
   Transform,
@@ -70,12 +71,13 @@ procedure RunEmbed(const TokenizedCorpus: TIVector);
 var
   i, j, k: Integer;
   Start, EmbedLoop: Integer;
-  Stride: Integer = 64;      // Stride 64 toekns every sequence.
+  Stride: Integer = 64;      // Stride 64 tokens every sequence.
 
   procedure ReadEmbedIfKeyPressed;
   var
     key: char;
-    f: string;
+    Success: Boolean;
+    ModelFileName: string;
   begin
     key := CheckForControlKey;
     case key of
@@ -107,11 +109,15 @@ var
         Pause;
       end;
       's', 'S': begin
-        ChDir(WorkingDir);
-        f := WorkingDir + FormatDateTime('yyyy-mm-dd_hhnnss' + '.sym', Now);
-        // SaveModel;
+        ChDir(WorkingDir);   // Save model.
+        Write('Enter filename: ');
+        Readln(ModelFileName);
+        SaveModel(ModelFileName, WModel, Success);
         ChDir('..');
-        // Writeln('File ', f, ' successfully saved.');
+        if Success then
+          Writeln('File ', f, ' successfully saved.')
+        else
+          Writeln('File not saved.');
         Pause;
       end;
 
@@ -119,18 +125,11 @@ var
   end;
 
 begin
+  nVocab := nSymbols;    // Need nVocab (second name for variable) for Transform.
+
   if VeryVerbose then
     Writeln('Start Training. nVocab = ', nVocab, ' nSymbols = ', nSymbols, ' ModelDim = ', ModelDim,
       ' SeqLen = ', SeqLen, ' Length of TokenizedCorpus = ', Length(TokenizedCorpus));
-
-{  // Set the dimensions of the WVocab matrix.
-  SetLength(WModel.WVocab.Value, nSymbols);
-  SetLength(WModel.WVocab.Grad, nSymbols);
-
-  for i := 0 to nSymbols-1 do begin
-    SetLength(WModel.WVocab.Value[i], ModelD);
-    SetLength(WModel.WVocab.Grad[i],  ModelDim);
-  end; }
 
   // Seed the weights with random numbers.
   for i := 0 to nSymbols - 1 do             // Random normal distribution.
@@ -193,7 +192,6 @@ begin
     Start := Start + Stride;
   end;
 
-  nVocab := nSymbols;    // Need nVocab (second name for variable) for Transform.
   Writeln('End of training. Press <CR> to continue.');
   Readln;
 end;

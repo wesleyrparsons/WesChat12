@@ -450,17 +450,11 @@ var
       'm', 'M':
         begin
           Writeln;
-          Writeln('Maximum symbols = ', MaxVocab, '. Maximum merges = ', MaxMerges,
+          Writeln('Maximum symbols = ', DimVocab, '. Maximum merges = ', MaxMerges,
             '. Hash capacity = ', H.Capacity, '. Used slots = ', H.Used, '. Best count = ', BestCount, '.');
           Write(DateTimeToStr(Now), '  X = Exit program. B = Break out of merge loop. V = toggle Verbose mode. P = Pause.');
-          Writeln('  W = WesChat Information. M = Merging information. Y = set maximum sYmbols. S = Save. Merging...');
+          Writeln('  W = WesChat Information. M = Merging information. S = Save. Merging...');
           Pause;
-        end;
-      'y', 'Y':
-        begin
-          Writeln;
-          Write('Current maximum symbols = ', MaxVocab, '. Enter new maximum symbols: ');
-          ReadLn(MaxVocab);
         end;
       's', 'S':
         begin
@@ -478,7 +472,7 @@ begin
   MergeCount := 0;
 
   Write(DateTimeToStr(Now), '  X = Exit program. B = Break out of merge loop. V = toggle Verbose mode.');
-  Writeln('  P = Program information. M = Merging information. S = maximum Symbols. Merging...');
+  Writeln('  P = Program information. M = Merging information. Merging...');
   Writeln;
 
   if ShowMergeWork then
@@ -517,9 +511,9 @@ begin
     end;
 
     // Stop if symbol table is full.
-    if Length(SymbolTable) >= MaxVocab then begin
+    if Length(SymbolTable) >= DimVocab then begin
       Writeln;
-      Writeln('Stopping: symbol table reached ', MaxVocab, ' entries.');
+      Writeln('Stopping: symbol table reached ', DimVocab, ' entries.');
       Break;
     end;
 

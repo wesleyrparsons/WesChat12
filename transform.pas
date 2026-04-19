@@ -55,25 +55,25 @@ begin
 
     // Full Size Multiplication/Overwrite: Input X1, Wq. Output Q.
     // Equation: Q = X1 · Wq. Q in R^{L x D}. X1 in R^{L · D}. Wq in R^{D x D}. M=SeqLen N=ModelDim K=ModelDim.
-     MatMulNN(@X1.Value[0, 0], @Wq.Value[0, 0], @Q.Value[0, 0], SeqLen, ModelDim, ModelDim);
+    MatMulNN(@X1.Value[0, 0], @Wq.Value[0, 0], @Q.Value[0, 0], SeqLen, ModelDim, ModelDim);
 
     // Display Q.Value matrix.
     VTPDisplayX('Display Q in transform.', Q.Value, G);
 
     // Full Size Multiplication/Overwrite: Input X1, Wk. Output K.
     // Equation: K = X1 · Wk. K in R^{L x D}. X1 in R^{L · D}. Wk in R^{D x D}. M=SeqLen N=ModelDim K=ModelDim.
-      MatMulNN(@X1.Value[0, 0], @Wk.Value[0, 0], @K.Value[0, 0], SeqLen, ModelDim, ModelDim);
+    MatMulNN(@X1.Value[0, 0], @Wk.Value[0, 0], @K.Value[0, 0], SeqLen, ModelDim, ModelDim);
 
     // Display K.Value matrix.
     VTPDisplayX('Display K, end, in transform.', K.Value, E);
 
     // Full Size Multiplication/Overwrite: Input X1, Wv. Output V.
     // Equation: V = X1 · Wv. V in R^{L x D}. X1 in R^{L · D}. Wv in R^{D x D}. M=SeqLen N=ModelDim K=ModelDim.
-      MatMulNN(@X1.Value[0, 0], @Wv.Value[0, 0], @V.Value[0, 0], SeqLen, ModelDim, ModelDim);
+    MatMulNN(@X1.Value[0, 0], @Wv.Value[0, 0], @V.Value[0, 0], SeqLen, ModelDim, ModelDim);
 
     // 1D. RoPE.
-      ApplyRoPE(Q.Value, InvFreq, SeqLen, ModelDim);
-      ApplyRoPE(K.Value, InvFreq, SeqLen, ModelDim);
+    ApplyRoPE(Q.Value, InvFreq, SeqLen, ModelDim);
+    ApplyRoPE(K.Value, InvFreq, SeqLen, ModelDim);
 
     // 1E. Multiplication. Obtain Scores1.
 
@@ -86,19 +86,18 @@ begin
 
       // Q_h is Q[*, headOffset .. headOffset+H-1]
       // K_h is K[*, headOffset .. headOffset+H-1]
-      // Multiply Q_h (L x H) by K_h^T (H x L)
-      cblas_sgemm(RowMajor, NoTrans, Trans, SeqLen, SeqLen, HeadDim, 1.0, @Q.Value[0, HeadOffset],
+      // Multiply Q_h (L x H) by K_h^T (H x L), and scale by InvSqrtHeadDim.
+      cblas_sgemm(RowMajor, NoTrans, Trans, SeqLen, SeqLen, HeadDim, InvSqrtHeadDim, @Q.Value[0, HeadOffset],
         ModelDim, @K.Value[0, HeadOffset], ModelDim, 0.0, @ScoresHead1[h].Value[0, 0], SeqLen);
       {OR THIS WAY:
-      MatMulNT(@Q.Value[0, HeadOffset], @K.Value[0, HeadOffset], @ScoresHead1[h].Value[0, 0], SeqLen, SeqLen, HeadDim);}
+      MatMulNT(@Q.Value[0, HeadOffset], @K.Value[0, HeadOffset], @ScoresHead1[h].Value[0, 0], SeqLen, SeqLen, HeadDim);
+      And also scale by InvSqrtHeadDim}
     end;
 
     // Display ScoresHead[0].Value matrix.
     VTPDisplayX('Display ScoresHead1[0] before standardizing.', ScoresHead1[0].Value, B);
 
     // 1F. Mask & Softmax & Dropout. Obtain Scores2.
-
-    // Standardization: ScoresHead1 = Sqrt(1 / HeadDim). Now done below, in V, as a scale.
 
     // Masking: Input ScoresHead1. Output ScoresHead1.
     // Equation: ScoresHead1 = Mask(ScoresHead1). ScoresHead1 in R^{L x L}.
@@ -127,17 +126,12 @@ begin
 
     // 1G. Multiplication/Overwrite. Obtain X2Head from ScoresHead2.
 
-    // Scoring: Input ScoresHead2, VHead. Output: X2Head.
+    // Scoring: Input ScoresHead2, VHead. Output: X.
     // Equation: X2 = Scores2 · V. X2 in R^{L · D}. Scores2 in R^{L x L}. V in R^{L x D}. M=SeqLen N=ModelDim K=SeqLen
 
     for h := 0 to nHead - 1 do begin
       HeadOffset := h * HeadDim;
-      cblas_sgemm(RowMajor, NoTrans, NoTrans, SeqLen, HeadDim, SeqLen, 1.0,
-        @ScoresHead2[h].Value[0,0], SeqLen,
-        @V.Value[0, HeadOffset], ModelDim,
-        InvSqrtHeadDim,
-        @X2.Value[0, HeadOffset], ModelDim   // write directly into final L×D output
-      );
+      MatMulFullNN(@ScoresHead2[h].Value[0,0], @V.Value[0, HeadOffset], @X2.Value[0, HeadOffset], SeqLen, HeadDim, SeqLen, SeqLen, ModelDim, ModelDim);
     end;
 
     // Display X2.Value matrix.
@@ -232,18 +226,18 @@ begin
 
       // 3. FORWARD HEAD OUTPUT STAGE.
 
-        // 3A. Multiplication/Overwrite. Obtain Logits from X7 and Vocab.
+        // 3A. Multiplication/Overwrite. Obtain Probs from X7 and Vocab.
 
-        // Multiplication: Input X7, Vocab. Output Logits.
-      { // Equation: Logits = X7 · WVocab. Logits in R^{L x nVocab}. X in R^{L x D}.  WVocab in R^{D x nVocab}.
-           MatMulNN(@X7.Value[0, 0], @WVocab.Value[0, 0], @Logits[0, 0], SeqLen, nVocab, ModelDim);}
+        // Multiplication: Input X7, Vocab. Output Probs.
+      { // Equation: Probs = X7 · WVocab. Probs in R^{L x nVocab}. X in R^{L x D}.  WVocab in R^{D x nVocab}.
+           MatMulNN(@X7.Value[0, 0], @WVocab.Value[0, 0], @Probs[0, 0], SeqLen, nVocab, ModelDim);}
 
         { Use Embeddings {nVocab x D}, instead of WVocab, doing weight-tying }
-        // Equation: Logits = X7 · Embeddings-T. Logits in R^{L x nVocab}. X in R^{L x D}.  Embeddingsin R^{nVocab x D}.
-           MatMulNT(@X7.Value[0, 0], @Embeddings.Value[0, 0], @Logits[0, 0], SeqLen, nVocab, ModelDim);
-                             // chnage last 2 params above??
-        // Display Logits matrix.
-        VTPDisplayX('Display Logits, in transform, before softmax.', Logits, B);
+        // Equation: Probs = X7 · Embeddingsᵀ. Probs in R^{L x nVocab}. X in R^{L x D}.  Embeddings in R^{nVocab x D}.
+           MatMulNT(@X7.Value[0, 0], @Embeddings.Value[0, 0], @Probs[0, 0], SeqLen, nVocab, ModelDim);
+                             // change last 2 params above??
+        // Display Probs matrix.
+        VTPDisplayX('Display Probs, in transform, before softmax.', Probs, B);
 
         { // Display WVocab.Value matrix.
         VTPDisplayX('Display WVocab.Value in transform, before computing Logit.', WVocab.Value, B); }
@@ -252,22 +246,22 @@ begin
         // VTPDisplayX('Display Embeddings.Value in transform, before computing Logit.', Embeddings.Value, B);
            //Need display for Embeddings.
 
-        // 3B. Softmax. Obtain Logits from Logits.
+        // 3B. Softmax. Obtain Probs from Probs.
 
         // Softmax: Input Logit. Output Logit.
         // Equation: Logit = Softmax(Logit).
         for i := 0 to SeqLen - 1 do
-          SoftmaxForward(Logits[i], Logits[i]);
+          SoftmaxForward(Probs[i], Probs[i]);
 
-        // Display Logits matrix.
-        VTPDisplayX('Display Logits, in transform, after softmax.', Logits, B);
+        // Display Probs matrix.
+        VTPDisplayX('Display Probs, in transform, after softmax.', Probs, B);
 
-        // 3C. Cross-Entropy Loss. Obtain TopGradient from Logits.
-        // Gradient: Input Logits. Output TopGradient. Also option of CalculateGradient from KLDivergence.
-        // Equation: TopGradient in R^{L x nVocab}. Logits in R^{L x nVocab}.
+        // 3C. Cross-Entropy Loss. Obtain TopGradient from Probs.
+        // Gradient: Input Probs. Output TopGradient. Also option of CalculateGradient from KLDivergence.
+        // Equation: TopGradient in R^{L x nVocab}. Probs in R^{L x nVocab}.
         GradientFromCEProbabilities;
 
-   //fis this.     // Display TopGradient matrix.
+        // Display TopGradient matrix.
         VTPDisplayX('Display TopGradient, in transform, after Logit calculation.', TopGradient, B);
 
       // BACK PROPAGATION. FEED BACKWARD NETWORK.
@@ -289,10 +283,10 @@ begin
       { cblas_sgemm(101, 112, 111,  ModelDim, nVocab, SeqLen,  1.0,  @X7.Value[0, 0], ModelDim,
         @TopGradient[0,0], DimVocab,  1.0,  @.Grad[0,0], DimVocab); }
 
-      // Backprop TopGradient modifies/overwrites Embeddings-T: Input X7ᵀ, TopGradient. Output Embeddings-T.Grad.
-      // Equation: Embeddings-T.Grad = X7ᵀ · TopGradient. Embeddings-T.Grad in R^{nVocab x D}. X7ᵀ in R^(D x L}. TopGradient in R^{L x nVocab}.
-      cblas_sgemm(101, 112, 111,  ModelDim, nVocab, SeqLen,  1.0,  @X7.Value[0, 0], ModelDim,
-        @TopGradient[0,0], DimVocab,  1.0,  @Embeddings.Grad[0,0], DimVocab);
+      // Backprop TopGradient modifies/overwrites Embeddingsᵀ: Input X7ᵀ, TopGradient. Output Embeddingsᵀ.Grad.
+      // Equation: Embeddingsᵀ.Grad = X7ᵀ · TopGradient. Embeddingsᵀ.Grad in R^{nVocab x D}. X7ᵀ in R^(D x L}. TopGradient in R^{L x nVocab}.
+      cblas_sgemm(101, 112, 111,  nVocab, ModelDim, SeqLen,  1.0,
+        @TopGradient[0,0], DimVocab, @X7.Value[0, 0], ModelDim, 1.0,  @Embeddings.Grad[0,0], ModelDim);
 
       // Backprop Split X7 Grad into X5 and X6: Input X5.Grad, X7.Grad. Output dX.Grad.
       // Equation: X5.Grad = X5.Grad + X7.Grad. All in R^{L x D}.
@@ -393,27 +387,14 @@ begin
     // Equations: Scores2.Grad = X2.Grad · Vᵀ.Value. Scores2.Grad is R^{L x L}. X2.Grad is R^{L x D}. Vᵀ.Value is R^{D x L}.
     for h := 0 to nHead - 1 do begin
       HeadOffset := h * HeadDim;
-      cblas_sgemm(RowMajor, NoTrans, Trans, SeqLen, SeqLen, HeadDim, 1.0,
-        @X2.Grad[0, HeadOffset], ModelDim,  @V.Value[0, HeadOffset], ModelDim, 0.0, @ScoresHead2[h].Grad[0, 0], SeqLen);
+      MatMulFullTN(@X2.Grad[0, HeadOffset], @V.Value[0, HeadOffset], @ScoresHead2[h].Grad[0,0], SeqLen, SeqLen, HeadDim, ModelDim, ModelDim, SeqLen);
     end;
 
     // Backprop Create VHead Grad from X2Head Grad: Input ScoresHead2ᵀ.Value, X2Head.Grad. Output: VHead.Grad.
     // Equations: VHead.Grad = ScoresHead2ᵀ.Value · X2Head.Grad. VHead.Grad is R^{L x D}. ScoresHead2ᵀ.Value is R^{L x L}. X2Head.Grad is R^{L x D}.
     for h := 0 to nHead - 1 do begin
       HeadOffset := h * HeadDim;
-      cblas_sgemm(
-        RowMajor,
-        Trans,       // Scores_h^T
-        NoTrans,     // dX_h
-        SeqLen,                // M = L
-        HeadDim,                // N = H
-        SeqLen,                // K = L
-        1.0,
-        @ScoresHead2[h].Value[0, 0], SeqLen,       // lda = L
-        @X2.Grad[0, HeadOffset], ModelDim,    // ldb = D
-        InvSqrtHeadDim,
-        @V.Grad[0, HeadOffset], ModelDim      // ldc = D
-      );
+      MatMulFullNT(@ScoresHead2[h].Value[0,0], @X2.Grad[0, HeadOffset], @V.Grad[0, HeadOffset], SeqLen, HeadDim, SeqLen, SeqLen, ModelDim, ModelDim);
     end;
 
     // 1F. Backprop Standardize, Mask & Softmax. Obtain ScoresHead1.
@@ -426,6 +407,10 @@ begin
     for h := 0 to nHead - 1 do
       for i := 0 to SeqLen - 1 do
         SoftmaxBackward(ScoresHead2[h].Value[i], ScoresHead2[h].Grad[i], ScoresHead1[h].Grad[i]);
+
+    // Scaling after Softmax.
+    for h := 0 to nHead - 1 do
+      cblas_sscal(SeqLen * SeqLen, InvSqrtHeadDim, @ScoresHead1[h].Grad[0,0], 1);
 
     // Backprop AutoRegression.
     // Equation: ScoresHead1.Grad = Unmask(ScoresHead1.Grad).
@@ -449,27 +434,14 @@ begin
 
     for h := 0 to nHead - 1 do begin
       HeadOffset := h * HeadDim;
-      cblas_sgemm(RowMajor, NoTrans, NoTrans, SeqLen, HeadDim, SeqLen, 1.0,  // Move scalehere" SqrtD?
-        @ScoresHead1[h].Grad[0,0], SeqLen, @K.Value[0, HeadOffset], ModelDim, 0.0, @Q.Grad[0, HeadOffset], ModelDim);
+      MatMulFullNN(@ScoresHead1[h].Grad[0,0], @K.Value[0, HeadOffset], @Q.Grad[0, HeadOffset], SeqLen, HeadDim, SeqLen, SeqLen, ModelDim, ModelDim);
     end;
 
     // Backprop Multiplication: Input ScoresHead1.Gradᵀ, Q.Value. Output K.Grad.
     // Equation: K.Grad = ScoresHead1.Gradᵀ · Q.Value. K.Grad in R^{L x D}. ScoresHead1.Gradᵀ in R^{L · L}. Q.Value in R^{L x D}.
     for h := 0 to nHead - 1 do begin
       HeadOffset := h * HeadDim;
-      cblas_sgemm(
-        RowMajor,
-        Trans,
-        NoTrans,
-        SeqLen,
-        HeadDim,
-        SeqLen,
-        1.0,
-        @ScoresHead1[h].Grad[0,0], SeqLen,
-        @Q.Value[0, HeadOffset], ModelDim,
-        0.0,
-        @K.Grad[0, HeadOffset], ModelDim
-      );
+      MatMulFullNT(@ScoresHead1[h].Grad[0,0], @Q.Value[0, HeadOffset], @K.Grad[0, HeadOffset], SeqLen, HeadDim, SeqLen, SeqLen, ModelDim, ModelDim);
     end;
 
     // 1D. RoPE. Nil.
@@ -533,8 +505,8 @@ begin
     // Modify weights and biases.
     Optimization(WModel);
 
-    // Place X1 in X for next block.
-    CopyXMatrix(X1.Value, X.Value, SeqLen, ModelDim);
+    // Place X7 in X for next block.
+    CopyXMatrix(X7.Value, X.Value, SeqLen, ModelDim);
     If VerboseTransform then begin
       Writeln('End of tranformer block.');
       Pause;

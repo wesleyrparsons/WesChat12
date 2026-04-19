@@ -418,7 +418,7 @@ begin
     Writeln;
   end;
   if Part = G then begin
-    Write(nVocab): 4);
+    Write(nVocab: 4);
     for j := jB to jE do
       Write(X[nVocab, j * hStride]: 11: 5, ' ');
     Write(X[nVocab, High(X[0])]: 11: 5, ' ');

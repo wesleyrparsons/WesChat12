@@ -8,14 +8,13 @@ interface
 
 var
 { Set the defaults }
-  MaxMerges: Integer = 20000;         // Maximum number of merges.
+  MaxMerges: Integer = 20000;          // Maximum number of merges.
   MaxPairCount: Integer = 400000;      // Maximum number of pair in BPE.
-  MaxVocab: Integer = 12000;           // Need maximum of vocab symbols to dimension array.
 
 { Place all verbosity and control options at start }
-  DoNotPause: Boolean = False;          // Pause disabled.
-  PauseIfKeyPressed: Boolean = True;
-  DisplayCorpus: Boolean = True;       // one set for real tokenizing and one set for debug
+  DoNotPause: Boolean = False;         // Pause disabled.
+  PauseIfKeyPressed: Boolean = True;   // Pause if a key is pressed.
+  DisplayCorpus: Boolean = True;       // One set for real tokenizing and one set for debug.
   VeryVerbose: Boolean = False;
   VerboseTokenize: Boolean = True;
   VerboseTransform: Boolean = True;
@@ -33,11 +32,11 @@ const
   ModelDimProj = ModelDim * Proj; // Dimension of model of projected X matrix.
   SeqLen = 128;                   // Sequence length for X.
   nHead = 8;                      // Number of heads for multi-headed attention.
-  HeadDim = SeqLen div nHead;     // Length of one head.
+  HeadDim = ModelDim div nHead;   // Length of one head.
   nBlock = 4;                     // Number of blocks in transformer.
   ADropout = 0.1;                 // Probability of attention dropout.
   RDropout = 0.1;                 // Probability of residual dropout.
-  DimVocab = 15000;               // To dimension vocab matrices.
+  DimVocab = 15000;               // Need maximum of vocab symbols to dimension array. Needed for Embeddings.
 
 type                                                                           // SeqLen = L, ModelDim = D, ModelDim/nHead = H, DB is Proj*D
   TSeqVector = array [0..ModelDim - 1] of Single;                              // D
@@ -54,7 +53,7 @@ type                                                                           /
   TWeightProjMatrixT = array[0..ModelDimProj - 1] of TSeqVector;               // DB x D
   THiddenMatrix = array[0..SeqLen - 1] of TSeqVectorProj;                      // L x DB
   TScoresMatrix = array[0..SeqLen - 1] of TDimVector;                          // L x L
-  //TVocabWeightMatrix = array[0..ModelDim - 1] of TVocabVector;                 // D x MaxVocab
+  TVocabWeightMatrix = array[0..ModelDim - 1] of TVocabVector;                 // D x MaxVocab
   TSeqVocabMatrix = array [0..SeqLen - 1] of TVocabVector;                     // L x MaxVocab
   TFSVector = array[0..SeqLen - 1] of Single;                                  // L
   TEmbeddingsMatrix = array[0..DimVocab - 1] of TSeqVector;                    // Array for embeddings matrix.
@@ -108,10 +107,9 @@ type                                                                           /
   TSVector = array of String;          // Array of string.
   TPart = (B, E, F, G);                // Length = VocabSize * Dimension. But only use nSymbols in rows.
   TSymbolTable = TRBSVector;           // Array of symbols. So index of array is a symbol string.
-
   WModelType = record                  //  Model of trainable parameters.
-    Embeddings:                     TEmbeddingsTensor;     // Row is token, column is weights.
-    Wq, Wk, Wv, W0:                 TWeightTensor;
+    Embeddings:                     TEmbeddingsTensor;     // Embeddings cannot be dynamic, CBLAS will not work.
+    Wq, Wk, Wv, W0:                 TWeightTensor;         // Weights.
     W1:                             TWeightProjTensor;     // Weights.
     W2:                             TWeightProjTensorT;    // Weights.
     b1:                             TSeqVectorProjTensor;  // Biases.
@@ -139,19 +137,21 @@ var
   LearningRate: Single = 0.01;                   // LearningRate for Gradient.
   Temperature: Single = 1.0;                     // Temperature for softmax.
   Training: Boolean = True;                      // In training as opposed to inference mode.
+
   // Non-trainable parameters.
   X, X1, X2, X3, X4, X5, X6, X7:  TSeqTensor;              // X's at all stages.
   X1q, X1v, X1k:                  TSeqTensor;              // X's for Q, K, V.
   Q, K, V:                        TSeqTensor;              // Q is X*Wq, K is X*Wk, V is X*Wv.
   ScoresHead1, ScoresHead2:       array[0..nHead - 1] of TScoresHeadTensor;    // Scores partitioned into nHeads.
   Hidden1, Hidden2:               THiddenTensor;           // Neural net payer.
-  //WVocab:                         TVocabWeightTensor;      // ModelDim x MaxVocab. Vocab is dimensioned as MaxVocab, but only uses nVocab.
-  Logits, TopGradient:            TSeqVocabMatrix;         // Logit and Gradient.
+  Probs, TopGradient:             TSeqVocabMatrix;         // Logit and Gradient.
+
   // Caches.
   LNInvStd1:  TFSVector;          // Caches for Layer-Norm.
   LNXhat1:    TSeqMatrix;         // Caches for Layer-Norm.
   LNInvStd2:  TFSVector;          // Caches for Layer-Norm.
   LNXhat2:    TSeqMatrix;         // Caches for Layer-Norm.
+
   // Other.
   TestVector: TFSVector;          // Vector for testing. [0..SeqLen] of Single.
   InvFreq:    TFVector;           // For RoPE.

@@ -19,6 +19,8 @@ procedure LoadSymbolTable(const FileName: string; var SymbolTable: TSymbolTable)
 procedure LoadTokenList(const TokenFileName: string; var TokenizedCorpus: TIVector);
 procedure SaveSymbolTable(const SymbolFileName: string; const SymbolTable: TSymbolTable);
 procedure SaveTokenList(const TokenizedCorpus: TIVector; const TokenFileName: String);
+procedure SaveModel(const FileName: string; const Model: WModelType; var Success: Boolean);
+procedure LoadModel(const FileName: string; var Model: WModelType; var Success: Boolean);
 
 implementation
 
@@ -204,54 +206,35 @@ begin
   Writeln;
 end;
 
-{procedure SaveMatrix(var F: File; const M: array of array of Single);
+procedure SaveModel(const FileName: string; const Model: WModelType; var Success: Boolean);
 var
-  R, C: LongInt;
+  F: file of WModelType;
 begin
-  R := Length(M);
-  if R = 0 then begin
-    C := 0;
-    BlockWrite(F, R, SizeOf(R));
-    BlockWrite(F, C, SizeOf(C));
-    Exit;
+  Success := False;   // Ddefault.
+  Assign(F, FileName);
+
+  try
+    Rewrite(F);       // May err.
+    Write(F, Model);  // May err.
+    Success := True;  // Only reached if both succeed.
+  except
+    Success := False;
   end;
 
-  C := Length(M[0]);
-
-  BlockWrite(F, R, SizeOf(R));
-  BlockWrite(F, C, SizeOf(C));
-  BlockWrite(F, M[0][0], R * C * SizeOf(Single));
+  Close(F);           // Safe even if Rewrite failed.
 end;
 
-procedure SaveWesModel(const FileName: string; const WesModel: ModelType);
+procedure LoadModel(const FileName: string; var Model: WModelType; var Success: Boolean);
 var
-  F: File;
+  F: file of WModelType;
 begin
   Assign(F, FileName);
-  Rewrite(F, 1);
-
-  // Magic.
-  BlockWrite(F, Magic, SizeOf(Magic));
-
-  // Version.
-  BlockWrite(F, Version, 16);
-
-  // Save model.
-  SaveMatrix(F, WesModel.Embeddings);
-  SaveMatrix(F, WesModel.Wq);
-  SaveMatrix(F, WesModel.Wk);
-  SaveMatrix(F, WesModel.Wv);
-  SaveMatrix(F, WesModel.W0);
-  SaveMatrix(F, WesModel.W1);
-  SaveMatrix(F, WesModel.W2);
-  SaveMatrix(F, WesModel.b1);
-  SaveMatrix(F, WesModel.b2);
-  SaveMatrix(F, WesModel.Gamma1);
-  SaveMatrix(F, WesModel.Beta1);
-  SaveMatrix(F, WesModel.Gamma2);
-  SaveMatrix(F, WesModel.Beta2);
-
-  Close(F);
-end;}
+  Reset(F);
+  try
+    Read(F, Model);
+  finally
+    Close(F);
+  end;
+end;
 
 end.

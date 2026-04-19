@@ -89,7 +89,7 @@ begin
   Writeln('Blocks (nBlock): ', nBlock);
   Writeln('Learning Rate (LearningRate): ', LearningRate: 6: 4);
   Writeln('Trainable Parameters: Wq, Wk, Wv, W0, W1, b1, W2, b2, gamma1, beta1, beta2, gamma2');
-  Writeln('Maximum Vocabulary (MaxVocab): ', MaxVocab);
+  Writeln('Maximum Vocabulary (MaxVocab): ', DimVocab);
   Writeln('Number of Vocabulary (nVocab): ', nVocab);
 end;
 

@@ -6,9 +6,13 @@ unit Notes;
 
 General
 
-1. Check whixh trainable and non-t params need to be in zerogradients.
+1. Check which trainable and non-t params need to be in zerogradients.
+
+2. Put State vars in WModelState.
 
 3. Add SaveModel and LoadModel procedures.
+
+3a. Use saxpy and Updateparam im Optimization routine.
 
 4. In main program: Read Corpus, Read Files (vocab and merge), Tokenize, Embed, Transform.
 One proc: display merge/token info. One proc: display transform/embed info.
@@ -59,27 +63,24 @@ initialize embeddings, initialize transformer, create training windows,
 build input and targets, and run transformer blocks.
 No, keep it as Embed.
 
-Transform.
-
-0. Move mult by SqrtD or H into the cblas calls.
+Transform/Matrix/Utils.
 
 a. Create Saxpy wrapper.
 
-b. Use MatMul wrapper for all cblas.
+b. Use MatMul wrapper for all cblas. Use FullAcc that now exists in Matrix.
 
-1. Many models reuse the embedding matrix for output projection:
-logits = X_final · Embedding^T.
-This is called weight tying. WVocab not needed.
-The gradient has to hit the embedding matrix after X0.
+1. Many models reuse the embedding matrix for output projection.
+This is called weight tying. WVocab not needed. I am doing it.
 
 2. What to do with nTokens and append proc.
 Store attention softmax outputs. Do I need them intact for backprop through softmax.
 
 3. Put Hidden on the heap; make it a dynamically allocated variable. No. cblas will not work.
 
-Matrix
+4. Can I make Embeddings a dynamic matrix, and therefore avoid the need for MaxSymbols?
+And generally simplify things? It would be the only dynamic variable. No, CBLAS will not work.
 
-1. Use Welford addition. No, not with sgemm.
+5. Use Welford addition. No, not with sgemm.
 
 Work Flow.
                         X

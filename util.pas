@@ -15,9 +15,9 @@ procedure XGUniformW(var W: TWeightMatrix; FanIn, FanOut: Integer);
 procedure XGUniformWHead(var W: TWeightHeadMatrix; FanIn, FanOut: Integer);
 procedure XGUniformW1(var W: TWeightProjMatrix; FanIn, FanOut: Integer);
 procedure XGUniformW2(var W: TWeightProjMatrixT; FanIn, FanOut: Integer);
-procedure XGUniformWVocab(var W: TVocabWeightMatrix; FanIn, FanOut: Integer);
 procedure InitializeTransformer(var WModel: WModelType);
 procedure ZeroGradients(var WesModel: WModelType);
+procedure UpdateParam(const N: Integer; const LearningRate: Single; const Grad: PSingle; Param: PSingle);
 procedure Optimization(var WesModel: WModelType);
 procedure ApplyRoPE(var H: TSeqMatrix;  const InvFreq: TFVector; SeqLen, ModelDim: Integer);
 procedure ApplyAutoregressiveMask(var ScoresHead: TScoresMatrix; const L: Integer);
@@ -113,21 +113,6 @@ begin
     end;
 end;
 
-// Xavier-Glorot initialization on WVocab matrix.
-procedure XGUniformWVocab(var W: TVocabWeightMatrix; FanIn, FanOut: Integer);
-var
-  Limit, r: Single;
-  i, j: Integer;
-begin
-  Limit := Sqrt(6.0 / (FanIn + FanOut));
-
-  for i := 0 to ModelDim - 1 do
-    for j := 0 to nVocab - 1 do begin
-      r := Random;              // 0..1.
-      W[i, j] := (2 * r - 1) * Limit;
-    end;
-end;
-
 // Initialize the transformer stage.
 procedure InitializeTransformer(var WModel: WModelType);
 var
@@ -136,7 +121,7 @@ begin
   with WModel do begin
     // InitTestVector(TestVector);
     // Initialize RoPE.
-    InitRoPE(InvFreq, HeadDim);
+    InitRoPE(InvFreq, ModelDim);
 
     // Initialize weight matrix W0.
     XGUniformW(W0.Value, ModelDim, ModelDim);
@@ -168,7 +153,6 @@ begin
 end;
 
 // Zero out all gradients.
-// Do I need Wq, Wv, Wk, and ScoresHead1 & 2?
 procedure ZeroGradients(var WesModel: WModelType);
 begin
   FillChar(X.Grad, SizeOf(X.Grad), 0);
@@ -204,6 +188,12 @@ begin
   end;
 end;
 
+// Parameter update. Param := Param - LearningRate * Grad.
+procedure UpdateParam(const N: Integer; const LearningRate: Single; const Grad: PSingle; Param: PSingle);
+begin
+  AddScaled(N, -LearningRate, Grad, Param);
+end;
+
 { Optimization }
 // Update the weights and biases.
 procedure Optimization(var WesModel: WModelType);
@@ -235,10 +225,20 @@ begin
     cblas_saxpy(ModelDim, -LearningRate, @Beta2.Grad[0], 1, @Beta2.Value[0], 1);
 
     // Embeddings.
+    // Add input-side embedding gradients into Embeddings.Grad.
     for i := 0 to SeqLen - 1 do begin
-      v := TokenID[i];    // Same as TokenizedCorpus;
-      cblas_saxpy(ModelDim, -LearningRate, @X.Grad[i,0], 1, @Embeddings.Value[0, v], 1);
+      v := TokenID[i];
+      cblas_saxpy(ModelDim, 1.0, @X.Grad[i,0], 1, @Embeddings.Grad[v,0], 1);
     end;
+
+    // Apply the total embedding gradient (output-side + input-side).
+    cblas_saxpy(nVocab * ModelDim, -LearningRate,
+      @Embeddings.Grad[0,0], 1,
+      @Embeddings.Value[0,0], 1);
+    {for i := 0 to SeqLen - 1 do begin
+      v := TokenID[i];    // Same as TokenizedCorpus;
+      cblas_saxpy(ModelDim, -LearningRate, @X.Grad[i,0], 1, @Embeddings.Value[v, 0], 1);
+    end;}
   end;
 end;
 
@@ -384,35 +384,29 @@ begin
   end;
 end;
 
-// Calculate cross-entropy gradient from logits and target.
+// Calculate cross-entropy gradient from probabilities and target, one-hot.
 procedure GradientFromCEProbabilities;
 var
   i, v: Integer;
 begin
   for i := 0 to SeqLen - 1 do begin
     for v := 0 to nVocab - 1 do
-      TopGradient[i, v] := Logits[i, v];
-    TopGradient[i, TargetTokens[i]] := Logits[i, TargetTokens[i]] - 1.0;
+      TopGradient[i, v] := Probs[i, v];
+    TopGradient[i, TargetTokens[i]] := Probs[i, TargetTokens[i]] - 1.0;
   end;
 end;
 
-// Calculate Kullback-Leibler gradient from logits and target.
-// Gradient for KL divergence: dL/dLogits = Q - P.
-// Gradient for KL divergence with one-hot targets: dL/dLogits = Q - P.
+// Calculate gradient for KL divergence with one-hot targets: dL/dProbs = Q - P.
 procedure GradientFromKLDivergence;
 var
-  i, v, t: Integer;
+  i, v: Integer;
 begin
-  for i := 0 to SeqLen - 1 do begin
-    t := TargetTokens[i];  // Correct token ID.
-
-    for v := 0 to nVocab - 1 do begin
-      if v = t then
-        TopGradient[i, v] := Logits[i, v] - 1.0   // Q - 1.
+  for i := 0 to SeqLen - 1 do
+    for v := 0 to nVocab - 1 do
+      if v = TargetTokens[i] then
+        TopGradient[i, v] := Probs[i, v] - 1.0   // Q - 1.
       else
-        TopGradient[i, v] := Logits[i, v] - 0.0;  // Q - 0.
-    end;
-  end;
+        TopGradient[i, v] := Probs[i, v] - 0.0;  // Q - 0.
 end;
 
 // Back propagation addition.

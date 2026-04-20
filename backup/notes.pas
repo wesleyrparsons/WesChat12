@@ -12,6 +12,8 @@ General
 
 3. Add SaveModel and LoadModel procedures.
 
+3a. Use saxpy and Updateparam im Optimization routine.
+
 4. In main program: Read Corpus, Read Files (vocab and merge), Tokenize, Embed, Transform.
 One proc: display merge/token info. One proc: display transform/embed info.
 

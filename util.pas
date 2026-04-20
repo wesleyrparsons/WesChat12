@@ -204,39 +204,50 @@ var
 begin
   with WesModel do begin
     // W0 weights: main attention output.
-    cblas_saxpy(ModelDim * ModelDim, -LearningRate, @W0.Grad[0, 0], 1, @W0.Value[0, 0], 1);
+    UpdateParam(ModelDim * ModelDim, LearningRate, @W0.Grad[0,0], @W0.Value[0,0]);
+    //cblas_saxpy(ModelDim * ModelDim, -LearningRate, @W0.Grad[0, 0], 1, @W0.Value[0, 0], 1);
 
     // Wq, Wk, Wv weights: Q, K, V.
-    cblas_saxpy(ModelDim * ModelDim, -LearningRate, @Wq.Grad[0, 0], 1, @Wq.Value[0, 0], 1);
-    cblas_saxpy(ModelDim * ModelDim, -LearningRate, @Wk.Grad[0, 0], 1, @Wk.Value[0, 0], 1);
-    cblas_saxpy(ModelDim * ModelDim, -LearningRate, @Wv.Grad[0, 0], 1, @Wv.Value[0, 0], 1);
+    UpdateParam(ModelDim * ModelDim, LearningRate, @Wq.Grad[0,0], @Wq.Value[0,0]);
+    //cblas_saxpy(ModelDim * ModelDim, -LearningRate, @Wq.Grad[0, 0], 1, @Wq.Value[0, 0], 1);
+    UpdateParam(ModelDim * ModelDim, LearningRate, @Wk.Grad[0,0], @Wk.Value[0,0]);
+    //cblas_saxpy(ModelDim * ModelDim, -LearningRate, @Wk.Grad[0, 0], 1, @Wk.Value[0, 0], 1);
+    UpdateParam(ModelDim * ModelDim, LearningRate, @Wv.Grad[0,0], @Wv.Value[0,0]);
+    //cblas_saxpy(ModelDim * ModelDim, -LearningRate, @Wv.Grad[0, 0], 1, @Wv.Value[0, 0], 1);
 
     // W1, W2: feed-forward and vocab projection.
-    cblas_saxpy(ModelDim * ModelDimProj, -LearningRate, @W1.Grad[0, 0], 1, @W1.Value[0, 0], 1);
-    cblas_saxpy(ModelDimProj * ModelDim, -LearningRate, @W2.Grad[0, 0], 1, @W2.Value[0, 0], 1);
-    //cblas_saxpy(ModelDim * nVocab, -LearningRate, @WVocab.Grad[0, 0], 1, @WVocab.Value[0, 0], 1);
+    UpdateParam(ModelDim * ModelDim, LearningRate, @W1.Grad[0,0], @W1.Value[0,0]);
+    //cblas_saxpy(ModelDim * ModelDimProj, -LearningRate, @W1.Grad[0, 0], 1, @W1.Value[0, 0], 1);
+    UpdateParam(ModelDim * ModelDim, LearningRate, @W2.Grad[0,0], @W2.Value[0,0]);
+    //cblas_saxpy(ModelDimProj * ModelDim, -LearningRate, @W2.Grad[0, 0], 1, @W2.Value[0, 0], 1);
 
     // b1, b2: biases.
-    cblas_saxpy(ModelDimProj, -LearningRate, @b1.Grad[0], 1, @b1.Value[0], 1);
-    cblas_saxpy(ModelDim, -LearningRate, @b2.Grad[0], 1, @b2.Value[0], 1);
+    UpdateParam(ModelDim, LearningRate, @b1.Grad[0], @b1.Value[0]);
+    //cblas_saxpy(ModelDimProj, -LearningRate, @b1.Grad[0], 1, @b1.Value[0], 1);
+    UpdateParam(ModelDim, LearningRate, @b2.Grad[0], @b2.Value[0]);
+    //cblas_saxpy(ModelDim, -LearningRate, @b2.Grad[0], 1, @b2.Value[0], 1);
 
     // Gamma1, Gamm2, Beta1, Beta2: Layer-Norm parameters.
-    cblas_saxpy(ModelDim, -LearningRate, @Gamma1.Grad[0], 1, @Gamma1.Value[0], 1);
-    cblas_saxpy(ModelDim, -LearningRate, @Gamma2.Grad[0], 1, @Gamma2.Value[0], 1);
-    cblas_saxpy(ModelDim, -LearningRate, @Beta1.Grad[0], 1, @Beta1.Value[0], 1);
-    cblas_saxpy(ModelDim, -LearningRate, @Beta2.Grad[0], 1, @Beta2.Value[0], 1);
+    UpdateParam(ModelDim, LearningRate, @Gamma1.Grad[0], @Gamma1.Value[0]);
+    //cblas_saxpy(ModelDim, -LearningRate, @Gamma1.Grad[0], 1, @Gamma1.Value[0], 1);
+    UpdateParam(ModelDim, LearningRate, @Gamma2.Grad[0], @Gamma2.Value[0]);
+    //cblas_saxpy(ModelDim, -LearningRate, @Gamma2.Grad[0], 1, @Gamma2.Value[0], 1);
+    UpdateParam(ModelDim, LearningRate, @Beta1.Grad[0], @Beta1.Value[0]);
+    //cblas_saxpy(ModelDim, -LearningRate, @Beta1.Grad[0], 1, @Beta1.Value[0], 1);
+    UpdateParam(ModelDim, LearningRate, @Beta2.Grad[0], @Beta2.Value[0]);
+    //cblas_saxpy(ModelDim, -LearningRate, @Beta2.Grad[0], 1, @Beta2.Value[0], 1);
 
     // Embeddings.
     // Add input-side embedding gradients into Embeddings.Grad.
     for i := 0 to SeqLen - 1 do begin
       v := TokenID[i];
-      cblas_saxpy(ModelDim, 1.0, @WModelState.X.Grad[i,0], 1, @Embeddings.Grad[v,0], 1);
+      AddScaled(ModelDim, 1.0, @WModelState.X.Grad[i,0], @Embeddings.Grad[v,0]);
+      //cblas_saxpy(ModelDim, 1.0, @WModelState.X.Grad[i,0], 1, @Embeddings.Grad[v,0], 1);
     end;
 
     // Apply the total embedding gradient (output-side + input-side).
-    cblas_saxpy(nVocab * ModelDim, -LearningRate,
-      @Embeddings.Grad[0,0], 1,
-      @Embeddings.Value[0,0], 1);
+    UpdateParam(nVocab * ModelDim, LearningRate, @Embeddings.Grad[0,0], @Embeddings.Value[0,0]);
+    //cblas_saxpy(nVocab * ModelDim, -LearningRate, @Embeddings.Grad[0,0], 1, @Embeddings.Value[0,0], 1);
     {for i := 0 to SeqLen - 1 do begin
       v := TokenID[i];    // Same as TokenizedCorpus;
       cblas_saxpy(ModelDim, -LearningRate, @X.Grad[i,0], 1, @Embeddings.Value[v, 0], 1);

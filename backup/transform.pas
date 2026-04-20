@@ -178,7 +178,8 @@ begin
       // Equation: Hidden1 = Hidden1 * b1. Hidden1 in R^{L x DB}. b1 in R^{DB}.
       // AddMatVec(@Hidden1.Value, b1.Value, SeqLen, ModelDimProj);
       for i := 0 to SeqLen - 1 do
-        cblas_saxpy(ModelDimProj,  1.0,  @b1.Value[0], 1,  @Hidden1.Value[i,0], 1);
+        AddScaled(ModelDimProj, 1.0, @b1.Value[0], @Hidden1.Value[i,0]);
+        //cblas_saxpy(ModelDimProj,  1.0,  @b1.Value[0], 1,  @Hidden1.Value[i,0], 1);
 
       // Display Hidden1.Value matrix.
       VTPDisplayX('Display Hidden1.Value, in transform,  after adding b1, and before ReLU.', Hidden1.Value, G);
@@ -210,7 +211,8 @@ begin
       // Equation: X6 = X6 + b2. X6 in R^{L x D}. b2 in R^{L x D}.
       // AddMatVec(@X6.Value, @b2.Value, SeqLen, ModelDim);
       for i := 0 to SeqLen - 1 do
-        cblas_saxpy(ModelDim,  1.0,  @b2.Value[0], 1,  @X6.Value[i,0], 1);
+        AddScaled(ModelDim, 1.0, @b2.Value[0], @X6.Value[i,0]);
+        //cblas_saxpy(ModelDim,  1.0,  @b2.Value[0], 1,  @X6.Value[i,0], 1);
 
       // Display X6.Value matrix.
       VTPDisplayX('Display X6, in transform, after contraction.', X6.Value, B);
@@ -239,9 +241,6 @@ begin
         // Display Probs matrix.
         VTPDisplayX('Display Probs, in transform, before softmax.', Probs, B);
 
-        { // Display WVocab.Value matrix.
-        VTPDisplayX('Display WVocab.Value in transform, before computing Logit.', WVocab.Value, B); }
-
         // Display Embeddings.Value matrix.
         // VTPDisplayX('Display Embeddings.Value in transform, before computing Logit.', Embeddings.Value, B);
            //Need display for Embeddings.
@@ -261,6 +260,15 @@ begin
         // Equation: TopGradient in R^{L x nVocab}. Probs in R^{L x nVocab}.
         GradientFromCEProbabilities;
 
+        // 3D. Is QueryForward, then pick the largest prob, and save it.
+        {if not Training then
+          for i := 0 to SeqLen do begin
+            TopGrad := TopGradient[i, 0];
+            for j := 1 to nVocab do
+              if TopGradient[i, j] > TopGrad then TopGrad := TopGradient[1, j];
+            QueryOutput[i] := TopGrad;
+          end;}
+
         // Display TopGradient matrix.
         VTPDisplayX('Display TopGradient, in transform, after Logit calculation.', TopGradient, B);
 
@@ -268,20 +276,10 @@ begin
 
       // 2F. Backprop TopGradient creates X7 Grad: Input TopGradient, WVocabᵀ. Output X7.Grad.
 
-      { // Equation: X7.Grad = TopGradient · WVocabᵀ.Value. X7.Grad in R^{L x D}. TopGradient in R^{L x nVocab}. WVocabᵀ in R^{nVocab x D}.
-      writeln('Stage 2F');
-      cblas_sgemm(101, 111, 112,  SeqLen, ModelDim, nVocab,  1.0,   // 112 = Transposed.
-        @TopGradient[0, 0], DimVocab,  @WVocab.Value[0, 0], DimVocab, 0.0,  @X7.Grad[0, 0], ModelDim); }
-
       // Equation: X7.Grad = TopGradient · Embeddings.Value. X7.Grad in R^{L x D}. TopGradient in R^{L x nVocab}. Embeddings in R^{D x nVocab}.
       writeln('Stage 2F');
       cblas_sgemm(101, 111, 112,  SeqLen, ModelDim, nVocab,  1.0,
         @TopGradient[0, 0], DimVocab,  @Embeddings.Value[0, 0], DimVocab, 0.0,  @X7.Grad[0, 0], ModelDim);
-
-      // Backprop TopGradient modifies/overwrites WVocab: Input X7ᵀ, TopGradient. Output WVocab.Grad.
-      // Equation: WVocab.Grad = X7ᵀ · TopGradient. WVocab.Grad in R^{D x nVocab}. X7ᵀ in R^(D x L). TopGradient in R^{L x nVocab}.
-      { cblas_sgemm(101, 112, 111,  ModelDim, nVocab, SeqLen,  1.0,  @X7.Value[0, 0], ModelDim,
-        @TopGradient[0,0], DimVocab,  1.0,  @.Grad[0,0], DimVocab); }
 
       // Backprop TopGradient modifies/overwrites Embeddingsᵀ: Input X7ᵀ, TopGradient. Output Embeddingsᵀ.Grad.
       // Equation: Embeddingsᵀ.Grad = X7ᵀ · TopGradient. Embeddingsᵀ.Grad in R^{nVocab x D}. X7ᵀ in R^(D x L}. TopGradient in R^{L x nVocab}.
@@ -301,7 +299,8 @@ begin
       // Backprop X6 Grad creates b2 Grad. Input X6.Grad. Output b2.Grad.
       // Equation: b2.Grad = sum of X6.Grad. b2.Grad is R^{L x D}. X6.Grad in R^{L x D}.
       for i := 0 to SeqLen - 1 do
-        cblas_saxpy(ModelDim,  1.0,  @X6.Grad[i, 0], 1,  @b2.Grad[0], 1);
+        AddScaled(ModelDim, 1.0, @X6.Grad[i,0], @b2.Grad[0]);
+        //cblas_saxpy(ModelDim,  1.0,  @X6.Grad[i, 0], 1,  @b2.Grad[0], 1);
 
       // 2D. Backprop Multiplication/Overwrite. Obtain W2 from Hidden2 and X6.
 
@@ -503,7 +502,7 @@ begin
     VTPDisplayX('Display X.Grad, in transform, at end.', X.Grad, G);
 
     // Modify weights and biases.
-    Optimization(WModel);
+    Optimization(WModelParams);
 
     // Place X7 in X for next block.
     CopyXMatrix(X7.Value, X.Value, SeqLen, ModelDim);

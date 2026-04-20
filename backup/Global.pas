@@ -101,7 +101,7 @@ type                                                                           /
   TSVector = array of String;          // Array of string.
   TPart = (B, E, F, G);                // Length = VocabSize * Dimension. But only use nSymbols in rows.
   TSymbolTable = TRBSVector;           // Array of symbols. So index of array is a symbol string.
-  TWModelParam = record                // Model of trainable parameters.
+  TWModelParams = record               // Model of trainable parameters.
     Embeddings:                     TEmbeddingsTensor;     // Embeddings cannot be dynamic, CBLAS will not work.
     Wq, Wk, Wv, W0:                 TWeightTensor;         // Weights.
     W1:                             TWeightProjTensor;     // Weights.
@@ -130,6 +130,7 @@ var
   TokenID: TIVector;                             // Same as TokenizedCorpus.
   TargetTokens: TIDimVector;                     // Input and target tokenns. Input lags by one.
   nVocab: Integer = DimVocab;                    // nVocab is also nSymbol. Number of symbol items.
+  TopGrad: TDimVector;
   Mt0, Mt1, t0, t1, StopTime: TDateTime;         // For timing.
   Version: shortstring = '1.2';                  // Version 1.2.
   FromSymbolTable: Boolean = False;              // Operating from input Symbol Table rather than from tokenization.

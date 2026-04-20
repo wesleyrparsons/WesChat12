@@ -217,8 +217,10 @@ begin
     //cblas_saxpy(ModelDim * nVocab, -LearningRate, @WVocab.Grad[0, 0], 1, @WVocab.Value[0, 0], 1);
 
     // b1, b2: biases.
-    cblas_saxpy(ModelDimProj, -LearningRate, @b1.Grad[0], 1, @b1.Value[0], 1);
-    cblas_saxpy(ModelDim, -LearningRate, @b2.Grad[0], 1, @b2.Value[0], 1);
+    UpdateParam(ModelDim, LearningRate, @b1.Grad[0], @b1.Value[0]);
+    //cblas_saxpy(ModelDimProj, -LearningRate, @b1.Grad[0], 1, @b1.Value[0], 1);
+    UpdateParam(ModelDim, LearningRate, @b2.Grad[0], @b2.Value[0]);
+    //cblas_saxpy(ModelDim, -LearningRate, @b2.Grad[0], 1, @b2.Value[0], 1);
 
     // Gamma1, Gamm2, Beta1, Beta2: Layer-Norm parameters.
     cblas_saxpy(ModelDim, -LearningRate, @Gamma1.Grad[0], 1, @Gamma1.Value[0], 1);
@@ -234,9 +236,8 @@ begin
     end;
 
     // Apply the total embedding gradient (output-side + input-side).
-    cblas_saxpy(nVocab * ModelDim, -LearningRate,
-      @Embeddings.Grad[0,0], 1,
-      @Embeddings.Value[0,0], 1);
+    UpdateParam(nVocab * ModelDim, LearningRate, @Embeddings.Grad[0,0], @Embeddings.Value[0,0]);
+    //cblas_saxpy(nVocab * ModelDim, -LearningRate, @Embeddings.Grad[0,0], 1, @Embeddings.Value[0,0], 1);
     {for i := 0 to SeqLen - 1 do begin
       v := TokenID[i];    // Same as TokenizedCorpus;
       cblas_saxpy(ModelDim, -LearningRate, @X.Grad[i,0], 1, @Embeddings.Value[v, 0], 1);
@@ -389,15 +390,15 @@ end;
 // Calculate cross-entropy gradient from probabilities and target, one-hot.
 procedure GradientFromCEProbabilities;
 var
-  i, v: Integer;
+  i, s: Integer;
 begin
-  //with WModelState do
+  with WModelState do
     for i := 0 to SeqLen - 1 do begin
-      for v := 0 to nVocab - 1 do
-        WModelState.TopGradient[i, v] := WModelState.Probs[i, v];
+      for s := 0 to nVocab - 1 do
+        TopGradient[i, s] := Probs[i, s];
 
-      WModelState.TopGradient[i, TargetTokens[i]] :=
-        WModelState.Probs[i, TargetTokens[i]] - 1.0;
+      TopGradient[i, TargetTokens[i]] :=
+        Probs[i, TargetTokens[i]] - 1.0;
     end;
 end;
 

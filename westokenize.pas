@@ -40,7 +40,6 @@ type
 var
   StartSymbol: Integer = 260;                    // UTF-8 0.255, BOS, EOS, PAD, UNK is 259.
   TokenizedCorpus: TIVector;
-
   nCorpus: Integer;
   BOS, EOS, PAD, UNK: Integer;                   // Extra symbols for control.
   ElapsedMS: Int64;                              // For timing.
@@ -59,7 +58,6 @@ function MatchLongest(root: PTrieNode; const text: TBVector; startPos: Integer;
   out tokenID, matchLen: Integer): Boolean;
 procedure ReportStatistics;
 procedure DetokenizeToDisplay(const TokenizedCorpus: TIVector; const Part: TPart = B);
-//procedure ReportStatistics;
 procedure RunWesTokenize(const Corpus: TBVector; var TokenizedCorpus: TIVector);
 
 implementation

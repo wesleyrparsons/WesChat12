@@ -19,7 +19,7 @@ procedure LoadSymbolTable(const FileName: string; var SymbolTable: TSymbolTable)
 procedure LoadTokenList(const TokenFileName: string; var TokenizedCorpus: TIVector);
 procedure SaveSymbolTable(const SymbolFileName: string; const SymbolTable: TSymbolTable);
 procedure SaveTokenList(const TokenizedCorpus: TIVector; const TokenFileName: String);
-procedure SaveModel(const FileName: string; const Model: WModelType; var Success: Boolean);
+procedure SaveModel(const FileName: string; var Model: WModelType; var Success: Boolean);
 procedure LoadModel(const FileName: string; var Model: WModelType; var Success: Boolean);
 
 implementation
@@ -206,7 +206,7 @@ begin
   Writeln;
 end;
 
-procedure SaveModel(const FileName: string; const Model: WModelType; var Success: Boolean);
+procedure SaveModel(const FileName: string; var Model: WModelType; var Success: Boolean);
 var
   F: file of WModelType;
 begin

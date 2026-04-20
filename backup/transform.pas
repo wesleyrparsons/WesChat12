@@ -15,12 +15,12 @@ uses
 const
   InvSqrtHeadDim: Single = 1 / Sqrt(HeadDim);         // Used in softmax.
 
-procedure RunTransform(var WModel: WModelType);
+procedure RunTransform(var WModelParams: TWModelParams);
 
 implementation
 
 // Run the transformer.
-procedure RunTransform(var WModel: WModelType);
+procedure RunTransform(var WModelParams: TWModelParams);
 var
   h, i, j, HeadOffset: Integer;
 begin
@@ -28,12 +28,12 @@ begin
   writeln('Entering Transformer/FFN/Head Output');
 
   // Zero gradients.
-  ZeroGradients(WModel);
+  ZeroGradients(WModelParams);
 
   // Display X.Value matrix.
-  VTPDisplayX('Display X.Value in transform, before any action.', X.Value, G);
+  VTPDisplayX('Display X.Value in transform, before any action.', WModelState.X.Value, G);
 
-  with WModel do begin
+  with WModelParams do with WModelState do begin
   // BLOCK 0.
 
   // 1. FORWARD STAGE: ATTENTION.
@@ -434,27 +434,14 @@ begin
 
     for h := 0 to nHead - 1 do begin
       HeadOffset := h * HeadDim;
-      cblas_sgemm(RowMajor, NoTrans, NoTrans, SeqLen, HeadDim, SeqLen, 1.0,  // Move scalehere" SqrtD?
-        @ScoresHead1[h].Grad[0,0], SeqLen, @K.Value[0, HeadOffset], ModelDim, 0.0, @Q.Grad[0, HeadOffset], ModelDim);
+      MatMulFullNN(@ScoresHead1[h].Grad[0,0], @K.Value[0, HeadOffset], @Q.Grad[0, HeadOffset], SeqLen, HeadDim, SeqLen, SeqLen, ModelDim, ModelDim);
     end;
 
     // Backprop Multiplication: Input ScoresHead1.Gradᵀ, Q.Value. Output K.Grad.
     // Equation: K.Grad = ScoresHead1.Gradᵀ · Q.Value. K.Grad in R^{L x D}. ScoresHead1.Gradᵀ in R^{L · L}. Q.Value in R^{L x D}.
     for h := 0 to nHead - 1 do begin
       HeadOffset := h * HeadDim;
-      cblas_sgemm(
-        RowMajor,
-        Trans,
-        NoTrans,
-        SeqLen,
-        HeadDim,
-        SeqLen,
-        1.0,
-        @ScoresHead1[h].Grad[0,0], SeqLen,
-        @Q.Value[0, HeadOffset], ModelDim,
-        0.0,
-        @K.Grad[0, HeadOffset], ModelDim
-      );
+      MatMulFullNT(@ScoresHead1[h].Grad[0,0], @Q.Value[0, HeadOffset], @K.Grad[0, HeadOffset], SeqLen, HeadDim, SeqLen, SeqLen, ModelDim, ModelDim);
     end;
 
     // 1D. RoPE. Nil.

@@ -15,12 +15,12 @@ uses
 const
   InvSqrtHeadDim: Single = 1 / Sqrt(HeadDim);         // Used in softmax.
 
-procedure RunTransform(var WModel: WModelType);
+procedure RunTransform(var WModelParams: TWModelParams);
 
 implementation
 
 // Run the transformer.
-procedure RunTransform(var WModel: WModelType);
+procedure RunTransform(var WModelParams: TWModelParams);
 var
   h, i, j, HeadOffset: Integer;
 begin
@@ -28,12 +28,12 @@ begin
   writeln('Entering Transformer/FFN/Head Output');
 
   // Zero gradients.
-  ZeroGradients(WModel);
+  ZeroGradients(WModelParams);
 
   // Display X.Value matrix.
-  VTPDisplayX('Display X.Value in transform, before any action.', X.Value, G);
+  VTPDisplayX('Display X.Value in transform, before any action.', WModelState.X.Value, G);
 
-  with WModel do begin
+  with WModelParams do with WModelState do begin
   // BLOCK 0.
 
   // 1. FORWARD STAGE: ATTENTION.
@@ -503,7 +503,7 @@ begin
     VTPDisplayX('Display X.Grad, in transform, at end.', X.Grad, G);
 
     // Modify weights and biases.
-    Optimization(WModel);
+    Optimization(WModelParams);
 
     // Place X7 in X for next block.
     CopyXMatrix(X7.Value, X.Value, SeqLen, ModelDim);

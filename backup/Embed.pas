@@ -24,11 +24,11 @@ procedure RunEmbed(const TokenizedCorpus: TIVector);
 implementation
 
 const
-  Scale = Sqrt(ModelDim);    // Optional transformer-style embedding scaling by sqrt(d_model).
+  Scale = Sqrt(ModelDim);         // Optional transformer-style embedding scaling by sqrt(d_model).
 
 var
-  WModel: WModelType;        // WModel is declared here. (Change to WModel.)
-  Block: Integer;            // Number of iterations sequentially of Transform.
+  WModelParams: TWModelParams;    // WModel is declared here. (Change to WModel.)
+  Block: Integer;                 // Number of iterations sequentially of Transform.
 
 // Create the target vector for use in head output.
 procedure BuildTargetVector(var Target: TIDimVector; const TokenizedCorpus: TIVector;
@@ -62,7 +62,7 @@ begin
 
     // Copy embedding vector.
     for j := 0 to ModelDim - 1 do
-      X[i, j] := WModel.Embeddings.Value[id, j];
+      X[i, j] := WModelParams.Embeddings.Value[id, j];
   end;
 end;
 
@@ -112,12 +112,12 @@ var
         ChDir(WorkingDir);   // Save model.
         Write('Enter filename: ');
         Readln(ModelFileName);
-        SaveModel(ModelFileName, WModel, Success);
+        SaveModel(ModelFileName, WModelParams, Success);
         ChDir('..');
         if Success then
           Writeln('File ', f, ' successfully saved.')
         else
-          Writeln('File not saved.')'
+          Writeln('File not saved.');
         Pause;
       end;
 
@@ -134,18 +134,18 @@ begin
   // Seed the weights with random numbers.
   for i := 0 to nSymbols - 1 do             // Random normal distribution.
     for j := 0 to ModelDim - 1 do           // Mean = 0, SD = 0.02.
-      WModel.Embeddings.Value[i, j] := RandG(0.0, 0.02); // Only time I use this randomizer.
+      WModelParams.Embeddings.Value[i, j] := RandG(0.0, 0.02); // Only time I use this randomizer.
 
   Writeln('First quarter of two rows of embeddings.');
   for k := 0 to ModelDim div 4 - 1 do
-    Write(WModel.Embeddings.Value[1, k]: 8: 6, ' ');
+    Write(WModelParams.Embeddings.Value[1, k]: 8: 6, ' ');
   Writeln;
   for k := 0 to ModelDim div 4 - 1 do
-    Write(WModel.Embeddings.Value[2, k]: 8: 6, ' ');
+    Write(WModelParams.Embeddings.Value[2, k]: 8: 6, ' ');
   Writeln;
   Pause;
 
-  VTPDisplayX('Display Embeddings.Value prior to Transform.', WModel.Embeddings.Value, B);
+  VTPDisplayX('Display Embeddings.Value prior to Transform.', WModelParams.Embeddings.Value, B);
 
   // Initialize.
   InitializeTransformer(WModel);
@@ -166,24 +166,24 @@ begin
     if VerboseTransform then Pause;
 
     // Build X from TokenizedCorpus[start .. start + SeqLen - 1].
-    BuildInputMatrix(X.Value, TokenizedCorpus, Start, SeqLen);
+    BuildInputMatrix(WModelState.X.Value, TokenizedCorpus, Start, SeqLen);
 
     // Optional transformer-style embedding scaling by sqrt(d_model).
     for i := 0 to SeqLen - 1 do
       for j := 0 to ModelDim - 1 do
-        X.Value[i, j] := X.Value[i, j] * Scale;
+        WModelState.X.Value[i, j] := WModelState.X.Value[i, j] * Scale;
 
     // Build the target vector, one ahead, for the loss stage.
     BuildTargetVector(TargetTokens, TokenizedCorpus, Start + 1, SeqLen);
 
-    VTPDisplayX('Display X.Value before transform.', X.Value, G);
+    VTPDisplayX('Display X.Value before transform.', WModelState.X.Value, G);
 
     // Forward and backward pass thru transformer.
     for Block := 0 to nBlock - 1 do begin
       Writeln('$$$ Starting Block ', Block, '  Sequence Start ', Start, ' $$$');
       if VerboseTransform then Pause;
 
-      RunTransform(WModel);
+      RunTransform(WModelParams);
 
       if PauseIfKeyPressed then
         ReadEmbedIfKeyPressed;

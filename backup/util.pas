@@ -15,9 +15,10 @@ procedure XGUniformW(var W: TWeightMatrix; FanIn, FanOut: Integer);
 procedure XGUniformWHead(var W: TWeightHeadMatrix; FanIn, FanOut: Integer);
 procedure XGUniformW1(var W: TWeightProjMatrix; FanIn, FanOut: Integer);
 procedure XGUniformW2(var W: TWeightProjMatrixT; FanIn, FanOut: Integer);
-procedure InitializeTransformer(var WModel: WModelType);
-procedure ZeroGradients(var WesModel: WModelType);
-procedure Optimization(var WesModel: WModelType);
+procedure InitializeTransformer(var WModel: TWModelParams);
+procedure ZeroGradients(var WesModel: TWModelParams);
+procedure UpdateParam(const N: Integer; const LearningRate: Single; const Grad: PSingle; Param: PSingle);
+procedure Optimization(var WesModel: TWModelParams);
 procedure ApplyRoPE(var H: TSeqMatrix;  const InvFreq: TFVector; SeqLen, ModelDim: Integer);
 procedure ApplyAutoregressiveMask(var ScoresHead: TScoresMatrix; const L: Integer);
 procedure SoftmaxForward(const x: TFVector; out y: array of Single);
@@ -113,7 +114,7 @@ begin
 end;
 
 // Initialize the transformer stage.
-procedure InitializeTransformer(var WModel: WModelType);
+procedure InitializeTransformer(var WModel: TWModelParams);
 var
   j: Integer;
 begin
@@ -152,44 +153,52 @@ begin
 end;
 
 // Zero out all gradients.
-procedure ZeroGradients(var WesModel: WModelType);
+procedure ZeroGradients(var WesModel: TWModelParams);
 begin
-  FillChar(X.Grad, SizeOf(X.Grad), 0);
-  FillChar(X1.Grad, SizeOf(X1.Grad), 0);
-  FillChar(X2.Grad, SizeOf(X2.Grad), 0);
-  FillChar(X3.Grad, SizeOf(X3.Grad), 0);
-  FillChar(X4.Grad, SizeOf(X4.Grad), 0);
-  FillChar(X5.Grad, SizeOf(X5.Grad), 0);
-  FillChar(X6.Grad, SizeOf(X6.Grad), 0);
-  FillChar(X7.Grad, SizeOf(X7.Grad), 0);
-  FillChar(X1k.Grad, SizeOf(X1k.Grad), 0);
-  FillChar(X1q.Grad, SizeOf(X1q.Grad), 0);
-  FillChar(X1v.Grad, SizeOf(X1v.Grad), 0);
-  FillChar(K.Grad, SizeOf(K.Grad), 0);
-  FillChar(Q.Grad, SizeOf(Q.Grad), 0);
-  FillChar(V.Grad, SizeOf(V.Grad), 0);
-  FillChar(Hidden1.Grad, SizeOf(Hidden1.Grad), 0);
-  FillChar(Hidden2.Grad, SizeOf(Hidden2.Grad), 0);
-  with WesModel do begin
-    FillChar(Wk.Grad, SizeOf(Wk.Grad), 0);
-    FillChar(Wq.Grad, SizeOf(Wq.Grad), 0);
-    FillChar(Wv.Grad, SizeOf(Wv.Grad), 0);
-    FillChar(W0.Grad, SizeOf(W0.Grad), 0);
-    FillChar(W1.Grad, SizeOf(W1.Grad), 0);
-    FillChar(W2.Grad, SizeOf(W2.Grad), 0);
-    FillChar(Embeddings.Grad, SizeOf(Embeddings.Grad), 0);
-    FillChar(b1.Grad, SizeOf(b1.Grad), 0);
-    FillChar(b2.Grad, SizeOf(b2.Grad), 0);
-    FillChar(Gamma1.Grad, SizeOf(Gamma1.Grad), 0);
-    FillChar(Gamma2.Grad, SizeOf(Gamma2.Grad), 0);
-    FillChar(Beta1.Grad, SizeOf(Beta1.Grad), 0);
-    FillChar(Beta2.Grad, SizeOf(Beta2.Grad), 0);
+  with WModelState do begin
+    FillChar(X.Grad, SizeOf(X.Grad), 0);
+    FillChar(X1.Grad, SizeOf(X1.Grad), 0);
+    FillChar(X2.Grad, SizeOf(X2.Grad), 0);
+    FillChar(X3.Grad, SizeOf(X3.Grad), 0);
+    FillChar(X4.Grad, SizeOf(X4.Grad), 0);
+    FillChar(X5.Grad, SizeOf(X5.Grad), 0);
+    FillChar(X6.Grad, SizeOf(X6.Grad), 0);
+    FillChar(X7.Grad, SizeOf(X7.Grad), 0);
+    FillChar(X1k.Grad, SizeOf(X1k.Grad), 0);
+    FillChar(X1q.Grad, SizeOf(X1q.Grad), 0);
+    FillChar(X1v.Grad, SizeOf(X1v.Grad), 0);
+    FillChar(K.Grad, SizeOf(K.Grad), 0);
+    FillChar(Q.Grad, SizeOf(Q.Grad), 0);
+    FillChar(V.Grad, SizeOf(V.Grad), 0);
+    FillChar(Hidden1.Grad, SizeOf(Hidden1.Grad), 0);
+    FillChar(Hidden2.Grad, SizeOf(Hidden2.Grad), 0);
+    with WesModel do begin
+      FillChar(Wk.Grad, SizeOf(Wk.Grad), 0);
+      FillChar(Wq.Grad, SizeOf(Wq.Grad), 0);
+      FillChar(Wv.Grad, SizeOf(Wv.Grad), 0);
+      FillChar(W0.Grad, SizeOf(W0.Grad), 0);
+      FillChar(W1.Grad, SizeOf(W1.Grad), 0);
+      FillChar(W2.Grad, SizeOf(W2.Grad), 0);
+      FillChar(Embeddings.Grad, SizeOf(Embeddings.Grad), 0);
+      FillChar(b1.Grad, SizeOf(b1.Grad), 0);
+      FillChar(b2.Grad, SizeOf(b2.Grad), 0);
+      FillChar(Gamma1.Grad, SizeOf(Gamma1.Grad), 0);
+      FillChar(Gamma2.Grad, SizeOf(Gamma2.Grad), 0);
+      FillChar(Beta1.Grad, SizeOf(Beta1.Grad), 0);
+      FillChar(Beta2.Grad, SizeOf(Beta2.Grad), 0);
+    end;
   end;
+end;
+
+// Parameter update. Param := Param - LearningRate * Grad.
+procedure UpdateParam(const N: Integer; const LearningRate: Single; const Grad: PSingle; Param: PSingle);
+begin
+  AddScaled(N, -LearningRate, Grad, Param);
 end;
 
 { Optimization }
 // Update the weights and biases.
-procedure Optimization(var WesModel: WModelType);
+procedure Optimization(var WesModel: TWModelParams);
 var
   i, v: Integer;
 begin
@@ -221,7 +230,7 @@ begin
     // Add input-side embedding gradients into Embeddings.Grad.
     for i := 0 to SeqLen - 1 do begin
       v := TokenID[i];
-      cblas_saxpy(ModelDim, 1.0, @X.Grad[i,0], 1, @Embeddings.Grad[v,0], 1);
+      cblas_saxpy(ModelDim, 1.0, @WModelState.X.Grad[i,0], 1, @Embeddings.Grad[v,0], 1);
     end;
 
     // Apply the total embedding gradient (output-side + input-side).
@@ -382,24 +391,29 @@ procedure GradientFromCEProbabilities;
 var
   i, v: Integer;
 begin
-  for i := 0 to SeqLen - 1 do begin
-    for v := 0 to nVocab - 1 do
-      TopGradient[i, v] := Probs[i, v];
-    TopGradient[i, TargetTokens[i]] := Probs[i, TargetTokens[i]] - 1.0;
-  end;
+  //with WModelState do
+    for i := 0 to SeqLen - 1 do begin
+      for v := 0 to nVocab - 1 do
+        WModelState.TopGradient[i, v] := WModelState.Probs[i, v];
+
+      WModelState.TopGradient[i, TargetTokens[i]] :=
+        WModelState.Probs[i, TargetTokens[i]] - 1.0;
+    end;
 end;
+
 
 // Calculate gradient for KL divergence with one-hot targets: dL/dProbs = Q - P.
 procedure GradientFromKLDivergence;
 var
-  i, v: Integer;
+  i, s: Integer;
 begin
-  for i := 0 to SeqLen - 1 do
-    for v := 0 to nVocab - 1 do
-      if v = TargetTokens[i] then
-        TopGradient[i, v] := Probs[i, v] - 1.0   // Q - 1.
-      else
-        TopGradient[i, v] := Probs[i, v] - 0.0;  // Q - 0.
+  with WModelState do
+    for i := 0 to SeqLen - 1 do
+      for s := 0 to nVocab - 1 do
+        if s = TargetTokens[i] then
+          TopGradient[i, s] := Probs[i, s] - 1.0   // Q - 1.
+        else
+          TopGradient[i, s] := Probs[i, s] - 0.0;  // Q - 0.
 end;
 
 // Back propagation addition.

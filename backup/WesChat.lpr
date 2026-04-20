@@ -3,7 +3,7 @@ program WesChat;
 {$mode ObjFPC}{$H+}{$I proprietary.txt}
 
 { WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wespar.com}
-{ Note: Edited 4/19/2026 3 pm on CruiseK Kopia}
+{ Note: Edited 4/20/2026 8 am -- saved as WesChat 12 on GitHub and Kopia}
 { Notes: TC comes from WesTokenize or ChatGPTTokenize; WesModel (with Embeddings) comes from Embed }
 uses
   CombineTables,
@@ -408,7 +408,7 @@ begin
 
         // Run Embed.
         If QueryEmbed then begin
-          RunEmbed(TokenizedCorpus)
+          RunEmbed(TokenizedCorpus);
           if Success then ForwardQuery;
         end;
       end;

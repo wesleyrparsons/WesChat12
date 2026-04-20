@@ -85,12 +85,6 @@ type                                                                           /
   TWeightProjTensorT = record
     Value, Grad:  TWeightProjMatrixT;
   end;
-  {TVocabWeightTensor = record
-    Value, Grad:  TVocabWeightMatrix;
-  end;
-  TSeqVocabTensor = record
-    Value, Grad:  TSeqVocabMatrix;
-  end; }
   TScoresHeadTensor = record
     Value, Grad:  TScoresMatrix;
   end;
@@ -107,7 +101,7 @@ type                                                                           /
   TSVector = array of String;          // Array of string.
   TPart = (B, E, F, G);                // Length = VocabSize * Dimension. But only use nSymbols in rows.
   TSymbolTable = TRBSVector;           // Array of symbols. So index of array is a symbol string.
-  WModelType = record                  //  Model of trainable parameters.
+  TWModelParam = record                // Model of trainable parameters.
     Embeddings:                     TEmbeddingsTensor;     // Embeddings cannot be dynamic, CBLAS will not work.
     Wq, Wk, Wv, W0:                 TWeightTensor;         // Weights.
     W1:                             TWeightProjTensor;     // Weights.
@@ -115,6 +109,14 @@ type                                                                           /
     b1:                             TSeqVectorProjTensor;  // Biases.
     b2:                             TSeqVectorTensor;      // Biases.
     Gamma1, Beta1, Gamma2, Beta2:   TSeqVectorTensor;      // Weights.
+  end;
+  TWModelState = record                // Model of non-trainable parameters.
+    X, X1, X2, X3, X4, X5, X6, X7:  TSeqTensor;              // X's at all stages.
+    X1q, X1v, X1k:                  TSeqTensor;              // X's for Q, K, V.
+    Q, K, V:                        TSeqTensor;              // Q is X*Wq, K is X*Wk, V is X*Wv.
+    ScoresHead1, ScoresHead2:       array[0..nHead - 1] of TScoresHeadTensor;    // Scores partitioned into nHeads.
+    Hidden1, Hidden2:               THiddenTensor;           // Neural net payer.
+    Probs, TopGradient:             TSeqVocabMatrix;         // Logit and Gradient.
   end;
 
 var
@@ -139,12 +141,7 @@ var
   Training: Boolean = True;                      // In training as opposed to inference mode.
 
   // Non-trainable parameters.
-  X, X1, X2, X3, X4, X5, X6, X7:  TSeqTensor;              // X's at all stages.
-  X1q, X1v, X1k:                  TSeqTensor;              // X's for Q, K, V.
-  Q, K, V:                        TSeqTensor;              // Q is X*Wq, K is X*Wk, V is X*Wv.
-  ScoresHead1, ScoresHead2:       array[0..nHead - 1] of TScoresHeadTensor;    // Scores partitioned into nHeads.
-  Hidden1, Hidden2:               THiddenTensor;           // Neural net payer.
-  Probs, TopGradient:             TSeqVocabMatrix;         // Logit and Gradient.
+  WModelState: TWModelState;
 
   // Caches.
   LNInvStd1:  TFSVector;          // Caches for Layer-Norm.

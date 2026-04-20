@@ -29,6 +29,7 @@ procedure MatMulNN(const A, B: PSingle; C: PSingle; M, N, K: Integer);
 procedure MatMulNT(const A, B: PSingle; C: PSingle; M, N, K: Integer);
 procedure MatMulTN(const A, B: PSingle; C: PSingle; M, N, K: Integer);
 procedure AddScaled(const N: Integer; const Alpha: Single; const X: PSingle; Y: PSingle);
+procedure Scale(const N: Integer; const Alpha: Single; X: PSingle);
 procedure MatAdd(const A, B: TSeqMatrix; var C: TSeqMatrix; Rows, Cols: Integer);
 
 // Partition and concatenate procedures.
@@ -284,6 +285,16 @@ begin
     Alpha,
     X, 1,
     Y, 1
+  );
+end;
+
+// Scale vector.
+procedure Scale(const N: Integer; const Alpha: Single; X: PSingle);
+begin
+  cblas_sscal(
+    N,
+    Alpha,
+    X,1
   );
 end;
 

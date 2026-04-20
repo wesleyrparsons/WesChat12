@@ -25,7 +25,7 @@ var
   Success: Boolean;                         // For loading and saving files.
   CorpusFileName, SymbolFileName,           // File names.
     TokenFileName, ModelFileName, ListFile: string;
-  Model: WModelType;
+  Model: TWModelParams;
   CombinedSymbolTable: TSymbolTable;        // For combining two symbol tables.
   MinSymbols: Integer = 50;                 // Minimum for loading.
   MinTokens: Integer = 50;                  // Minimum for loading.

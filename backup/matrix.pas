@@ -28,6 +28,7 @@ procedure MatMulFullAccTN(const A, B: PSingle; C: PSingle; M, N, K, lda, ldb, ld
 procedure MatMulNN(const A, B: PSingle; C: PSingle; M, N, K: Integer);
 procedure MatMulNT(const A, B: PSingle; C: PSingle; M, N, K: Integer);
 procedure MatMulTN(const A, B: PSingle; C: PSingle; M, N, K: Integer);
+procedure AddScaled(const N: Integer; const Alpha: Single; const X: PSingle; Y: PSingle);
 procedure MatAdd(const A, B: TSeqMatrix; var C: TSeqMatrix; Rows, Cols: Integer);
 
 // Partition and concatenate procedures.
@@ -275,6 +276,15 @@ begin
     B, K,
     1.0,
     C, N);
+end;
+
+procedure AddScaled(const N: Integer; const Alpha: Single; const X: PSingle; Y: PSingle);
+begin
+  cblas_saxpy(N,
+    Alpha,
+    X, 1,
+    Y, 1
+  );
 end;
 
 // Matrix addition, overwrite.

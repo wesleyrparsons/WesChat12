@@ -145,6 +145,7 @@ begin
     Result := True;
 end;
 
+// Run the model forward.
 procedure ForwardQuery;
 begin
   Training := False;

@@ -242,8 +242,7 @@ begin
         VTPDisplayX('Display Probs, in transform, before softmax.', Probs, B);
 
         // Display Embeddings.Value matrix.
-        // VTPDisplayX('Display Embeddings.Value in transform, before computing Logit.', Embeddings.Value, B);
-           //Need display for Embeddings.
+        VTPDisplayX('Display Embeddings.Value in transform, before computing Logit.', Embeddings.Value, B);
 
         // 3B. Softmax. Obtain Probs from Probs.
 
@@ -331,7 +330,8 @@ begin
       // Backprop Hidden Grad creates b1 Grad: Input Hidden1.Grad. Output b1.Grad.
       // Equation: b1.Grad = sum of Hidden1.Grad. b1.Grad is R^{L x DB}. Hidden1.Grad in R^{L x DB}.
       for i := 0 to SeqLen - 1 do
-        cblas_saxpy(ModelDimProj,  1.0,  @Hidden1.Grad[i, 0], 1,  @b1.Grad[0], 1);
+        AddScaled(ModelDimProj, 1.0, @Hidden1.Grad[i,0], @b1.Grad[0]);
+        //cblas_saxpy(ModelDimProj,  1.0,  @Hidden1.Grad[i, 0], 1,  @b1.Grad[0], 1);
 
       // 2A. Backprop Multiplication/Overwrite. Obtain W1 from X5ᵀ and Hidden1.
 

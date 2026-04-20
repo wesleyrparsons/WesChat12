@@ -242,8 +242,7 @@ begin
         VTPDisplayX('Display Probs, in transform, before softmax.', Probs, B);
 
         // Display Embeddings.Value matrix.
-        // VTPDisplayX('Display Embeddings.Value in transform, before computing Logit.', Embeddings.Value, B);
-           //Need display for Embeddings.
+        VTPDisplayX('Display Embeddings.Value in transform, before computing Logit.', Embeddings.Value, B);
 
         // 3B. Softmax. Obtain Probs from Probs.
 
@@ -410,7 +409,8 @@ begin
 
     // Scaling after Softmax.
     for h := 0 to nHead - 1 do
-      cblas_sscal(SeqLen * SeqLen, InvSqrtHeadDim, @ScoresHead1[h].Grad[0,0], 1);
+      Scale(SeqLen * SeqLen, InvSqrtHeadDim, @ScoresHead1[h].Grad[0,0]);
+      //cblas_sscal(SeqLen * SeqLen, InvSqrtHeadDim, @ScoresHead1[h].Grad[0,0], 1);
 
     // Backprop AutoRegression.
     // Equation: ScoresHead1.Grad = Unmask(ScoresHead1.Grad).

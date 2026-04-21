@@ -2,75 +2,33 @@ unit Embed;
 
 {$mode ObjFPC}{$H+}{$I proprietary.txt}
 
-{ WesChat, Version 1.1, January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wespar.com.}
+{ WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wespar.com.}
 
 interface
 
 uses
   Display,
   Global,
+  IOHandler,
   Math,
   SysUtils,
-  Transform;
+  Transform,
+  Util;
 
- {From the tokenization stage:
-  TokenizedCorpus are vector of Integers, which become InputTokens and TargetTokens.
+ {TokenizedCorpus is a vector of Integers, which become InputTokens and TargetTokens.
   Arrays are nSymbols x ModelDim of Single.
-  nSymbols is vocabulary size. ModelDim is the dimension of the models, the loads.}
+  nSymbols (nVocab) is vocabulary size. ModelDim is the dimension of the models, the loads.}
 
 procedure RunEmbed(const TokenizedCorpus: TIVector);
-procedure TestEmbedding;
 
 implementation
 
 const
-  MaxSeq = 128;                        // Need maximum size of sequence to dimension array.
-  Scale = Sqrt(ModelDim);
+  Scale = Sqrt(ModelDim);         // Optional transformer-style embedding scaling by sqrt(d_model).
 
 var
-  Embeddings: array of array of Single;        // Row is token, column is weights.
-  Block: Integer;
-
-// Test emnbedding with small model of 4 tokens.
-procedure TestEmbedding;
-const
-  TestVocab = 5;
-  TestSeq = 4;
-var
-  i, j: Integer;
-  Tokens: array[0..TestSeq - 1] of Integer; // For testing, tokens.
-  XTest: TSeqMatrix;                        // For tesing, sequence.
-  ETest: TEmbeddingMatrix;                  // For testing, embedding matrix.
-begin
-  Writeln('--- Embedding Test ---');
-
-  { 1. Define a small token sequence. }
-  Tokens[0] := 0;
-  Tokens[1] := 1;
-  Tokens[2] := 2;
-  Tokens[3] := 3;
-
-  { 2. Create deterministic embeddings. }
-  for i := 0 to TestVocab - 1 do
-    for j := 0 to ModelDim - 1 do
-      ETest[i, j] := i + 0.01 * j;  // Easy to verify visually.
-
-  { 3.  Standardizatio to keep in range. }
-  for i := 0 to SeqLen - 1 do
-    for j := 0 to ModelDim - 1 do
-      X[i, j] := X[i, j] * Scale;
-
-  { 4. Display result. }
-  for i := 0 to TestSeq - 1 do begin
-    Write('Token ', Tokens[i], ': ');
-    for j := 0 to Min(7, ModelDim - 1) do
-      Write(X[i, j]:8:4, ' ');
-    Writeln;
-  end;
-
-  Writeln('--- End Test ---');
-  Readln;
-end;
+  WModelParams: TWModelParams;    // WModel is declared here. (Change to WModel.)
+  Block: Integer;                 // Number of iterations sequentially of Transform.
 
 // Create the target vector for use in head output.
 procedure BuildTargetVector(var Target: TIDimVector; const TokenizedCorpus: TIVector;
@@ -78,7 +36,9 @@ procedure BuildTargetVector(var Target: TIDimVector; const TokenizedCorpus: TIVe
 var
   i: Integer;
 begin
-  // Target must be sized [0..L - 1].
+  Assert(StartIndex >= 0);
+  Assert(StartIndex + L <= Length(TokenizedCorpus));
+
   for i := 0 to L - 1 do
     Target[i] := TokenizedCorpus[StartIndex + i];
 end;
@@ -102,7 +62,7 @@ begin
 
     // Copy embedding vector.
     for j := 0 to ModelDim - 1 do
-      X[i, j] := Embeddings[id, j];
+      X[i, j] := WModelParams.Embeddings.Value[id, j];
   end;
 end;
 
@@ -111,121 +71,130 @@ procedure RunEmbed(const TokenizedCorpus: TIVector);
 var
   i, j, k: Integer;
   Start, EmbedLoop: Integer;
-  Stride: Integer = 64;
+  Stride: Integer = 64;      // Stride 64 tokens every sequence.
 
   procedure ReadEmbedIfKeyPressed;
   var
     key: char;
+    Success: Boolean;
+    ModelFileName: string;
   begin
     key := CheckForControlKey;
     case key of
       'x', 'X': begin
-          writeln('Exit requested. Stopping execution.');
-          Pause;
-          Halt;              // Immediately terminate program.
-        end;
+        Writeln('Exit requested. Stopping execution.');
+        Pause;
+        Halt;                // Immediately terminate program.
+      end;
       'b', 'B': begin
-          writeln('Break requested. Exiting loop.');
-          Pause;
-          Block := nBlock;   // Break out of the loop cleanly.
-        end;
+        Writeln('Break requested. Exiting loop.');
+        Pause;
+        Block := nBlock;     // Break out of the loop cleanly.
+      end;
       'v', 'V': begin
         VeryVerbose := not VeryVerbose;
-        writeln('Very verbose mode: ', VeryVerbose);
+        Writeln('Very verbose mode: ', VeryVerbose);
         Pause;
       end;                   // Change verbosity.
-      'p', 'P': begin
-        writeln;
+      'i', 'I': begin
+        Writeln;
         ReportInfo;          // Report program info.
         Pause;
       end;
-      'e', 'E': begin
-        writeln('Embedding. nVocab = ', nVocab, ' nSymbols = ', nSymbols, ' ModelDim = ', ModelDim + 1,
-          '  Start = ', Start, ' Stride = ', Stride, ' SeqLen = ', SeqLen, ' MaxSeq = ', MaxSeq, ' nTokenizedCorpus = ', nTokenizedCorpus);
-        writeln(DateTimeToStr(Now), '  X = Exit program. B = Break out of merge loop. V = toggle Verbose mode.');
-        writeln(' P = Program information. E = Embedding information. Embedding & transforming...');
+      't', 'T': begin
+        Writeln('Training. nVocab = ', nVocab, ' nSymbols = ', nSymbols, ' ModelDim = ', ModelDim,
+          '  Start = ', Start, ' Stride = ', Stride, ' SeqLen = ', SeqLen, ' Length of TokenizedCorpus = ', Length(TokenizedCorpus));
+        Write(DateTimeToStr(Now), '  X = Exit program. B = Break out of loop. V = toggle Verbose mode. P = Pause.');
+        Writeln('  W = WesChat Information. T = Training information. S = Save. Training...');
         Pause;
       end;
+      's', 'S': begin
+        ChDir(WorkingDir);   // Save model.
+        Write('Enter filename: ');
+        Readln(ModelFileName);
+        SaveModel(ModelFileName, WModelParams, Success);
+        ChDir('..');
+        if Success then
+          Writeln('File ', f, ' successfully saved.')
+        else
+          Writeln('File not saved.');
+        Pause;
+      end;
+
     end;
   end;
 
 begin
-  if VeryVerbose then begin
-    writeln('Start Embedding. nVocab = ', nVocab, ' nSymbols = ', nSymbols, ' ModelDim = ', ModelDim + 1,
-       ' SeqLen = ', SeqLen, ' MaxSeq = ', MaxSeq, ' nTokenizedCorpus = ', nTokenizedCorpus);
-  end;
+  nVocab := nSymbols;    // Need nVocab (second name for variable) for Transform.
 
-  // Set the dimensions of the embedding matrix.
-  SetLength(Embeddings, nSymbols);
-  for i := 0 to nSymbols - 1 do
-    SetLength(Embeddings[i], ModelDim);
+  if VeryVerbose then
+    Writeln('Start Training. nVocab = ', nVocab, ' nSymbols = ', nSymbols, ' ModelDim = ', ModelDim,
+      ' SeqLen = ', SeqLen, ' Length of TokenizedCorpus = ', Length(TokenizedCorpus));
 
   // Seed the weights with random numbers.
   for i := 0 to nSymbols - 1 do             // Random normal distribution.
     for j := 0 to ModelDim - 1 do           // Mean = 0, SD = 0.02.
-      Embeddings[i, j] := RandG(0.0, 0.02); // Only time I use this randomizer.
+      WModelParams.Embeddings.Value[i, j] := RandG(0.0, 0.02); // Only time I use this randomizer.
 
-  writeln('First quarter of two rows of embeddings.');
+  Writeln('First quarter of two rows of embeddings.');
   for k := 0 to ModelDim div 4 - 1 do
-    write(Embeddings[1, k]: 8: 6, ' ');
-  writeln;
+    Write(WModelParams.Embeddings.Value[1, k]: 8: 6, ' ');
+  Writeln;
   for k := 0 to ModelDim div 4 - 1 do
-    write(Embeddings[2, k]: 8: 6, ' ');
-  writeln;
+    Write(WModelParams.Embeddings.Value[2, k]: 8: 6, ' ');
+  Writeln;
   Pause;
 
-  // Initialize.
-  InitializeTransformer;
+  VTPDisplayX('Display Embeddings.Value prior to Transform.', WModelParams.Embeddings.Value, B);
 
-  // Stride loop theu Sequence.
+  // Initialize.
+  InitializeTransformer(WModelParams);
+  SetLength(TokenID, Length(TokenizedCorpus));
+  TokenID := TokenizedCorpus;
+
+  // Stride loop thru Sequence.
   Start := 0;
   EmbedLoop := 0;
-  while (Start + SeqLen) < nTokenizedCorpus do begin
+  while (Start + SeqLen) < Length(TokenizedCorpus) do begin
 
     // Display number of loops thru embed loop.
     Inc(EmbedLoop);
-    writeln('&&& Loop thru Embed: start ', Start, ' and loop number ', EmbedLoop, ' &&&');
-    writeln(DateTimeToStr(Now), '  X = Exit program. B = Break out of merge loop. V = toggle Verbose mode.');
-    writeln('  P = Program information. E = Embedding information. Embedding & transforming...');
+    Writeln('&&& Loop thru Embed: start ', Start, ' and loop number ', EmbedLoop, ' &&&');
+    Writeln(DateTimeToStr(Now), '  X = Exit program. B = Break out of merge loop. V = toggle Verbose mode.');
+    Writeln('  P = Program information. E = Embedding information. Embedding & transforming...');
 
     if VerboseTransform then Pause;
 
     // Build X from TokenizedCorpus[start .. start + SeqLen - 1].
-    BuildInputMatrix(X, TokenizedCorpus, Start, SeqLen);
+    BuildInputMatrix(WModelState.X.Value, TokenizedCorpus, Start, SeqLen);
 
-    // Standardizatio to keep in range.
+    // Optional transformer-style embedding scaling by sqrt(d_model).
     for i := 0 to SeqLen - 1 do
       for j := 0 to ModelDim - 1 do
-        X[i, j] := X[i, j] * Scale;
+        WModelState.X.Value[i, j] := WModelState.X.Value[i, j] * Scale;
 
     // Build the target vector, one ahead, for the loss stage.
     BuildTargetVector(TargetTokens, TokenizedCorpus, Start + 1, SeqLen);
 
-    if VerboseTokenize then begin
-      writeln('Display X, beginning, after PE, before transform.');
-      DisplayX(X, G);
-      Pause;
-    end;
+    VTPDisplayX('Display X.Value before transform.', WModelState.X.Value, G);
 
     // Forward and backward pass thru transformer.
     for Block := 0 to nBlock - 1 do begin
-      writeln('$$$ Starting Block ', Block, '  Sequence Start ', Start, ' $$$');
+      Writeln('$$$ Starting Block ', Block, '  Sequence Start ', Start, ' $$$');
       if VerboseTransform then Pause;
 
-      RunTransform;
+      RunTransform(WModelParams);
 
       if PauseIfKeyPressed then
         ReadEmbedIfKeyPressed;
-
-      Start := Start + Stride;
     end;
+
+    Start := Start + Stride;
   end;
 
-  nVocab := nSymbols;    // I have two names for this variable.
-  writeln('End of training. Press <CR> to continue.');
+  Writeln('End of training. Press <CR> to continue.');
   Readln;
 end;
 
 end.
-
 

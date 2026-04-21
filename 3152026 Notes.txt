@@ -1,6 +1,23 @@
 3/15/2026 Notes
 
+<<<<<<< HEAD
 1. Add a regex pretokenizer.
+=======
+General
+
+1. Better model architecture.
+  type
+    TModel = record
+      Embedding : TEmbeddingMatrix;
+      Wq : TMatrix;
+      Wk : TMatrix;
+      Wv : TMatrix;
+      Wo : TMatrix;
+      ...
+    end;
+
+Tokenizer.
+>>>>>>> WesChat12k
 
 2. Add a max-heap helps for “what is the most frequent pair right now?”
 Instead of scanning all pairs every iteration, keep a heap ordered by count.
@@ -13,6 +30,7 @@ You do: else begin
   symIndex := t - 260;
   Write(SymbolTable[symIndex]);
 end; But your symbol table already stores merged symbols at their true token IDs:
+<<<<<<< HEAD
 That code should likely just be:
 Write(SymbolTable[t]);
 
@@ -24,3 +42,23 @@ Prev[i]
 Next[i]
 Alive[i]
 
+=======
+That code should likely just be: Write(SymbolTable[t]);
+
+4. Corpus array of byte. Use RawByteString.
+
+5. Drop linked lists. So if you later optimize training hard, use
+Tok[i], Prev[i], Next[i], Alive[i].
+
+6. Avoid repeated trie rebuilds.
+If the symbol table is fixed, build the trie once after loading. ??
+
+1. Add a regex pretokenizer. Nope, not necessary.
+
+Transform.
+
+1. Many models reuse the embedding matrix for output projection:
+logits = X_final · Embedding^T.
+This is called weight tying. Don't need WVocab.
+The gradient has to hit the embedding matrix after X0.
+>>>>>>> WesChat12k

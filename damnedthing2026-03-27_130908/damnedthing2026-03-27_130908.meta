@@ -1,0 +1,50 @@
+
+--- File Information ---
+Files used in symbol table: 
+damnedthing.txt   18457 bytes   3/27/2026 1:08:34 PM  
+
+--- Time Statistics ---
+Start time: 3/27/2026 1:09:08 PM     End time: 3/27/2026 1:10:43 PM
+Total elapsed time: 0 hours, 1 min 34.9140 sec
+Number of symbols: 1635
+Elapsed time applying merges: 0 hours, 1 min 34.9000 sec
+Original text size (bytes/tokens): 18457
+Tokens per second (total): 194.4602
+Tokens per second (merging): 194.4889
+
+--- Symbols Statistics ---
+Number of raw byte symbols: 256
+Number of special symbols: 4
+Number of merged symbols: 1375
+Minimum symbol length: 1
+Maximum symbol length: 22
+
+Histogram of symbol lengths:
+Length  1: 256
+Length  2: 167
+Length  3: 307
+Length  4: 277
+Length  5: 198
+Length  6: 139
+Length  7: 91
+Length  8: 68
+Length  9: 49
+Length 10: 31
+Length 11: 17
+Length 12: 11
+Length 13: 7
+Length 14: 1
+Length 15: 4
+Length 16: 3
+Length 17: 3
+Length 18: 1
+Length 19: 2
+Length 22: 3
+
+Mean symbol length: 4.3303
+Median symbol length: 4.0000
+Mean tokens per symbol (compression): 11.2887
+Longest symbol:
+  Index: 1367
+  Length: 22
+  Value: "from his breast pocket"

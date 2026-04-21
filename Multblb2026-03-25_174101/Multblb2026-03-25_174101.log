@@ -1,0 +1,68 @@
+--- Program Information ---
+WesChat, Version: 1.2
+Author: Wesley R. Parsons
+Date: February 15, 2026
+Sequence Length (SeqLen): 128
+Model Dimensions (ModelDim): 160
+Dimensional Projections (Proj): 4
+Heads (nHead): 8
+Blocks (nBlock): 4
+Learning Rate (LearningRate): 0.0100
+Trainable Parameters: Wq, Wk, Wv, W0, W1, b1, W2, b2, gamma1, beta1, beta2, gamma2
+Maximum Vocabulary (MaxVocab): 12000
+Number of Vocabulary (nVocab): 15000
+
+--- File Information ---
+Files used in symbol table: 
+bela.txt  
+locke.txt  
+bela.txt  
+
+--- Time Statistics ---
+Start time: 3/25/2026 5:41:11 PM     End time: 3/25/2026 5:41:14 PM
+Total elapsed time: 0 hours, 0 min 2.4140 sec
+--- BPE Statistics ---
+Original text size (bytes/tokens): 341118
+Encoded text size (bytes/tokens): 219446
+Compression ratio: 1.5545
+
+--- Token Statistics ---
+Merged token instances: 0
+Unmerged token instances: 0
+Mean token length: 1.5545
+--- Top 30 Most Frequent Merged Tokens ---
+   1  ID=   262  Count=    4585  Symbol="e "
+   2  ID=   263  Count=    4492  Symbol="  "
+   3  ID=   285  Count=    4243  Symbol="th"
+   4  ID=   305  Count=    3624  Symbol=", "
+   5  ID=   275  Count=    3302  Symbol="s "
+   6  ID=   265  Count=    3248  Symbol="t "
+   7  ID=   304  Count=    3038  Symbol="y "
+   8  ID=   264  Count=    3013  Symbol="er"
+   9  ID=   287  Count=    2981  Symbol="re"
+  10  ID=   288  Count=    2912  Symbol="at"
+  11  ID=   289  Count=    2665  Symbol="is"
+  12  ID=   278  Count=    2442  Symbol="o "
+  13  ID=   293  Count=    2257  Symbol="of"
+  14  ID=   268  Count=    2246  Symbol="in"
+  15  ID=   266  Count=    2207  Symbol=" a"
+  16  ID=   274  Count=    1988  Symbol="se"
+  17  ID=   277  Count=    1929  Symbol="on"
+  18  ID=   272  Count=    1845  Symbol="an"
+  19  ID=   363  Count=    1654  Symbol="nd "
+  20  ID=   271  Count=    1609  Symbol="d "
+  21  ID=   279  Count=    1572  Symbol="en"
+  22  ID=   269  Count=    1472  Symbol="or"
+  23  ID=   337  Count=    1386  Symbol=", a"
+  24  ID=   307  Count=    1316  Symbol="ing"
+  25  ID=   280  Count=    1293  Symbol="ou"
+  26  ID=   359  Count=    1241  Symbol="or "
+  27  ID=   384  Count=    1232  Symbol="me"
+  28  ID=   295  Count=    1178  Symbol="om"
+  29  ID=   340  Count=    1091  Symbol="ce"
+  30  ID=   282  Count=    1052  Symbol="l "
+Hit <CR> to continue.... 
+Merged tokens never used: 13
+Merged tokens used only once: 2
+Top 30 merged tokens account for 69113 / 91526 merged-token instances = 75.51%
+

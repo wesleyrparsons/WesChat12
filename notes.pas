@@ -2,39 +2,85 @@ unit Notes;
 
 {$mode ObjFPC}{$H+}{$I proprietary.txt}
 
-{ WesChat, Version 1.1, January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wespar.com.}
+{ WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wespar.com.}
 
-interface
-implementation
-begin
-end.
-{Notes
+General
 
-To Do.
-Fix computevocabfromlist.
-In main program: Read Corpus, Read Files (vocab and merge), Tokenize, Embed, Transform.
-One proc: display merge/token info. One proc: display transform/embed info. Move keypressed to global.
+1. Check which trainable and non-t params need to be in zerogradients.
 
-LoadCorpus    FileName          Corpus
-LoadTables    Corpus            Symbol & Merge
-Embed         Symbol & Merge    Sequence
-Tokenize      Sequence          TokCorpus
-RunForward    UserInput         Output
+3. Test SaveModel and LoadModel procedures.
 
-What to do with nTokens and append proc.
-Check adding EOS and BOS at end of multiple corpuses.
-Should SeqLen be a BVectorType.
-In Tokenize, add maxheap with a hash table to speed up tokenization.
-🔹 Store attention softmax outputs
-Do I need them intact for backprop through softmax.
+3a. Use saxpy and Updateparam im Optimization routine.
 
-Resolved.
-Use Welford addition. No, not with sgemm.
-Use nSymbols in Tokenization, and nVocab in Training.
-In tokenize, add longest token, and 20 most common tokens. No, too much trouble. Remove.
-Put Hidden on the heap; make it a dynamically allocated variable.
-  No. cblas will not work.
+4. In main program: Read Corpus, Read Files (vocab and merge), Tokenize, Embed, Transform.
+One proc: display merge/token info. One proc: display transform/embed info.
 
+  Proc          Input                      Output
+  LoadCorpus    CorpusFileName             Corpus
+  Symbolize     CorpusFileName             SymbolTable
+                SymbolFileName
+  Wes Tokenize  SymbolTable                TokenizedCorpus
+  GPT Tokenize  SymbolTable                TokenizedCorpus
+                MergeTable/MergeFileName
+  Embed         TokenizedCorpus            Sequence, Embeddings
+  Transform     Sequence                   Embeddings
+                Embeddings
+  RunForward    UserInput                  Output
+
+Tokenize
+
+1. Add a max-heap helps for “what is the most frequent pair right now?”
+Instead of scanning all pairs every iteration, keep a heap ordered by count.
+But because counts change after merges, you usually do lazy heap updates:
+push updated (pair, count, version) records
+when popping, discard stale entries. What heap unit to use in FPC?
+
+2. Where does nCorpus live?
+
+4. Corpus array of byte. Use RawByteString. Done, but check.
+
+5. Drop linked lists. So if you later optimize training hard, use
+Tok[i], Prev[i], Next[i], Alive[i].
+
+6. Avoid repeated trie rebuilds.
+If the symbol table is fixed, build the trie once after loading. ??
+
+7. Use nSymbols, except use nVocab in Transform. Done.
+
+8. Add a regex pretokenizer. Nope, not necessary.
+
+Symbolize.
+
+Should I use clean-up symbols in DisplayByteSymbolTable? Yes, doing so.
+Lengthen tabs in printouts like most frequent symbols.array[ or symboltable...1] of Type = ();
+
+Embed.
+
+The name RunEmbed understates what it does. It seems to:
+initialize embeddings, initialize transformer, create training windows,
+build input and targets, and run transformer blocks.
+No, keep it as Embed.
+
+Transform/Matrix/Utils.
+
+a. Create Saxpy wrapper.
+
+b. Use MatMul wrapper for all cblas. Use FullAcc that now exists in Matrix.
+
+1. Many models reuse the embedding matrix for output projection.
+This is called weight tying. WVocab not needed. I am doing it.
+
+2. What to do with nTokens and append proc.
+Store attention softmax outputs. Do I need them intact for backprop through softmax.
+
+3. Put Hidden on the heap; make it a dynamically allocated variable. No. cblas will not work.
+
+4. Can I make Embeddings a dynamic matrix, and therefore avoid the need for MaxSymbols?
+And generally simplify things? It would be the only dynamic variable. No, CBLAS will not work.
+
+5. Use Welford addition. No, not with sgemm.
+
+Work Flow.
                         X
                        |||
               +------------------+

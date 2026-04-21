@@ -3,7 +3,7 @@ program WesChat;
 {$mode ObjFPC}{$H+}{$I proprietary.txt}
 
 { WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wespar.com}
-{ Note: Edited 4/21/2026 8 am -- saved as WesChat 12 on GitHub and Kopia}
+{ Note: Edited 4/21/2026 9 pm -- saved as WesChat12 on GitHub and Kopia}
 { Notes: TC comes from WesTokenize or ChatGPTTokenize; WesModel (with Embeddings) comes from Embed }
 uses
   CombineTables,
@@ -20,8 +20,7 @@ uses
   Windows;
 
 var
-  Corpus, QueryCorpus,
-    ReponseCorpus: TBVector;                // Vector of byte.
+  Corpus, QueryCorpus: TBVector;            // Vector of byte.
   Ch: string;                               // For option menu.
   Success: Boolean;                         // For loading and saving files.
   CorpusFileName, SymbolFileName,           // File names.

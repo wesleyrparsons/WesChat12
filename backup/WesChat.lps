@@ -9,8 +9,8 @@
         <Filename Value="WesChat.lpr"/>
         <IsPartOfProject Value="True"/>
         <IsVisibleTab Value="True"/>
-        <TopLine Value="131"/>
-        <CursorPos X="48" Y="159"/>
+        <TopLine Value="33"/>
+        <CursorPos X="47" Y="161"/>
         <UsageCount Value="233"/>
         <Loaded Value="True"/>
       </Unit>
@@ -159,8 +159,7 @@
         <UsageCount Value="46"/>
       </Unit>
       <Unit>
-        <Filename Value="global.pas"/>
-        <UnitName Value="Global"/>
+        <Filename Value="Global.pas"/>
         <EditorIndex Value="6"/>
         <TopLine Value="109"/>
         <CursorPos Y="162"/>
@@ -177,10 +176,6 @@
       </Unit>
     </Units>
     <JumpHistory HistoryIndex="29">
-      <Position>
-        <Filename Value="WesChat.lpr"/>
-        <Caret Line="509" Column="31" TopLine="500"/>
-      </Position>
       <Position>
         <Filename Value="global.pas"/>
         <Caret Line="114" Column="46" TopLine="104"/>
@@ -294,6 +289,10 @@
       <Position>
         <Filename Value="WesChat.lpr"/>
         <Caret Line="334" Column="38" TopLine="296"/>
+      </Position>
+      <Position>
+        <Filename Value="WesChat.lpr"/>
+        <Caret Line="159" Column="48" TopLine="131"/>
       </Position>
     </JumpHistory>
     <RunParams>

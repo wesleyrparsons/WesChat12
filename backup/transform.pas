@@ -277,8 +277,10 @@ begin
 
       // Equation: X7.Grad = TopGradient · Embeddings.Value. X7.Grad in R^{L x D}. TopGradient in R^{L x nVocab}. Embeddings in R^{D x nVocab}.
       writeln('Stage 2F');
-      cblas_sgemm(101, 111, 112,  SeqLen, ModelDim, nVocab,  1.0,
-        @TopGradient[0, 0], DimVocab,  @Embeddings.Value[0, 0], DimVocab, 0.0,  @X7.Grad[0, 0], ModelDim);
+      cblas_sgemm(101, 111, 111, SeqLen, ModelDim, nVocab, 1.0, @TopGradient[0, 0], DimVocab,
+      @Embeddings.Value[0, 0], ModelDim, 0.0, @X7.Grad[0, 0], ModelDim);
+      {cblas_sgemm(101, 111, 112,  SeqLen, ModelDim, nVocab,  1.0,
+        @TopGradient[0, 0], DimVocab,  @Embeddings.Value[0, 0], DimVocab, 0.0,  @X7.Grad[0, 0], ModelDim);}
 
       // Backprop TopGradient modifies/overwrites Embeddingsᵀ: Input X7ᵀ, TopGradient. Output Embeddingsᵀ.Grad.
       // Equation: Embeddingsᵀ.Grad = X7ᵀ · TopGradient. Embeddingsᵀ.Grad in R^{nVocab x D}. X7ᵀ in R^(D x L}. TopGradient in R^{L x nVocab}.
@@ -409,7 +411,8 @@ begin
 
     // Scaling after Softmax.
     for h := 0 to nHead - 1 do
-      cblas_sscal(SeqLen * SeqLen, InvSqrtHeadDim, @ScoresHead1[h].Grad[0,0], 1);
+      Scale(SeqLen * SeqLen, InvSqrtHeadDim, @ScoresHead1[h].Grad[0,0]);
+      //cblas_sscal(SeqLen * SeqLen, InvSqrtHeadDim, @ScoresHead1[h].Grad[0,0], 1);
 
     // Backprop AutoRegression.
     // Equation: ScoresHead1.Grad = Unmask(ScoresHead1.Grad).

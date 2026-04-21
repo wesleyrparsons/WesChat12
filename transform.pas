@@ -277,13 +277,16 @@ begin
 
       // Equation: X7.Grad = TopGradient · Embeddings.Value. X7.Grad in R^{L x D}. TopGradient in R^{L x nVocab}. Embeddings in R^{D x nVocab}.
       writeln('Stage 2F');
-      cblas_sgemm(101, 111, 112,  SeqLen, ModelDim, nVocab,  1.0,
-        @TopGradient[0, 0], DimVocab,  @Embeddings.Value[0, 0], DimVocab, 0.0,  @X7.Grad[0, 0], ModelDim);
+      cblas_sgemm(101, 111, 111, SeqLen, ModelDim, nVocab, 1.0, @TopGradient[0, 0], DimVocab,
+      @Embeddings.Value[0, 0], ModelDim, 0.0, @X7.Grad[0, 0], ModelDim);
+      {cblas_sgemm(101, 111, 112,  SeqLen, ModelDim, nVocab,  1.0,
+        @TopGradient[0, 0], DimVocab,  @Embeddings.Value[0, 0], DimVocab, 0.0,  @X7.Grad[0, 0], ModelDim);}
 
       // Backprop TopGradient modifies/overwrites Embeddingsᵀ: Input X7ᵀ, TopGradient. Output Embeddingsᵀ.Grad.
       // Equation: Embeddingsᵀ.Grad = X7ᵀ · TopGradient. Embeddingsᵀ.Grad in R^{nVocab x D}. X7ᵀ in R^(D x L}. TopGradient in R^{L x nVocab}.
-      cblas_sgemm(101, 112, 111,  nVocab, ModelDim, SeqLen,  1.0,
-        @TopGradient[0,0], DimVocab, @X7.Value[0, 0], ModelDim, 1.0,  @Embeddings.Grad[0,0], ModelDim);
+      MatMulFullAccNT(@TopGradient[0,0], @X7.Value[0,0], @Embeddings.Grad[0,0], nVocab, ModelDim, SeqLen, DimVocab, ModelDim, ModelDim);
+      {cblas_sgemm(101, 112, 111,  nVocab, ModelDim, SeqLen,  1.0,
+        @TopGradient[0,0], DimVocab, @X7.Value[0, 0], ModelDim, 1.0,  @Embeddings.Grad[0,0], ModelDim);}
 
       // Backprop Split X7 Grad into X5 and X6: Input X5.Grad, X7.Grad. Output dX.Grad.
       // Equation: X5.Grad = X5.Grad + X7.Grad. All in R^{L x D}.

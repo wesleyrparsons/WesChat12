@@ -3,7 +3,7 @@ program WesChat;
 {$mode ObjFPC}{$H+}{$I proprietary.txt}
 
 { WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wespar.com}
-{ Note: Edited 4/20/2026 8 am -- saved as WesChat 12 on GitHub and Kopia}
+{ Note: Edited 4/21/2026 8 am -- saved as WesChat 12 on GitHub and Kopia}
 { Notes: TC comes from WesTokenize or ChatGPTTokenize; WesModel (with Embeddings) comes from Embed }
 uses
   CombineTables,
@@ -20,8 +20,9 @@ uses
   Windows;
 
 var
-  Corpus: TBVector;                         // Vector of byte.
-  Ch, QueryCorpus: string;                  // For option menu.
+  Corpus, QueryCorpus,
+    TBVector;                               // Vector of byte.
+  Ch: string;                               // For option menu.
   Success: Boolean;                         // For loading and saving files.
   CorpusFileName, SymbolFileName,           // File names.
     TokenFileName, ModelFileName, ListFile: string;
@@ -147,18 +148,25 @@ end;
 
 // Run the model forward.
 procedure ForwardQuery;
+var
+  i: Integer;
+  QueryString: string;
 begin
   Training := False;
   repeat
     Writeln('Enter query: ');
-    Readln(QueryCorpus);
-    // Convert to TC.
-    for i := 1 to Length(QueryCorpus) do
-      Corpus[i] := Ord(QueryCorpus[i]);
-    RunWesTokenize(Corpus, TokenizedCorpus);
+    Readln(QueryString);
+    SetLength(QueryCorpus, Length(QueryString));
+    for i := 0 to Length(QueryString) do
+      QueryCorpus[i] := Ord(QueryString[i - 1]);
+    RunWesTokenize(QueryCorpus, TokenizedCorpus);
     RunEmbed(TokenizedCorpus);
-  until QueryCorpus = EmptyStr;
+    Writeln('Output: ');
+    for i := 0 to Length(QueryOutput) do  // Make QO a param to be passed to RunEnbed.
+      Writeln(QueryOutput[i]);
+  until QueryString = EmptyStr;
 end;
+
 // Start of main program.
 begin
   { Necessary because JSON will throw dupe errors otherwise }
@@ -186,7 +194,7 @@ begin
   Writeln('     to create a concatenated token list.');
   Writeln('  9: Create symbol table from input corpus.');
   Writeln('  10: Save a model.');
-  Writeln('  11: Load a model for running forward.');
+  Writeln('  11: Load a model and run it forward using this WesChat''s tokenization.');
   Writeln('  H: Help.');
   Writeln('  X: Exit.');
   Writeln;
@@ -243,7 +251,7 @@ begin
         // Embed.
         if QueryEmbed then begin
           RunEmbed(TokenizedCorpus);
-          if Success then ForwardQuery;
+          ForwardQuery;
         end;
       end;
       '2': begin
@@ -260,7 +268,7 @@ begin
         RunWesTokenize(Corpus, TokenizedCorpus);
         If QueryEmbed then begin
           RunEmbed(TokenizedCorpus);
-          if Success then ForwardQuery;
+          ForwardQuery;
         end;
       end;
       '3': begin
@@ -286,7 +294,7 @@ begin
         // Run Embed.
         if QueryEmbed then begin
           RunEmbed(TokenizedCorpus);
-          if Success then ForwardQuery;
+          ForwardQuery;
         end;
       end;
       '4': begin
@@ -297,10 +305,6 @@ begin
         // Check existence and size of corpus file.
         if not FileExists(CorpusFileName) then begin
           Writeln('File not found: ', CorpusFileName, '. Aborting...');
-          Continue;
-        end;
-        if Length(Corpus) < MinCorpus then begin
-          Writeln('Corpus too small. Aborting...');
           Continue;
         end;
 
@@ -327,6 +331,12 @@ begin
         // Read corpus bytes from file.
         ReadFileBytes(CorpusFileName, Corpus);
         nCorpus := Length(Corpus);
+
+        if Length(Corpus) < MinCorpus then begin
+          Writeln('Corpus too small. Aborting...');
+          Continue;
+        end;
+
         SetLength(CorpusFileNames, 1);
         CorpusFileNames[0] := CorpusFileName;
 
@@ -340,7 +350,7 @@ begin
         // Run Embed.
         if QueryEmbed then begin
           RunEmbed(TokenizedCorpus);
-          if Success then ForwardQuery;
+          ForwardQuery;
         end;
       end;
       '5': begin
@@ -382,7 +392,7 @@ begin
         // Check number of symbols, and Embed.
         if nSymbols > 0 then begin
           RunEmbed(TokenizedCorpus);
-          if Success then ForwardQuery;
+          ForwardQuery;
         end
         else
           Writeln('Symbols not found in table.');
@@ -410,7 +420,7 @@ begin
         // Run Embed.
         If QueryEmbed then begin
           RunEmbed(TokenizedCorpus);
-          if Success then ForwardQuery;
+          ForwardQuery;
         end;
       end;
       '7': begin
@@ -461,7 +471,7 @@ begin
         RunWesTokenize(Corpus, TokenizedCorpus);
         If QueryEmbed then begin
           RunEmbed(TokenizedCorpus);
-          if Success then ForwardQuery;
+          ForwardQuery;
         end;
       end;
       '9': begin
@@ -471,7 +481,7 @@ begin
 
         // Check existence and size of corpus file.
         if not FileExists(CorpusFileName) then begin
-          Writeln('File not found: ', FileName, '.');
+          Writeln('File not found: ', CorpusFileName, '.');
           Continue;
         end;
         if FileSize(CorpusFileName) < MinCorpus then begin
@@ -496,7 +506,7 @@ begin
         // Check number of symbols, and Embed.
         if nSymbols > MinSymbols then begin
           RunEmbed(TokenizedCorpus);
-          if Success then ForwardQuery;
+          ForwardQuery;
         end
         else
           Writeln('Symbols not found in table.');
@@ -511,7 +521,7 @@ begin
         SaveModel(ModelFileName, Model, Success);
         // ChDir('..');
         if Success then
-          Writeln('File ', f, ' successfully saved.')
+          Writeln('File ', ModelFileName, ' successfully saved.')
         else
           Writeln('File not saved.');
         Pause;
@@ -523,7 +533,7 @@ begin
         LoadModel(ModelFileName, Model, Success);
         // ChDir('..');
         if Success then begin
-          Writeln('File ', f, ' loaded.');
+          Writeln('File ', ModelFileName, ' loaded.');
           ForwardQuery;
         end
         else

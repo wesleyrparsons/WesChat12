@@ -16,9 +16,9 @@ procedure XGUniformWHead(var W: TWeightHeadMatrix; FanIn, FanOut: Integer);
 procedure XGUniformW1(var W: TWeightProjMatrix; FanIn, FanOut: Integer);
 procedure XGUniformW2(var W: TWeightProjMatrixT; FanIn, FanOut: Integer);
 procedure InitializeTransformer(var WModel: TWModelParams);
-procedure ZeroGradients(var WesModel: TWModelParams);
+procedure ZeroGradients(var WModelParams: TWModelParams; var WModelState: TWModelState);
 procedure UpdateParam(const N: Integer; const LearningRate: Single; const Grad: PSingle; Param: PSingle);
-procedure Optimization(var WesModel: TWModelParams);
+procedure Optimization(var WModelParams: TWModelParams; var WModelState: TWModelState);
 procedure ApplyRoPE(var H: TSeqMatrix;  const InvFreq: TFVector; SeqLen, ModelDim: Integer);
 procedure ApplyAutoregressiveMask(var ScoresHead: TScoresMatrix; const L: Integer);
 procedure SoftmaxForward(const x: TFVector; out y: array of Single);
@@ -27,8 +27,8 @@ procedure LayerNormForward(const InX: TSeqMatrix; var OutX: TSeqMatrix; SeqLen: 
   const Gamma, Beta: TSeqVector; var LNXhat: TSeqMatrix; var LNInvStd: TFSVector);
 procedure LayerNormBackward(const dY: TSeqMatrix; var dX: TSeqMatrix; var dGamma, dBeta: TSeqVector;
   SeqLen: Integer; const Gamma: TSeqVector; var LNXhat: TSeqMatrix; var LNInvStd: TFSVector);
-procedure GradientFromKLDivergence;
-procedure GradientFromCEProbabilities;
+procedure GradientFromKLDivergence(var WModelState: TWModelState);
+procedure GradientFromCEProbabilities(var WModelState: TWModelState);
 procedure BackpropAdd(const dOut: TSeqMatrix; var dA, dB: TSeqMatrix; const L, D: Integer);
 
 implementation
@@ -153,7 +153,7 @@ begin
 end;
 
 // Zero out all gradients.
-procedure ZeroGradients(var WesModel: TWModelParams);
+procedure ZeroGradients(var WModelParams: TWModelParams; var WModelState: TWModelState);
 begin
   with WModelState do begin
     FillChar(X.Grad, SizeOf(X.Grad), 0);
@@ -172,7 +172,7 @@ begin
     FillChar(V.Grad, SizeOf(V.Grad), 0);
     FillChar(Hidden1.Grad, SizeOf(Hidden1.Grad), 0);
     FillChar(Hidden2.Grad, SizeOf(Hidden2.Grad), 0);
-    with WesModel do begin
+    with WModelParams do begin
       FillChar(Wk.Grad, SizeOf(Wk.Grad), 0);
       FillChar(Wq.Grad, SizeOf(Wq.Grad), 0);
       FillChar(Wv.Grad, SizeOf(Wv.Grad), 0);
@@ -198,11 +198,11 @@ end;
 
 { Optimization }
 // Update the weights and biases.
-procedure Optimization(var WesModel: TWModelParams);
+procedure Optimization(var WModelParams: TWModelParams; var WModelState: TWModelState);
 var
   i, v: Integer;
 begin
-  with WesModel do begin
+  with WModelParams do begin
     // W0 weights: main attention output.
     UpdateParam(ModelDim * ModelDim, LearningRate, @W0.Grad[0,0], @W0.Value[0,0]);
     //cblas_saxpy(ModelDim * ModelDim, -LearningRate, @W0.Grad[0, 0], 1, @W0.Value[0, 0], 1);
@@ -398,7 +398,7 @@ begin
 end;
 
 // Calculate cross-entropy gradient from probabilities and target, one-hot.
-procedure GradientFromCEProbabilities;
+procedure GradientFromCEProbabilities(var WModelState: TWModelState);
 var
   i, s: Integer;
 begin
@@ -414,7 +414,7 @@ end;
 
 
 // Calculate gradient for KL divergence with one-hot targets: dL/dProbs = Q - P.
-procedure GradientFromKLDivergence;
+procedure GradientFromKLDivergence(var WModelState: TWModelState);
 var
   i, s: Integer;
 begin

@@ -19,7 +19,8 @@ uses
   Arrays are nSymbols x ModelDim of Single.
   nSymbols (nVocab) is vocabulary size. ModelDim is the dimension of the models, the loads.}
 
-procedure RunEmbed(const TokenizedCorpus: TIVector);
+procedure RunEmbed(var WModelParams: TWModelParams; var WModelState: TWModelState; const TokenizedCorpus: TIVector);
+procedure RunInfer(var WModelParams: TWModelParams; var WModelState: TWModelState; const TokenizedCorpus: TIVector; QueryOutput: TIVector);
 
 implementation
 
@@ -27,7 +28,7 @@ const
   Scale = Sqrt(ModelDim);         // Optional transformer-style embedding scaling by sqrt(d_model).
 
 var
-  WModelParams: TWModelParams;    // WModel is declared here. (Change to WModel.)
+  //WModelParams: TWModelParams;    // WModel is declared here. (Change to WModel.)
   Block: Integer;                 // Number of iterations sequentially of Transform.
 
 // Create the target vector for use in head output.
@@ -45,7 +46,7 @@ end;
 
 // Create the input matrix.
 procedure BuildInputMatrix(var X: TSeqMatrix; const TokenizedCorpus: TIVector;
-  const Start, L: Integer);
+  var WModelParams: TWModelParams; const Start, L: Integer);
 var
   i, j, id: Integer;
 begin
@@ -67,7 +68,7 @@ begin
 end;
 
 // Run the training.
-procedure RunEmbed(const TokenizedCorpus: TIVector);
+procedure RunEmbed(var WModelParams: TWModelParams; var WModelState: TWModelState; const TokenizedCorpus: TIVector);
 var
   i, j, k: Integer;
   Start, EmbedLoop: Integer;
@@ -166,7 +167,7 @@ begin
     if VerboseTransform then Pause;
 
     // Build X from TokenizedCorpus[start .. start + SeqLen - 1].
-    BuildInputMatrix(WModelState.X.Value, TokenizedCorpus, Start, SeqLen);
+    BuildInputMatrix(WModelState.X.Value, TokenizedCorpus, WModelParams, Start, SeqLen);
 
     // Optional transformer-style embedding scaling by sqrt(d_model).
     for i := 0 to SeqLen - 1 do
@@ -183,10 +184,75 @@ begin
       Writeln('$$$ Starting Block ', Block, '  Sequence Start ', Start, ' $$$');
       if VerboseTransform then Pause;
 
-      RunTransform(WModelParams);
+      RunTransform(WModelParams, WModelState, QueryOutput);
 
       if PauseIfKeyPressed then
         ReadEmbedIfKeyPressed;
+    end;
+
+    Start := Start + Stride;
+  end;
+
+  Writeln('End of training. Press <CR> to continue.');
+  Readln;
+end;
+
+procedure RunInfer(var WModelParams: TWModelParams; var WModelState: TWModelState; const TokenizedCorpus: TIVector; QueryOutput: TIVector);
+var
+  i, j, k: Integer;
+  Start, EmbedLoop: Integer;
+  Stride: Integer = 64;      // Stride 64 tokens every sequence.
+
+begin
+  nVocab := nSymbols;    // Need nVocab (second name for variable) for Transform.
+
+  Writeln('First quarter of two rows of embeddings.');
+  for k := 0 to ModelDim div 4 - 1 do
+    Write(WModelParams.Embeddings.Value[1, k]: 8: 6, ' ');
+  Writeln;
+  for k := 0 to ModelDim div 4 - 1 do
+    Write(WModelParams.Embeddings.Value[2, k]: 8: 6, ' ');
+  Writeln;
+  Pause;
+
+  VTPDisplayX('Display Embeddings.Value prior to Transform.', WModelParams.Embeddings.Value, B);
+
+  // Initialize.
+  SetLength(TokenID, Length(TokenizedCorpus));
+  TokenID := TokenizedCorpus;
+
+  // Stride loop thru Sequence.
+  Start := 0;
+  EmbedLoop := 0;
+  while (Start + SeqLen) < Length(TokenizedCorpus) do begin
+
+    // Display number of loops thru embed loop.
+    Inc(EmbedLoop);
+    Writeln('&&& Loop thru Embed: start ', Start, ' and loop number ', EmbedLoop, ' &&&');
+    Writeln(DateTimeToStr(Now), '  X = Exit program. B = Break out of merge loop. V = toggle Verbose mode.');
+    Writeln('  P = Program information. E = Embedding information. Embedding & transforming...');
+
+    if VerboseTransform then Pause;
+
+    // Build X from TokenizedCorpus[start .. start + SeqLen - 1].
+    BuildInputMatrix(WModelState.X.Value, TokenizedCorpus, WModelParams, Start, SeqLen);
+
+    // Optional transformer-style embedding scaling by sqrt(d_model).
+    for i := 0 to SeqLen - 1 do
+      for j := 0 to ModelDim - 1 do
+        WModelState.X.Value[i, j] := WModelState.X.Value[i, j] * Scale;
+
+    // Build the target vector, one ahead, for the loss stage.
+    BuildTargetVector(TargetTokens, TokenizedCorpus, Start + 1, SeqLen);
+
+    VTPDisplayX('Display X.Value before transform.', WModelState.X.Value, G);
+
+    // Forward and backward pass thru transformer.
+    for Block := 0 to nBlock - 1 do begin
+      Writeln('$$$ Starting Block ', Block, '  Sequence Start ', Start, ' $$$');
+      if VerboseTransform then Pause;
+
+      RunTransform(WModelParams, WModelState, QueryOutput);
     end;
 
     Start := Start + Stride;

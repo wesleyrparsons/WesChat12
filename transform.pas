@@ -15,20 +15,21 @@ uses
 const
   InvSqrtHeadDim: Single = 1 / Sqrt(HeadDim);         // Used in softmax.
 
-procedure RunTransform(var WModelParams: TWModelParams);
+procedure RunTransform(var WModelParams: TWModelParams; var WModelState: TWModelState; var QueryOutput: TIVector);
 
 implementation
 
 // Run the transformer.
-procedure RunTransform(var WModelParams: TWModelParams);
+procedure RunTransform(var WModelParams: TWModelParams; var WModelState: TWModelState; var QueryOutput: TIVector);
 var
-  h, i, j, HeadOffset: Integer;
+  h, i, j, HeadOffset, BestTok: Integer;
+  BestProb: Single;
 begin
   // Display entry to transform.
   writeln('Entering Transformer/FFN/Head Output');
 
   // Zero gradients.
-  ZeroGradients(WModelParams);
+  ZeroGradients(WModelParams, WModelState);
 
   // Display X.Value matrix.
   VTPDisplayX('Display X.Value in transform, before any action.', WModelState.X.Value, G);
@@ -257,9 +258,25 @@ begin
         // 3C. Cross-Entropy Loss. Obtain TopGradient from Probs.
         // Gradient: Input Probs. Output TopGradient. Also option of CalculateGradient from KLDivergence.
         // Equation: TopGradient in R^{L x nVocab}. Probs in R^{L x nVocab}.
-        GradientFromCEProbabilities;
+        GradientFromCEProbabilities(WModelState);
 
-        // 3D. Is QueryForward, then pick the largest prob, and save it.
+        // 3D. Is QueryForward, then pick the largest prob, and save it. ''
+
+        if not Training then begin
+          SetLength(QueryOutput, SeqLen);
+          for i := 0 to SeqLen - 1 do begin
+            BestProb := Probs[i, 0];
+            BestTok  := 0;
+            for j := 1 to nVocab - 1 do
+              if Probs[i, j] > BestProb then begin
+                BestProb := Probs[i, j];
+                BestTok := j;
+              end;
+            QueryOutput[i] := BestTok;   // if QueryOutput is changed to integer output
+          end;
+          Exit;
+        end;
+
         {if not Training then
           for i := 0 to SeqLen do begin
             TopGrad := TopGradient[i, 0];
@@ -506,7 +523,7 @@ begin
     VTPDisplayX('Display X.Grad, in transform, at end.', X.Grad, G);
 
     // Modify weights and biases.
-    Optimization(WModelParams);
+    Optimization(WModelParams, WModelState);
 
     // Place X7 in X for next block.
     CopyXMatrix(X7.Value, X.Value, SeqLen, ModelDim);

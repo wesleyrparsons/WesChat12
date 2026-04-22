@@ -2,9 +2,15 @@ program WesChat;
 
 {$mode ObjFPC}{$H+}{$I proprietary.txt}
 
-{ WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wespar.com}
-{ Note: Edited 4/21/2026 9 pm -- saved as WesChat12 on GitHub and Kopia}
-{ Notes: TC comes from WesTokenize or ChatGPTTokenize; WesModel (with Embeddings) comes from Embed }
+{ WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wespar.com }
+{ Note: Edited 4/22/2026 8 am -- saved as WesChat12 on GitHub and Kopia}
+{ Notes: TokCorpus comes from WesTokenize or ChatGPTTokenize; WModelParams (with Embeddings) and WModelState are from here}
+{ Notes: Corpus, QueryCorpus (TBVector) are here; QueryOutput (TIVector) is in Global }
+{        Input Train      Input Query            Output
+ Raw                      QueryString
+ Bytes   Corpus           QueryCorpus
+ Token   TokCorpus        TokCorpus              QueryOutput }
+
 uses
   CombineTables,
   Crt,
@@ -25,7 +31,8 @@ var
   Success: Boolean;                         // For loading and saving files.
   CorpusFileName, SymbolFileName,           // File names.
     TokenFileName, ModelFileName, ListFile: string;
-  Model: TWModelParams;
+  WModelParams: TWModelParams;
+  WModelState: TWModelState;
   CombinedSymbolTable: TSymbolTable;        // For combining two symbol tables.
   MinSymbols: Integer = 50;                 // Minimum for loading.
   MinTokens: Integer = 50;                  // Minimum for loading.
@@ -159,9 +166,9 @@ begin
     for i := 0 to Length(QueryString) do
       QueryCorpus[i] := Ord(QueryString[i - 1]);
     RunWesTokenize(QueryCorpus, TokenizedCorpus);
-    RunEmbed(TokenizedCorpus);
+    RunInfer(WModelParams, WModelState, TokenizedCorpus, QueryOutput);
     Writeln('Output: ');
-    for i := 0 to Length(QueryOutput) do  // Make QO a param to be passed to RunEnbed.
+    for i := 0 to Length(QueryOutput) do
       Writeln(QueryOutput[i]);
   until QueryString = EmptyStr;
 end;
@@ -249,7 +256,7 @@ begin
 
         // Embed.
         if QueryEmbed then begin
-          RunEmbed(TokenizedCorpus);
+          RunEmbed(WModelParams, WModelState, TokenizedCorpus);
           ForwardQuery;
         end;
       end;
@@ -266,7 +273,7 @@ begin
         // Run WesChat tokenizer.
         RunWesTokenize(Corpus, TokenizedCorpus);
         If QueryEmbed then begin
-          RunEmbed(TokenizedCorpus);
+          RunEmbed(WModelParams, WModelState, TokenizedCorpus);
           ForwardQuery;
         end;
       end;
@@ -292,7 +299,7 @@ begin
         RunWesTokenize(Corpus, TokenizedCorpus);
         // Run Embed.
         if QueryEmbed then begin
-          RunEmbed(TokenizedCorpus);
+          RunEmbed(WModelParams, WModelState, TokenizedCorpus);
           ForwardQuery;
         end;
       end;
@@ -348,7 +355,7 @@ begin
 
         // Run Embed.
         if QueryEmbed then begin
-          RunEmbed(TokenizedCorpus);
+          RunEmbed(WModelParams, WModelState, TokenizedCorpus);
           ForwardQuery;
         end;
       end;
@@ -390,7 +397,7 @@ begin
 
         // Check number of symbols, and Embed.
         if nSymbols > 0 then begin
-          RunEmbed(TokenizedCorpus);
+          RunEmbed(WModelParams, WModelState, TokenizedCorpus);
           ForwardQuery;
         end
         else
@@ -418,7 +425,7 @@ begin
 
         // Run Embed.
         If QueryEmbed then begin
-          RunEmbed(TokenizedCorpus);
+          RunEmbed(WModelParams, WModelState, TokenizedCorpus);
           ForwardQuery;
         end;
       end;
@@ -469,7 +476,7 @@ begin
         // Run WesChat tokenizer.
         RunWesTokenize(Corpus, TokenizedCorpus);
         If QueryEmbed then begin
-          RunEmbed(TokenizedCorpus);
+          RunEmbed(WModelParams, WModelState, TokenizedCorpus);
           ForwardQuery;
         end;
       end;
@@ -504,7 +511,7 @@ begin
 
         // Check number of symbols, and Embed.
         if nSymbols > MinSymbols then begin
-          RunEmbed(TokenizedCorpus);
+          RunEmbed(WModelParams, WModelState, TokenizedCorpus);
           ForwardQuery;
         end
         else
@@ -517,7 +524,7 @@ begin
         // ChDir(WorkingDir);   // Save model.
         Write('Enter filename: ');
         Readln(ModelFileName);
-        SaveModel(ModelFileName, Model, Success);
+        SaveModel(ModelFileName, WModelParams, Success);
         // ChDir('..');
         if Success then
           Writeln('File ', ModelFileName, ' successfully saved.')
@@ -529,7 +536,7 @@ begin
         // ChDir(WorkingDir);   // Load model.
         Write('Enter filename: ');
         Readln(ModelFileName);
-        LoadModel(ModelFileName, Model, Success);
+        LoadModel(ModelFileName, WModelParams, Success);
         // ChDir('..');
         if Success then begin
           Writeln('File ', ModelFileName, ' loaded.');

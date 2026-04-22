@@ -130,7 +130,7 @@ var
   TokenID: TIVector;                             // Same as TokenizedCorpus.
   TargetTokens: TIDimVector;                     // Input and target tokenns. Input lags by one.
   nVocab: Integer = DimVocab;                    // nVocab is also nSymbol. Number of symbol items.
-  QueryOutput: TDimVector;                       // Eventually make this a passed param to RunEmbed.
+  QueryOutput: TIVector;                         // Eventually make this a passed param to RunEmbed.
   Mt0, Mt1, t0, t1, StopTime: TDateTime;         // For timing.
   Version: shortstring = '1.2';                  // Version 1.2.
   FromSymbolTable: Boolean = False;              // Operating from input Symbol Table rather than from tokenization.
@@ -142,7 +142,7 @@ var
   Training: Boolean = True;                      // In training as opposed to inference mode.
 
   // Non-trainable parameters.
-  WModelState: TWModelState;
+  //WModelState: TWModelState;
 
   // Caches.
   LNInvStd1:  TFSVector;          // Caches for Layer-Norm.

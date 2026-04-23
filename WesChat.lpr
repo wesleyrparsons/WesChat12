@@ -162,9 +162,12 @@ begin
   repeat
     Writeln('Enter query: ');
     Readln(QueryString);
+
     SetLength(QueryCorpus, Length(QueryString));
-    for i := 0 to Length(QueryString) do
-      QueryCorpus[i] := Ord(QueryString[i - 1]);
+    for i := 0 to Length(QueryString) - 1 do
+      QueryCorpus[i] := Ord(QueryString[i + 1]);
+    for i := 0 to Length(QueryOutput) - 1 do
+      Writeln(QueryOutput[i]);
     RunWesTokenize(QueryCorpus, TokenizedCorpus);
     RunInfer(WModelParams, WModelState, TokenizedCorpus, QueryOutput);
     Writeln('Output: ');
@@ -410,7 +413,7 @@ begin
 
         // Check existence and size of token file.
         if not FileExists(TokenFileName) then begin
-          Writeln('File not found: ', FileName, '.');
+          Writeln('File not found: ', TokenFileName, '.');
           Continue;
         end;
 

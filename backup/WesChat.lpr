@@ -6,10 +6,10 @@ program WesChat;
 { Note: Edited 4/22/2026 8 am -- saved as WesChat12 on GitHub and Kopia}
 { Notes: TokCorpus comes from WesTokenize or ChatGPTTokenize; WModelParams (with Embeddings) and WModelState are from here}
 { Notes: Corpus, QueryCorpus (TBVector) are here; QueryOutput (TIVector) is in Global }
-{        Input Train      Input Query            Output
- Raw                      QueryString
- Bytes   Corpus           QueryCorpus
- Token   TokCorpus        TokCorpus              QueryOutput }
+{        Input Train        Input Query        Output
+ Raw                        QueryString
+ Bytes   Corpus             QueryCorpus
+ Token   TokenizedCorpus    TokenizedCorpus    QueryOutput }
 
 uses
   CombineTables,

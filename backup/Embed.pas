@@ -197,7 +197,8 @@ begin
   Readln;
 end;
 
-procedure RunInfer(var WModelParams: TWModelParams; var WModelState: TWModelState; const TokenizedCorpus: TIVector; QueryOutput: TIVector);
+procedure RunInfer(var WModelParams: TWModelParams; var WModelState: TWModelState;
+  const TokenizedCorpus: TIVector; var QueryOutput: TIVector);
 var
   i, j, k: Integer;
   Start, EmbedLoop: Integer;
@@ -252,7 +253,7 @@ begin
       Writeln('$$$ Starting Block ', Block, '  Sequence Start ', Start, ' $$$');
       if VerboseTransform then Pause;
 
-      RunTransform(WModelParams, QueryOutput);
+      RunTransform(WModelParams, WModelState, QueryOutput);
     end;
 
     Start := Start + Stride;

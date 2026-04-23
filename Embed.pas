@@ -19,8 +19,10 @@ uses
   Arrays are nSymbols x ModelDim of Single.
   nSymbols (nVocab) is vocabulary size. ModelDim is the dimension of the models, the loads.}
 
-procedure RunEmbed(var WModelParams: TWModelParams; var WModelState: TWModelState; const TokenizedCorpus: TIVector);
-procedure RunInfer(var WModelParams: TWModelParams; var WModelState: TWModelState; const TokenizedCorpus: TIVector; QueryOutput: TIVector);
+procedure RunEmbed(var WModelParams: TWModelParams; var WModelState: TWModelState;
+  const TokenizedCorpus: TIVector);
+procedure RunInfer(var WModelParams: TWModelParams; var WModelState: TWModelState;
+  const TokenizedCorpus: TIVector; var QueryOutput: TIVector);
 
 implementation
 
@@ -68,7 +70,8 @@ begin
 end;
 
 // Run the training.
-procedure RunEmbed(var WModelParams: TWModelParams; var WModelState: TWModelState; const TokenizedCorpus: TIVector);
+procedure RunEmbed(var WModelParams: TWModelParams; var WModelState: TWModelState;
+  const TokenizedCorpus: TIVector);
 var
   i, j, k: Integer;
   Start, EmbedLoop: Integer;
@@ -197,7 +200,8 @@ begin
   Readln;
 end;
 
-procedure RunInfer(var WModelParams: TWModelParams; var WModelState: TWModelState; const TokenizedCorpus: TIVector; QueryOutput: TIVector);
+procedure RunInfer(var WModelParams: TWModelParams; var WModelState: TWModelState;
+  const TokenizedCorpus: TIVector; var QueryOutput: TIVector);
 var
   i, j, k: Integer;
   Start, EmbedLoop: Integer;

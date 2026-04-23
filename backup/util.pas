@@ -28,7 +28,7 @@ procedure LayerNormForward(const InX: TSeqMatrix; var OutX: TSeqMatrix; SeqLen: 
 procedure LayerNormBackward(const dY: TSeqMatrix; var dX: TSeqMatrix; var dGamma, dBeta: TSeqVector;
   SeqLen: Integer; const Gamma: TSeqVector; var LNXhat: TSeqMatrix; var LNInvStd: TFSVector);
 procedure GradientFromKLDivergence(var WModelState: TWModelState);
-procedure GradientFromCEProbabilities(var WModelParams: TWModelParams);
+procedure GradientFromCEProbabilities(var WModelState: TWModelState);
 procedure BackpropAdd(const dOut: TSeqMatrix; var dA, dB: TSeqMatrix; const L, D: Integer);
 
 implementation

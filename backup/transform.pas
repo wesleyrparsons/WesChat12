@@ -14,6 +14,9 @@ uses
 
 const
   InvSqrtHeadDim: Single = 1 / Sqrt(HeadDim);         // Used in softmax.
+  RowMajor = 101;       // Row Major.
+  NoTrans  = 111;       // No transposition.
+  Trans    = 112;       // Transposition.
 
 procedure RunTransform(var WModelParams: TWModelParams; var WModelState: TWModelState; var QueryOutput: TIVector);
 
@@ -145,7 +148,7 @@ begin
     MatMulNN(@X2.Value[0, 0], @W0.Value[0, 0], @X3.Value[0, 0], SeqLen, ModelDim, ModelDim);
 
     // Display X3.Value matrix.
-    VTPDisplayX('Display X3, in transform.', X2.Value, B);
+    VTPDisplayX('Display X3, in transform.', X3.Value, B);
 
     // 1I. Merge. Obtain X4 from X1 and X3.
 
@@ -249,12 +252,7 @@ begin
         // Display Probs matrix.
         VTPDisplayX('Display Probs, in transform, after softmax.', Probs, B);
 
-        // 3C. Cross-Entropy Loss. Obtain TopGradient from Probs.
-        // Gradient: Input Probs. Output TopGradient. Also option of CalculateGradient from KLDivergence.
-        // Equation: TopGradient in R^{L x nVocab}. Probs in R^{L x nVocab}.
-        GradientFromCEProbabilities(WModelState);
-
-        // 3D. Is QueryForward, then pick the largest probs, and save them.
+        // 3C. Is QueryForward, then pick the largest probs, and save them.
         if not Training then begin
           SetLength(QueryOutput, SeqLen);
           for i := 0 to SeqLen - 1 do begin
@@ -269,6 +267,11 @@ begin
           end;
           Exit;
         end;
+
+        // 3D. Cross-Entropy Loss. Obtain TopGradient from Probs.
+        // Gradient: Input Probs. Output TopGradient. Also option of CalculateGradient from KLDivergence.
+        // Equation: TopGradient in R^{L x nVocab}. Probs in R^{L x nVocab}.
+        GradientFromCEProbabilities(WModelState);
 
         // Display TopGradient matrix.
         VTPDisplayX('Display TopGradient, in transform, after Logit calculation.', TopGradient, B);

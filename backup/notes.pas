@@ -8,9 +8,7 @@ General
 
 1. Check which trainable and non-t params need to be in zerogradients.
 
-2. Put State vars in WModelState.
-
-3. Add SaveModel and LoadModel procedures.
+3. Test SaveModel and LoadModel procedures.
 
 3a. Use saxpy and Updateparam im Optimization routine.
 

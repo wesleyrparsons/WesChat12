@@ -524,6 +524,7 @@ begin
         DisplayByteSymbolTable(SymbolTable);
       end;
       '10': begin
+        // Add code to force model train.
         // ChDir(WorkingDir);   // Save model.
         Write('Enter filename: ');
         Readln(ModelFileName);

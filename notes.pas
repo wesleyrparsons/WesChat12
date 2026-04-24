@@ -6,11 +6,7 @@ unit Notes;
 
 General
 
-1. Check which trainable and non-t params need to be in zerogradients.
-
 3. Test SaveModel and LoadModel procedures.
-
-3a. Use saxpy and Updateparam im Optimization routine.
 
 4. In main program: Read Corpus, Read Files (vocab and merge), Tokenize, Embed, Transform.
 One proc: display merge/token info. One proc: display transform/embed info.

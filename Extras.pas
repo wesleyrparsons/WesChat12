@@ -8,6 +8,42 @@ interface
 
 implementation
 
+{ Standard z-score transform: Xstd = X − μσ. The calls can still be optimized.
+   μ = mean of the row. σ = standard deviation.}
+procedure StandardizeRows(var A: array of Single; M, N: Integer);
+var
+  r, j: Integer;
+  Mean, Std, InvStd: Single;
+  Ones: TFVector;
+begin
+  // Build a vector of ones for mean calculation.
+  SetLength(Ones, N);
+  for j := 0 to N - 1 do
+    Ones[j] := 1.0;
+
+  for r := 0 to M - 1 do begin
+    // Pointer to the start of row r.
+    // Row r begins at index r * N.
+    // Row is contiguous, so stride = 1.
+    // 1. Compute mean = (1/N) * sum(row).
+    Mean := cblas_sdot(N, @A[r * N], 1, @Ones[0], 1) / N;
+
+    // 2. Subtract mean: row := row - mean.
+    cblas_saxpy(N, -Mean, @Ones[0], 1, @A[r * N], 1);
+
+    // 3. Compute std = sqrt(sum((row - mean)^2) / N).
+    Std := cblas_snrm2(N, @A[r * N], 1) / Sqrt(N);
+
+    // Avoid divide-by-zero.
+    if Std > 1e-12 then begin
+      InvStd := 1.0 / Std;
+
+    // 4. Scale row: row := row * (1 / std).
+      cblas_sscal(N, InvStd, @A[r * N], 1);
+    end;
+  end;
+end;
+
 // Welford addition algorithm. Not used yet.
 procedure WelfordAddition(const X: TSeqMatrix; SeqLen, ModelDim: Integer; out MeanX, VarX: TFVector);
 var

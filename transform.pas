@@ -14,6 +14,9 @@ uses
 
 const
   InvSqrtHeadDim: Single = 1 / Sqrt(HeadDim);         // Used in softmax.
+  RowMajor = 101;       // Row Major.
+  NoTrans  = 111;       // No transposition.
+  Trans    = 112;       // Transposition.
 
 procedure RunTransform(var WModelParams: TWModelParams; var WModelState: TWModelState; var QueryOutput: TIVector);
 
@@ -88,10 +91,12 @@ begin
       // Q_h is Q[*, headOffset .. headOffset+H-1]
       // K_h is K[*, headOffset .. headOffset+H-1]
       // Multiply Q_h (L x H) by K_h^T (H x L), and scale by InvSqrtHeadDim.
+      MatMulFullScaledNT(@Q.Value[0, HeadOffset], @K.Value[0, HeadOffset], @ScoresHead1[h].Value[0, 0],
+        SeqLen, SeqLen, HeadDim, ModelDim, ModelDim, SeqLen, InvSqrtHeadDim, 0.0);
+      {OR THIS WAY:
       cblas_sgemm(RowMajor, NoTrans, Trans, SeqLen, SeqLen, HeadDim, InvSqrtHeadDim, @Q.Value[0, HeadOffset],
         ModelDim, @K.Value[0, HeadOffset], ModelDim, 0.0, @ScoresHead1[h].Value[0, 0], SeqLen);
-      {OR THIS WAY:
-      MatMulNT(@Q.Value[0, HeadOffset], @K.Value[0, HeadOffset], @ScoresHead1[h].Value[0, 0], SeqLen, SeqLen, HeadDim);
+      OR THIS WAY MatMulNT(@Q.Value[0, HeadOffset], @K.Value[0, HeadOffset], @ScoresHead1[h].Value[0, 0], SeqLen, SeqLen, HeadDim);
       And also scale by InvSqrtHeadDim}
     end;
 

@@ -216,13 +216,13 @@ begin
     //cblas_saxpy(ModelDim * ModelDim, -LearningRate, @Wv.Grad[0, 0], 1, @Wv.Value[0, 0], 1);
 
     // W1, W2: feed-forward and vocab projection.
-    UpdateParam(ModelDim * ModelDim, LearningRate, @W1.Grad[0,0], @W1.Value[0,0]);
-    //cblas_saxpy(ModelDim * ModelDimProj, -LearningRate, @W1.Grad[0, 0], 1, @W1.Value[0, 0], 1);
-    UpdateParam(ModelDim * ModelDim, LearningRate, @W2.Grad[0,0], @W2.Value[0,0]);
+    UpdateParam(ModelDim * ModelDimProj, LearningRate, @W1.Grad[0,0], @W1.Value[0,0]);
+    UpdateParam(ModelDimProj * ModelDim, LearningRate, @W2.Grad[0,0], @W2.Value[0,0]);
+    UpdateParam(ModelDimProj * ModelDim, LearningRate, @W2.Grad[0,0], @W2.Value[0,0]);
     //cblas_saxpy(ModelDimProj * ModelDim, -LearningRate, @W2.Grad[0, 0], 1, @W2.Value[0, 0], 1);
 
     // b1, b2: biases.
-    UpdateParam(ModelDim, LearningRate, @b1.Grad[0], @b1.Value[0]);
+    UpdateParam(ModelDimProj, LearningRate, @b1.Grad[0], @b1.Value[0]);
     //cblas_saxpy(ModelDimProj, -LearningRate, @b1.Grad[0], 1, @b1.Value[0], 1);
     UpdateParam(ModelDim, LearningRate, @b2.Grad[0], @b2.Value[0]);
     //cblas_saxpy(ModelDim, -LearningRate, @b2.Grad[0], 1, @b2.Value[0], 1);
@@ -428,7 +428,7 @@ begin
 end;
 
 // Back propagation addition.
-procedure BackpropAdd(const dOut: TSeqMatrix; var dA, dB: TSeqMatrix; const L, D: Integer);
+procedure xBackpropAdd(const dOut: TSeqMatrix; var dA, dB: TSeqMatrix; const L, D: Integer);
 var
   i, j: Integer;
 begin

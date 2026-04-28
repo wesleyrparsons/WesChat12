@@ -129,7 +129,7 @@ var
   nTokenizedCorpus: Integer;                     // Length of tokenized corpus.
   TokenID: TIVector;                             // Same as TokenizedCorpus.
   TargetTokens: TIDimVector;                     // Input and target tokenns. Input lags by one.
-  nVocab: Integer = DimVocab;                    // nVocab is also nSymbol. Number of symbol items.
+  nVocab: Integer;                               // nVocab is also nSymbol. Number of symbol items.
   QueryOutput: TIVector;                         // Eventually make this a passed param to RunEmbed.
   Mt0, Mt1, t0, t1, StopTime: TDateTime;         // For timing.
   Version: shortstring = '1.2';                  // Version 1.2.

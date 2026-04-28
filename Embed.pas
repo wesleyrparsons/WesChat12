@@ -163,7 +163,7 @@ begin
 
     // Display number of loops thru embed loop.
     Inc(EmbedLoop);
-    Writeln('&&& Loop thru Embed: start ', Start, ' and loop number ', EmbedLoop, ' &&&');
+    Writeln('&&& SeqLen loop: start ', Start, ' and loop number ', EmbedLoop, ' &&&');
     Writeln(DateTimeToStr(Now), '  X = Exit program. B = Break out of merge loop. V = toggle Verbose mode.');
     Writeln('  P = Program information. E = Embedding information. Embedding & transforming...');
 
@@ -184,7 +184,7 @@ begin
 
     // Forward and backward pass thru transformer.
     for Block := 0 to nBlock - 1 do begin
-      Writeln('$$$ Starting Block ', Block, '  Sequence Start ', Start, ' $$$');
+      Writeln('     $$$ Block loop: start ', Block, '  Sequence Start ', Start, ' $$$');
       if VerboseTransform then Pause;
 
       RunTransform(WModelParams, WModelState, QueryOutput);

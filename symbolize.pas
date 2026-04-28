@@ -450,7 +450,7 @@ var
       'm', 'M':
         begin
           Writeln;
-          Writeln('Maximum symbols = ', DimVocab, '. Maximum merges = ', MaxMerges,
+          Writeln('Maximum symbols = ', nVocab, '. Maximum merges = ', MaxMerges,
             '. Hash capacity = ', H.Capacity, '. Used slots = ', H.Used, '. Best count = ', BestCount, '.');
           Write(DateTimeToStr(Now), '  X = Exit program. B = Break out of merge loop. V = toggle Verbose mode. P = Pause.');
           Writeln('  W = WesChat Information. M = Merging information. S = Save. Merging...');
@@ -511,9 +511,9 @@ begin
     end;
 
     // Stop if symbol table is full.
-    if Length(SymbolTable) >= DimVocab then begin
+    if Length(SymbolTable) >= nVocab then begin
       Writeln;
-      Writeln('Stopping: symbol table reached ', DimVocab, ' entries.');
+      Writeln('Stopping: symbol table reached ', nVocab, ' entries.');
       Break;
     end;
 
@@ -819,7 +819,7 @@ begin
   StopTime := 0;   // Time to subtract from timing.
 
   // Create the TokenList.
-  Writeln('Maximum symbols = ', DimVocab, '. Maximum merges = ', MaxMerges, '. Maximum pair counts = ', MaxPairCount, '.');
+  Writeln('Maximum symbols = ', nVocab, '. Maximum merges = ', MaxMerges, '. Maximum pair counts = ', MaxPairCount, '.');
   Writeln('X = Exit program. B = Break out of merge loop. V = toggle Verbose mode. P = Program information. M = Merging information. Merging...');
   BuildTokenListFromCorpus(Corpus);
 

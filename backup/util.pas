@@ -22,6 +22,7 @@ procedure Optimization(var WModelParams: TWModelParams; var WModelState: TWModel
 procedure ApplyRoPE(var H: TSeqMatrix;  const InvFreq: TFVector; SeqLen, ModelDim: Integer);
 procedure ApplyAutoregressiveMask(var ScoresHead: TScoresMatrix; const L: Integer);
 procedure SoftmaxForward(const x: TFVector; out y: array of Single);
+procedure SoftmaxForwardN(const x: PSingle; y: PSingle; const N: Integer);
 procedure SoftmaxBackward(const y, dy:  TFVector; out dx: array of Single);
 procedure LayerNormForward(const InX: TSeqMatrix; var OutX: TSeqMatrix; SeqLen: Integer;
   const Gamma, Beta: TSeqVector; var LNXhat: TSeqMatrix; var LNInvStd: TFSVector);
@@ -291,6 +292,36 @@ begin
       ScoresHead[i, j] := NEG_INF;
 end;
 
+procedure SoftmaxForwardN(const x: PSingle; y: PSingle; const N: Integer);
+var
+  i: Integer;
+  MaxVal, SumVal, InvT: Single;
+begin
+  if N <= 0 then Exit;
+
+  InvT := 1.0 / Temperature;
+
+  // Find max for numerical stability.
+  MaxVal := x[0] * InvT;
+  for i := 1 to N - 1 do
+    if (x[i] * InvT) > MaxVal then
+      MaxVal := x[i] * InvT;
+
+  // Exp and sum.
+  SumVal := 0.0;
+  for i := 0 to N - 1 do begin
+    y[i] := Exp((x[i] * InvT) - MaxVal);
+    SumVal := SumVal + y[i];
+  end;
+
+  // Normalize.
+  if SumVal <> 0.0 then begin
+    SumVal := 1.0 / SumVal;
+    for i := 0 to N - 1 do
+      y[i] := y[i] * SumVal;
+  end;
+end;
+
 // Softmax procedure forward.
 procedure SoftmaxForward(const x: TFVector; out y: array of Single);
 var
@@ -428,7 +459,7 @@ begin
 end;
 
 // Back propagation addition.
-procedure xBackpropAdd(const dOut: TSeqMatrix; var dA, dB: TSeqMatrix; const L, D: Integer);
+procedure BackpropAdd(const dOut: TSeqMatrix; var dA, dB: TSeqMatrix; const L, D: Integer);
 var
   i, j: Integer;
 begin

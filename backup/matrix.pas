@@ -25,6 +25,7 @@ procedure MatMulFullNT(const A, B: PSingle; C: PSingle; M, N, K, lda, ldb, ldc: 
 procedure MatMulFullAccNN(const A, B: PSingle; C: PSingle; M, N, K, lda, ldb, ldc: Integer);
 procedure MatMulFullAccNT(const A, B: PSingle; C: PSingle; M, N, K, lda, ldb, ldc: Integer);
 procedure MatMulFullAccTN(const A, B: PSingle; C: PSingle; M, N, K, lda, ldb, ldc: Integer);
+procedure MatMulFullScaledNT(const A, B: PSingle; C: PSingle; M, N, K, lda, ldb, ldc: Integer; Alpha, Beta: Single);
 procedure MatMulNN(const A, B: PSingle; C: PSingle; M, N, K: Integer);
 procedure MatMulNT(const A, B: PSingle; C: PSingle; M, N, K: Integer);
 procedure MatMulTN(const A, B: PSingle; C: PSingle; M, N, K: Integer);
@@ -192,6 +193,18 @@ begin
     C, ldc);
 end;
 
+// Matrix multiplication, A no transpose, B transpose, scaled overwrite, row-major.
+procedure MatMulFullScaledNT(const A, B: PSingle; C: PSingle; M, N, K, lda, ldb, ldc: Integer; Alpha, Beta: Single);
+begin
+  cblas_sgemm(RowMajor, NoTrans, Trans,
+    M, N, K,
+    Alpha,
+    A, lda,
+    B, ldb,
+    Beta,
+    C, ldc);
+end;
+
 // Matrix multiplication, A no transpose, B no transpose, overwrite, row-major.
 procedure MatMulNN(const A, B: PSingle; C: PSingle; M, N, K: Integer);
 begin
@@ -315,7 +328,7 @@ begin
       B[i, j] := Max(0.0, A[i, j]);
 end;
 
-// Copy an X matrix.
+// Copy an X matrix. Not used.
 procedure CopyXMatrix(const A: array of TSeqVector; var B: array of TSeqVector;
   const Rows, Cols: Integer);
 var
@@ -328,7 +341,7 @@ begin
     cblas_scopy(Cols, @A[i, 0], 1, @B[i, 0], 1);
 end;
 
-// Copy an X matrix, faster alternative. Not used.
+// Copy an X matrix, faster alternative.
 procedure FastCopyXMatrix(const A: TSeqMatrix; var B: TSeqMatrix);
 begin
   cblas_scopy(SeqLen * ModelDim, @A[0,0], 1, @B[0,0], 1);

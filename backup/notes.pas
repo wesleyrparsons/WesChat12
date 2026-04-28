@@ -5,12 +5,10 @@ unit Notes;
 { WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wespar.com.}
 
 General
+1. Replace nStmbols with nVocab.
 
-1. Check which trainable and non-t params need to be in zerogradients.
-
+2. Forward and Backprop Transform units.
 3. Test SaveModel and LoadModel procedures.
-
-3a. Use saxpy and Updateparam im Optimization routine.
 
 4. In main program: Read Corpus, Read Files (vocab and merge), Tokenize, Embed, Transform.
 One proc: display merge/token info. One proc: display transform/embed info.
@@ -65,8 +63,6 @@ Transform/Matrix/Utils.
 
 a. Create Saxpy wrapper.
 
-b. Use MatMul wrapper for all cblas. Use FullAcc that now exists in Matrix.
-
 1. Many models reuse the embedding matrix for output projection.
 This is called weight tying. WVocab not needed. I am doing it.
 
@@ -77,6 +73,9 @@ Store attention softmax outputs. Do I need them intact for backprop through soft
 
 4. Can I make Embeddings a dynamic matrix, and therefore avoid the need for MaxSymbols?
 And generally simplify things? It would be the only dynamic variable. No, CBLAS will not work.
+It will not work because Embeddings declared as array of array of single, and that creates
+a jagged matrix, which is not contiguous. It would work if I make Emebeddings one dimesional.
+Also, Probs and TopGradient rely on Embeddings (and Dim Vocab).
 
 5. Use Welford addition. No, not with sgemm.
 

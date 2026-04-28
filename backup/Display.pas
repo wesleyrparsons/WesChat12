@@ -26,10 +26,8 @@ procedure DisplayX(const X: TSeqMatrix; const Part: TPart = B); overload;
 procedure VTPDisplayX(const Mess: string; const X: TSeqMatrix; const Part: TPart = B); overload;
 procedure DisplayX(const X: THiddenMatrix; const Part: TPart = B); overload;
 procedure VTPDisplayX(const Mess: string; const X: THiddenMatrix; const Part: TPart = B); overload;
-procedure DisplayX(const X: TSeqVocabMatrix; const Part: TPart = B); overload;
-procedure VTPDisplayX(const Mess: string; const X: TSeqVocabMatrix; const Part: TPart = B); overload;
-//procedure DisplayX(const X: TVocabWeightMatrix; const Part: TPart = B); overload;
-//procedure VTPDisplayX(const Mess: string; const X: TVocabWeightMatrix; const Part: TPart = B); overload;
+//procedure DisplayX(const X: TSeqVocabMatrix; const Part: TPart = B); overload;
+//procedure VTPDisplayX(const Mess: string; const X: TSeqVocabMatrix; const Part: TPart = B); overload;
 procedure DisplayX(const X: TEmbeddingsMatrix; const Part: TPart = B); overload;
 procedure VTPDisplayX(const Mess: string; const X: TEmbeddingsMatrix; const Part: TPart = B); overload;
 procedure DisplayX(const X: TScoresMatrix; const Part: TPart = B); overload;
@@ -89,7 +87,7 @@ begin
   Writeln('Blocks (nBlock): ', nBlock);
   Writeln('Learning Rate (LearningRate): ', LearningRate: 6: 4);
   Writeln('Trainable Parameters: Wq, Wk, Wv, W0, W1, b1, W2, b2, gamma1, beta1, beta2, gamma2');
-  Writeln('Maximum Vocabulary (MaxVocab): ', MaxVocab);
+  //Writeln('Maximum Vocabulary (MaxVocab): ', DimVocab);
   Writeln('Number of Vocabulary (nVocab): ', nVocab);
 end;
 
@@ -296,7 +294,7 @@ begin
 end;
 
 // Display a Vocab Weight matrix, B, E, F, or G.
-procedure DisplayX(const X: TVocabWeightMatrix; const Part: TPart = B); overload;
+{procedure DisplayX(const X: TVocabWeightMatrix; const Part: TPart = B); overload;
 const
   tStride = 10;
 var
@@ -364,7 +362,7 @@ begin
     DisplayX(X, Part);
     Pause;
   end;
-end;
+end;}
 
 // Display a Embeddings matrix, B, E, F, or G.
 procedure DisplayX(const X: TEmbeddingsMatrix; const Part: TPart = B); overload;
@@ -438,7 +436,7 @@ begin
 end;
 
 // Display a Vocab TSeq matrix, B, E, F, or G.
-procedure DisplayX(const X: TSeqVocabMatrix; const Part: TPart = B); overload;
+{procedure DisplayX(const X: TSeqVocabMatrix; const Part: TPart = B); overload;
 const
   tStride = 10;
 var
@@ -506,7 +504,7 @@ begin
     DisplayX(X, Part);
     Pause;
   end;
-end;
+end;}
 
 // Display a ScoresHead matrix, B, E, F, or G.
 procedure DisplayX(const X: TScoresMatrix; const Part: TPart = B); overload;

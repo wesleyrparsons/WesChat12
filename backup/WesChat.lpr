@@ -3,7 +3,7 @@ program WesChat;
 {$mode ObjFPC}{$H+}{$I proprietary.txt}
 
 { WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wespar.com }
-{ Note: Edited 4/22/2026 8 am -- saved as WesChat12 on GitHub and Kopia}
+{ Note: Edited 4/28/2026 8 pm -- saved as WesChat12 on GitHub and Kopia}
 { Notes: TokCorpus comes from WesTokenize or ChatGPTTokenize; WModelParams (with Embeddings) and WModelState are from here}
 { Notes: Corpus, QueryCorpus (TBVector) are here; QueryOutput (TIVector) is in Global }
 {        Input Train        Input Query        Output
@@ -524,10 +524,11 @@ begin
         DisplayByteSymbolTable(SymbolTable);
       end;
       '10': begin
+        // Add code to force model train.
         // ChDir(WorkingDir);   // Save model.
         Write('Enter filename: ');
         Readln(ModelFileName);
-        SaveModel(ModelFileName, WModelParams, Success);
+        //SaveModel(ModelFileName, WModelParams, Success);
         // ChDir('..');
         if Success then
           Writeln('File ', ModelFileName, ' successfully saved.')
@@ -539,7 +540,7 @@ begin
         // ChDir(WorkingDir);   // Load model.
         Write('Enter filename: ');
         Readln(ModelFileName);
-        LoadModel(ModelFileName, WModelParams, Success);
+        //LoadModel(ModelFileName, WModelParams, Success);
         // ChDir('..');
         if Success then begin
           Writeln('File ', ModelFileName, ' loaded.');

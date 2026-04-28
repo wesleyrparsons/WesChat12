@@ -45,6 +45,7 @@ procedure ReLUMaskForward(const A: THiddenMatrix; var B: THiddenMatrix);
 // Copy matrix procedure.
 procedure CopyXMatrix(const A: array of TSeqVector; var B: array of TSeqVector;
   const Rows, Cols: Integer);
+procedure FastCopyXMatrix(const A: TSeqMatrix; var B: TSeqMatrix);
 
 // cblas sgemm.
 procedure cblas_sgemm(Layout: LongInt;
@@ -328,7 +329,7 @@ begin
       B[i, j] := Max(0.0, A[i, j]);
 end;
 
-// Copy an X matrix.
+// Copy an X matrix. Not used.
 procedure CopyXMatrix(const A: array of TSeqVector; var B: array of TSeqVector;
   const Rows, Cols: Integer);
 var
@@ -341,7 +342,7 @@ begin
     cblas_scopy(Cols, @A[i, 0], 1, @B[i, 0], 1);
 end;
 
-// Copy an X matrix, faster alternative. Not used.
+// Copy an X matrix, faster alternative.
 procedure FastCopyXMatrix(const A: TSeqMatrix; var B: TSeqMatrix);
 begin
   cblas_scopy(SeqLen * ModelDim, @A[0,0], 1, @B[0,0], 1);

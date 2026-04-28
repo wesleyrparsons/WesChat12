@@ -27,6 +27,7 @@ procedure RunTransform(var WModelParams: TWModelParams; var WModelState: TWModel
 var
   h, i, j, HeadOffset, BestTok: Integer;
   BestProb: Single;
+
 begin
   // Display entry to transform.
   writeln('Entering Transformer/FFN/Head Output');
@@ -43,7 +44,7 @@ begin
   // 1. FORWARD STAGE: ATTENTION.
 
     // 1A. Layer-Norm. Obtain X1 from X.
-
+    Writeln('          Transform Forward Stage 1A');
     // Layer Norm: Input X. Output X1.
     // Obtain input X from Tokenizer for Transformer stage.
     // Purpose: Normalization.
@@ -54,8 +55,10 @@ begin
     VTPDisplayX('Display X1.Value after layer-norming.', X1.Value, B);
 
     // 1B. Split. Implicit split into X1 and accumulate into X4.
+    Writeln('          Transform Forward Stage 1B (Implicit)');
 
     // 1C. Multiplication/Overwrite. Obtain Q, K, V from X1.
+    Writeln('          Transform Forward Stage 1C');
 
     // Full Size Multiplication/Overwrite: Input X1, Wq. Output Q.
     // Equation: Q = X1 · Wq. Q in R^{L x D}. X1 in R^{L · D}. Wq in R^{D x D}. M=SeqLen N=ModelDim K=ModelDim.
@@ -80,6 +83,7 @@ begin
     ApplyRoPE(K.Value, InvFreq, SeqLen, ModelDim);
 
     // 1E. Multiplication. Obtain Scores1.
+    Writeln('          Transform Forward Stage 1E');
 
     // Multihead Multiplication/Overwrite: Input Q, Kᵀ. Output: Scores1.
     // That is, the Queries * Tansposed(Keys) are the attention scores.
@@ -104,6 +108,7 @@ begin
     VTPDisplayX('Display ScoresHead1[0] before standardizing.', ScoresHead1[0].Value, B);
 
     // 1F. Mask & Softmax & Dropout. Obtain Scores2.
+    Writeln('          Transform Forward Stage 1F');
 
     // Masking: Input ScoresHead1. Output ScoresHead1.
     // Equation: ScoresHead1 = Mask(ScoresHead1). ScoresHead1 in R^{L x L}.
@@ -112,6 +117,7 @@ begin
 
     // Softmax: Input ScoresHead1. Output ScoresHead2.
     // Equation: ScoresHead2 = Softmax(ScoresHead1). ScoresHead in R^{L x L}.
+    // Do not use SoftmaxForwardN here.
     for h := 0 to nHead - 1 do
       for i := 0 to SeqLen - 1 do
         SoftmaxForward(ScoresHead1[h].Value[i], ScoresHead2[h].Value[i]);
@@ -131,10 +137,10 @@ begin
               ScoresHead2[h].Value[i, j] := ScoresHead2[h].Value[i, j] / (1.0 - ADropOut);
 
     // 1G. Multiplication/Overwrite. Obtain X2Head from ScoresHead2.
+    Writeln('          Transform Forward Stage 1G');
 
     // Scoring: Input ScoresHead2, VHead. Output: X.
     // Equation: X2 = Scores2 · V. X2 in R^{L · D}. Scores2 in R^{L x L}. V in R^{L x D}. M=SeqLen N=ModelDim K=SeqLen
-
     for h := 0 to nHead - 1 do begin
       HeadOffset := h * HeadDim;
       MatMulFullNN(@ScoresHead2[h].Value[0,0], @V.Value[0, HeadOffset], @X2.Value[0, HeadOffset], SeqLen, HeadDim, SeqLen, SeqLen, ModelDim, ModelDim);
@@ -144,6 +150,7 @@ begin
     VTPDisplayX('Display X2, after Softmax, and concatenation.', X2.Value, B);
 
     // 1H. Mutiplication/Overwrite. Obtain X3 by weighting X2 by W0.
+    Writeln('          Transform Forward Stage 1H');
 
     // Weighting: Input X2, W0. Output X3.
     // Equation: X3 = X2 · W0. X3 in R^{L · D}. W0 in R^{D x D}. X2 in R^{L x D}.
@@ -153,6 +160,7 @@ begin
     VTPDisplayX('Display X3, in transform.', X3.Value, B);
 
     // 1I. Merge. Obtain X4 from X1 and X3.
+    Writeln('          Transform Forward Stage 1I');
 
     // Merge Addition: Input X1, X3. Output X4.
     // Equation: X4 = X1 + X3. X4 in R^{L · D}. X1 in R^{L · D}. X2 in R^(L x D}.
@@ -162,6 +170,7 @@ begin
     VTPDisplayX('Display X4.Value, in transform, after residual added to X3.', X4.Value, G);
 
     // 1J. Layer-Norm. Obtain X5 from X4.
+    Writeln('          Transform Forward Stage 1J');
 
     // Layer Norm: Input X4. Output X5.
     // Equation: X5 = LayerNorm(X4). X4 in R^{L × D}. X5 in R^{L × D}. Gamma2, Beta2 in R^{D}.
@@ -173,12 +182,14 @@ begin
       // 2. STAGE FORWARD FFN.
 
       // 2A. Multiplication/Overwrite. Obtain Hidden1 from X5 and W1.
+      Writeln('            Transform Forward Stage 2A');
 
       // Expansion: Input X5, W1. Output Hidden1.
       // Equation: Hidden1 = X5 · W1. Hidden1 in R^{L x DB}. X5 in R^{L x D}. W1 in R^{D x DB}.
       MatMulNN(@X5.Value[0, 0], @W1.Value[0, 0], @Hidden1.Value[0, 0], SeqLen, ModelDimProj, ModelDim);
 
       // 2B. Addition/Accumulate. Obtain Hidden1 from Hidden1 and b1.
+      Writeln('            Transform Forward Stage 2B');
 
       // Addition: Input Hidden1, b1. Output Hidden1.
       // Equation: Hidden1 = Hidden1 * b1. Hidden1 in R^{L x DB}. b1 in R^{DB}.
@@ -190,6 +201,7 @@ begin
       VTPDisplayX('Display Hidden1.Value, in transform,  after adding b1, and before ReLU.', Hidden1.Value, G);
 
       // 2C. ReLU. Obtain Hidden2 from Hidden1.
+      Writeln('            Transform Forward Stage 2C');
 
       // Activation: Input Hidden1. Output Hidden2.
       // Equation: Hidden2 = ReLU(Hidden1).
@@ -205,12 +217,14 @@ begin
               Hidden2.Value[i, j] := Hidden2.Value[i, j] / (1.0 - RDropOut);
 
       // 2D. Multiplication/Overwrite. Obtain X6 from Hidden2.
+      Writeln('            Transform Forward Stage 2D');
 
       // Contraction: Input Hidden2, W2. Output X6.
       // Equation: X6 = Hidden2 · W2. Hidden2 in R^{L x DB}. W2 in R^{DB x D}. X6 in R^{L x D}.
       MatMulNN(@Hidden2.Value[0, 0], @W2.Value[0, 0], @X6.Value[0, 0], SeqLen, ModelDim, ModelDimProj);
 
       // 2E. Addition/Accumulation. Obtain X6 from Hidden2 and b2.
+      Writeln('            Transform Forward Stage 2E');
 
       // Addition: Input Hidden2, b2. Output X6.
       // Equation: X6 = X6 + b2. X6 in R^{L x D}. b2 in R^{L x D}.
@@ -222,6 +236,7 @@ begin
       VTPDisplayX('Display X6, in transform, after contraction.', X6.Value, B);
 
       // 2F. Addition/Merge. Obtain X7 from X5 and X6.
+      Writeln('            Transform Forward Stage 2F');
 
       // Backprop Merge Addition: Input Residual X6, X5. Output X7.
       // Equation: X7 = X5 + X6. X7 in R^{L · D}. X5 in R^{L · D}. X6 in R^{L x D}.
@@ -233,28 +248,32 @@ begin
       // 3. FORWARD HEAD OUTPUT STAGE.
 
         // 3A. Multiplication/Overwrite. Obtain Probs from X7 and Vocab.
+        Writeln('              Transform Forward Stage 3A');
 
         // Multiplication: Input X7, Vocab. Output Probs.
         // Equation: Probs = X7 · Embeddingsᵀ. Probs in R^{L x nVocab}. X in R^{L x D}.  Embeddings in R^{nVocab x D}.
-           MatMulNT(@X7.Value[0, 0], @Embeddings.Value[0, 0], @Probs[0, 0], SeqLen, nVocab, ModelDim);
-                             // change last 2 params above??
-        // Display Probs matrix.
+        MatMulFullNT(@X7.Value[0, 0], @Embeddings.Value[0, 0], @Probs[0, 0], SeqLen, nVocab, ModelDim, ModelDim, ModelDim, DimVocab);
+
+         // Display Probs matrix.
         VTPDisplayX('Display Probs, in transform, before softmax.', Probs, B);
 
         // Display Embeddings.Value matrix.
         VTPDisplayX('Display Embeddings.Value in transform, before computing Logit.', Embeddings.Value, B);
 
         // 3B. Softmax. Obtain Probs from Probs.
+        Writeln('            Transform Forward Stage 3B');
 
         // Softmax: Input Logit. Output Logit.
         // Equation: Logit = Softmax(Logit).
+        // Use SoftmaxForwardN here.
         for i := 0 to SeqLen - 1 do
-          SoftmaxForward(Probs[i], Probs[i]);
+          SoftmaxForwardN(@Probs[i,0], @Probs[i,0], nVocab);
 
         // Display Probs matrix.
         VTPDisplayX('Display Probs, in transform, after softmax.', Probs, B);
 
         // 3C. Is QueryForward, then pick the largest probs, and save them.
+        Writeln('            Transform Forward Stage 3C');
         if not Training then begin
           SetLength(QueryOutput, SeqLen);
           for i := 0 to SeqLen - 1 do begin
@@ -271,9 +290,11 @@ begin
         end;
 
         // 3D. Cross-Entropy Loss. Obtain TopGradient from Probs.
+        Writeln('            Transform Forward Stage 3D');
         // Gradient: Input Probs. Output TopGradient. Also option of CalculateGradient from KLDivergence.
         // Equation: TopGradient in R^{L x nVocab}. Probs in R^{L x nVocab}.
         GradientFromCEProbabilities(WModelState);
+        //GradientFromKLDivergence(WModelState);
 
         // Display TopGradient matrix.
         VTPDisplayX('Display TopGradient, in transform, after Logit calculation.', TopGradient, B);
@@ -281,15 +302,20 @@ begin
       // BACK PROPAGATION. FEED BACKWARD NETWORK.
 
       // 2F. Backprop TopGradient creates X7 Grad: Input TopGradient, WVocabᵀ. Output X7.Grad.
+      Writeln('            Transform Backprop Stage 2F');
 
-      // Equation: X7.Grad = TopGradient · Embeddings.Value. X7.Grad in R^{L x D}. TopGradient in R^{L x nVocab}. Embeddings in R^{D x nVocab}.
-      writeln('Stage 2F');
-      cblas_sgemm(101, 111, 111, SeqLen, ModelDim, nVocab, 1.0, @TopGradient[0, 0], DimVocab,
-      @Embeddings.Value[0, 0], ModelDim, 0.0, @X7.Grad[0, 0], ModelDim);
+      // Equation: X7.Grad = TopGradient · Embeddings.Value. X7.Grad in R^{L x D}. TopGradient in R^{L x nVocab}. Embeddings.Value in R^{nVocab x D}.
+      MatMulFullNN(@TopGradient[0, 0], @Embeddings.Value[0, 0], @X7.Grad[0, 0], SeqLen, ModelDim, nVocab, DimVocab, ModelDim, ModelDim);
+      {cblas_sgemm(101, 111, 111, SeqLen, ModelDim, nVocab, 1.0, @TopGradient[0, 0], DimVocab,
+      @Embeddings.Value[0, 0], ModelDim, 0.0, @X7.Grad[0, 0], ModelDim);}
+
+      Writeln('Finished MatMul X7.Grad loop.');
 
       // Backprop TopGradient modifies/overwrites Embeddingsᵀ: Input X7ᵀ, TopGradient. Output Embeddingsᵀ.Grad.
       // Equation: Embeddingsᵀ.Grad = X7ᵀ · TopGradient. Embeddingsᵀ.Grad in R^{nVocab x D}. X7ᵀ in R^(D x L}. TopGradient in R^{L x nVocab}.
-      MatMulFullAccNT(@TopGradient[0,0], @X7.Value[0,0], @Embeddings.Grad[0,0], nVocab, ModelDim, SeqLen, DimVocab, ModelDim, ModelDim);
+      // Problem here was I had NT rather than TN.
+      MatMulFullAccTN(@TopGradient[0,0], @X7.Value[0,0], @Embeddings.Grad[0,0], nVocab, ModelDim, SeqLen, DimVocab, ModelDim, ModelDim);
+      Writeln('Finished Embeddings.Grad GEMM.');
 
       // Backprop Split X7 Grad into X5 and X6: Input X5.Grad, X7.Grad. Output dX.Grad.
       // Equation: X5.Grad = X5.Grad + X7.Grad. All in R^{L x D}.
@@ -299,16 +325,16 @@ begin
       VTPDisplayX('Display X7.Grad, in transform, after stage 2D.', X7.Grad, G);
 
       // 2E. Backprop Addition/Accumulation. Obtain b2 from X6.
+      Writeln('            Transform Backprop Stage 2E');
 
-      Writeln('Stage 2E');
       // Backprop X6 Grad creates b2 Grad. Input X6.Grad. Output b2.Grad.
       // Equation: b2.Grad = sum of X6.Grad. b2.Grad is R^{L x D}. X6.Grad in R^{L x D}.
       for i := 0 to SeqLen - 1 do
         AddScaled(ModelDim, 1.0, @X6.Grad[i,0], @b2.Grad[0]);
 
       // 2D. Backprop Multiplication/Overwrite. Obtain W2 from Hidden2 and X6.
+      Writeln('            Transform Backprop Stage 2D');
 
-      Writeln('Stage 2D');
       // Backprop X6 Grad creates W2 Grad: Input Hidden2ᵀ.Value, X6.Grad. Output W2.Grad.
       // Equation: W2.Grad = Hidden2ᵀ.Value · X6.Grad. W2.Grad is R^{DB x D}. Hidden2ᵀ.Value is R^{DB x L}. X6.Grad in R^{L x D}.
       MatMulTN(@Hidden2.Value, @X6.Grad, @W2.Grad, ModelDimProj, ModelDim, SeqLen);
@@ -318,8 +344,8 @@ begin
       MatMulNT(@X6.Grad, @W2.Value, @Hidden2.Grad, SeqLen, ModelDimProj, ModelDim);
 
       // 2C. Backprop ReLU. Obtain Hidden1 from Hidden2.
+      Writeln('            Transform Backprop Stage 2C');
 
-      Writeln('Stage 2C');
       // Backprop BackReLU activation on Hidden: Input Hidden2.Grad. Output Hidden1.Grad.
       // Equation: Hidden1.Grad = ReLUMaskBackward(Hidden2.Grad). Hidden1.Grad is R^{L x DB}. Hidden2.Value is R^{L x DB}.
       for i := 0 to SeqLen - 1 do
@@ -330,16 +356,16 @@ begin
             Hidden1.Grad[i, j] := 0.0;
 
       // 2B. Backprop Addition/Accumulate. Obtain b1 from Hidden1.
+      Writeln('            Transform Backprop Stage 2B');
 
-      Writeln('Stage 2B');
       // Backprop Hidden Grad creates b1 Grad: Input Hidden1.Grad. Output b1.Grad.
       // Equation: b1.Grad = sum of Hidden1.Grad. b1.Grad is R^{L x DB}. Hidden1.Grad in R^{L x DB}.
       for i := 0 to SeqLen - 1 do
         AddScaled(ModelDimProj, 1.0, @Hidden1.Grad[i,0], @b1.Grad[0]);
 
       // 2A. Backprop Multiplication/Overwrite. Obtain W1 from X5ᵀ and Hidden1.
+      Writeln('            Transform Backprop Stage 2A');
 
-      Writeln('Stage 2A');
       // Obtain X5 from Hidden1 and W1.
       // Backprop Hidden1 Grad creates W1 Grad. Input: X5ᵀ.Value, Hidden1.Grad. Output: W1.Grad.
       // Equation: W1.Grad = X5ᵀ.Value · Hidden1.Grad. W1.Grad is R^{D x DB}. X5ᵀ.Value is R^{L x D}. Hidden1.Grad is R^{D x DB).
@@ -352,8 +378,8 @@ begin
     // 1. BACKPROP STAGE TRANSFORMER.
 
     // 1J. Backprop Layer-Norm. Obtain X5 from X4.
+    Writeln('          Transform Backprop Stage 1J');
 
-    Writeln('Stage 1J');
     // Backprop Layer-Norm: Input X5, dX5. Output X4.Grad, Gamma2.Grad, Beta2.Grad.
     // Equation: X4.Grad, Gamma2.Grad, Beta2.Grad = LayerNorm(X5, X5.Grad, Gamma2, Beta2). X4.Grad, X5.Grad in R^{L x D}. Gamma2.Grad, Beta2.Grad in R^{D}.
     LayerNormBackward(X5.Grad, X4.Grad, Gamma2.Grad, Beta2.Grad, SeqLen, Gamma2.Value, LNXhat2, LNInvStd2);
@@ -362,8 +388,8 @@ begin
     VTPDisplayX('Display X4.Grad, in transform, after stage 1J, layer-norm.', X4.Grad, G);
 
     // 1I. Backprop Split. Input: X1.Grad. Output: X3.Grad. Output X4.Grad,
+    Writeln('          Transform Bacprop Stage 1I');
 
-    Writeln('Stage 1I');
     // Equation: X3.Grad, X4.Grad = X1.Grad. All in R^{L x D}.
     GradSplit(X4.Grad, X1.Grad, X3.Grad, SeqLen, ModelDim);
 
@@ -385,8 +411,8 @@ begin
     VTPDisplayX('Display X3.Grad, in transform, before stage 1G.', X3.Grad, G);
 
     // 1G. Backprop Multiplication/Overwrite. Obtain Scores2.Grad from X2.Grad: Input X2.Grad, Vᵀ.Value. Output: Scores2.Grad.
+    Writeln('          Transform Backprop Stage 1G');
 
-    Writeln('Stage 1G');
     // Equations: Scores2.Grad = X2.Grad · Vᵀ.Value. Scores2.Grad is R^{L x L}. X2.Grad is R^{L x D}. Vᵀ.Value is R^{D x L}.
     for h := 0 to nHead - 1 do begin
       HeadOffset := h * HeadDim;
@@ -401,7 +427,8 @@ begin
     end;
 
     // 1F. Backprop Standardize, Mask & Softmax. Obtain ScoresHead1.
-    Writeln('Stage 1F');
+    Writeln('          Transform Backprop Stage 1F');
+
     // Insure ScoresHead1.Grad is empty.
     for h := 0 to nHead - 1 do
       FillChar(ScoresHead1[h].Grad, SizeOf(ScoresHead1[h].Grad), 0);
@@ -415,7 +442,7 @@ begin
     // Scaling after Softmax.
     for h := 0 to nHead - 1 do
       Scale(SeqLen * SeqLen, InvSqrtHeadDim, @ScoresHead1[h].Grad[0,0]);
-      //cblas_sscal(SeqLen * SeqLen, InvSqrtHeadDim, @ScoresHead1[h].Grad[0,0], 1);
+    //cblas_sscal(SeqLen * SeqLen, InvSqrtHeadDim, @ScoresHead1[h].Grad[0,0], 1);
 
     // Backprop AutoRegression.
     // Equation: ScoresHead1.Grad = Unmask(ScoresHead1.Grad).
@@ -431,11 +458,10 @@ begin
     VTPDisplayX('ScoresHead1[0].Grad, transform, before stage 1E, Q and K-transform.', ScoresHead1[0].Grad, G);
 
     // 1E. Backprop multiplication. Obtain QHead.Grad and KHead.Grad.
+    Writeln('          Transform Backprop Stage 1E');
 
-    Writeln('Stage 1E');
     // Backprop Multiplication: Input ScoresHead1.Grad, KHead.Value. Output QHead.Grad.
     // Equation: QHead.Grad = ScoresHead1.Grad · KHead.Value. QHead.Grad, ScoresHead1.Grad in R^{L x L}. KHead.Value in R^{L x D}.
-
     for h := 0 to nHead - 1 do begin
       HeadOffset := h * HeadDim;
       MatMulFullNN(@ScoresHead1[h].Grad[0,0], @K.Value[0, HeadOffset], @Q.Grad[0, HeadOffset], SeqLen, HeadDim, SeqLen, SeqLen, ModelDim, ModelDim);
@@ -449,10 +475,11 @@ begin
     end;
 
     // 1D. RoPE. Nil.
+    Writeln('          Transform Backprop Stage 1D Nil');
 
     // 1C. Backprop multiplication/overwrite. Obtain W_.Grad and X1_q.Grad for Q, K, and V.
+    Writeln('          Transform Backprop Stage 1C');
 
-    Writeln('Stage 1D');
     // Obtain X1q, X1k, X1v, from X1.
     {Wq.Grad = X1ᵀ.Value · Q.Grad
      X1q.Grad = Q.Grad · Wqᵀ.Value}
@@ -485,7 +512,8 @@ begin
     MatMulNT(@V.Grad, @Wv.Value, @X1v.Grad, SeqLen, ModelDim, ModelDim);
 
     // 1B. Backprop Merge: Obtain X1 Grad as sum of Grads. Input X1q.Grad, X1k.Grad, and X1v.Grad. Output X1.Grad.
-    Writeln('Stage 1B');
+    Writeln('          Transform Backprop Stage 1B');
+
     // Equation:  X1.Grad = X1q.Grad + X1k.Grad + X1v.Grad. All in R^{L x D}.
     for i := 0 to SeqLen - 1 do
       for j := 0 to ModelDim - 1 do
@@ -499,7 +527,8 @@ begin
     VTPDisplayX('Display X1.Grad, in transform, after concatenation.', X1.Grad, G);
 
     // 1A. Backprop Layer-Norm: Input X1.Value, X1.Grad. Output X.Grad, Gamma1.Grad, Beta1.Grad.
-    Writeln('Stage 1A');
+    Writeln('          Transform Backprop Stage 1A');
+
     // Equation: X.Grad, Gamma1.Grad, Beta1.Grad = LayerNorm(X1.Value, X1.Grad, Gamma1.Value, Beta1.Value). X.Grad, X1.Grad in R^{L x D}. Gamma1.Grad, Beta1.Grad in R^{D}.
     LayerNormBackward(X1.Grad, X.Grad, Gamma1.Grad, Beta1.Grad, SeqLen, Gamma1.Value, LNXhat1, LNInvStd1);
 
@@ -510,7 +539,9 @@ begin
     Optimization(WModelParams, WModelState);
 
     // Place X7 in X for next block.
-    CopyXMatrix(X7.Value, X.Value, SeqLen, ModelDim);
+    Writeln('          Transform Backprop Copy X matrix');
+    FastCopyXMatrix(X7.Value, X.Value);
+    FastCopyXMatrix(X7.Grad, X.Grad);
     If VerboseTransform then begin
       Writeln('End of tranformer block.');
       Pause;

@@ -1,7 +1,7 @@
 @echo off
-SET THEFILE=C:\LazarusProject\WesChat12Cruise\WesChat.exe
+SET THEFILE=C:\LazarusProject\WesChat12\WesChat.exe
 echo Linking %THEFILE%
-C:\lazarus\fpc\3.2.2\bin\x86_64-win64\ld.exe -b pei-x86-64  --gc-sections    --entry=_mainCRTStartup    -o C:\LazarusProject\WesChat12Cruise\WesChat.exe C:\LazarusProject\WesChat12Cruise\link2100.res
+C:\lazarus\fpc\3.2.2\bin\x86_64-win64\ld.exe -b pei-x86-64  --gc-sections    --entry=_mainCRTStartup    -o C:\LazarusProject\WesChat12\WesChat.exe C:\LazarusProject\WesChat12\link7008.res
 if errorlevel 1 goto linkend
 goto end
 :asmend

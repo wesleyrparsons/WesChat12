@@ -23,19 +23,16 @@ procedure RunTransformForward(var WModelParams: TWModelParams; var WModelState: 
 implementation
 
 procedure RunTransformForward(var WModelParams: TWModelParams; var WModelState: TWModelState; var QueryOutput: TIVector; const Blk: Integer);
-// Run the transformer.
+// Run the transformer forward.
 var
-  h, i, j, k, HeadOffset: Integer;
-
+  h, i, j, HeadOffset: Integer;
 begin
   // Display entry to transform.
-  writeln('Entering Transformer/FFN/Head Output');
+  writeln('Entering Forward Transformer');
 
   with WModelParams.ParamBlock[Blk] do with WModelState.StateBlock[Blk] do begin
   // Display X.Value matrix.
   VTPDisplayX('Display X.Value in transform, before any action.', X.Value, G);
-
-  //  0.
 
   // 1. FORWARD STAGE: ATTENTION.
 

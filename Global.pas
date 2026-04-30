@@ -7,7 +7,6 @@ unit Global;
 interface
 
 var
-
 { Place all verbosity and control options at start }
   DoNotPause: Boolean = False;         // Pause disabled.
   PauseIfKeyPressed: Boolean = True;   // Pause if a key is pressed.
@@ -157,7 +156,7 @@ var
   LearningRate: Single = 0.01;                   // LearningRate for Gradient.
   Temperature: Single = 1.0;                     // Temperature for softmax.
   Training: Boolean = True;                      // In training as opposed to inference mode.
-
+  InvFreq: TFVector;
   // Other.
   TestVector: TFSVector;          // Vector for testing. [0..SeqLen] of Single.
 

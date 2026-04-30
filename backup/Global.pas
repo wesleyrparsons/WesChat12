@@ -7,7 +7,6 @@ unit Global;
 interface
 
 var
-
 { Place all verbosity and control options at start }
   DoNotPause: Boolean = False;         // Pause disabled.
   PauseIfKeyPressed: Boolean = True;   // Pause if a key is pressed.
@@ -160,7 +159,6 @@ var
 
   // Other.
   TestVector: TFSVector;          // Vector for testing. [0..SeqLen] of Single.
-  InvFreq:    TFVector;           // For RoPE.
 
 implementation
 

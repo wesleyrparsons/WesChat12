@@ -22,15 +22,15 @@ procedure RunTransformBackprop(var WModelParams: TWModelParams; var WModelState:
 
 implementation
 
-// Run the transformer.
+// Run the transformer backprop.
 procedure RunTransformBackprop(var WModelParams: TWModelParams; var WModelState: TWModelState; var QueryOutput: TIVector; const Blk: Integer);
 var
-  h, i, j, k, HeadOffset, BestTok: Integer;
+  h, i, j, HeadOffset, BestTok: Integer;
   BestProb: Single;
 
 begin
   // Display entry to transform.
-  writeln('Entering Bacxkprop Transformer');
+  writeln('Entering Backprop Transformer');
 
   // Display X.Value matrix.
   VTPDisplayX('Display X.Value in transform, before any action.', WModelState.StateBlock[0].X.Value, G);
@@ -249,17 +249,6 @@ begin
 
     // Display X.Grad matrix.
     VTPDisplayX('Display X.Grad, in transform, at end.', X.Grad, G);
-
-    // Modify weights and biases.
-    Optimization(WModelParams, WModelState);
-
-    // Place X7 in X for next block.
-    Writeln('          Transform Backprop Copy X matrix');
-    CopyXTensor(X7, X);
-    If VerboseTransform then begin
-      Writeln('End of tranformer block.');
-      Pause;
-    end;
 
   end;   // End with WModel.
 end;     // End RunTransform.

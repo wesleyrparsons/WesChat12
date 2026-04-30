@@ -10,12 +10,11 @@ uses
   Global,
   Matrix;
 
-procedure InitRoPE(var InvFreq: TFVector; ModelDim: Integer);
 procedure XGUniformW(var W: TWeightMatrix; FanIn, FanOut: Integer);
 procedure XGUniformWHead(var W: TWeightHeadMatrix; FanIn, FanOut: Integer);
 procedure XGUniformW1(var W: TWeightProjMatrix; FanIn, FanOut: Integer);
 procedure XGUniformW2(var W: TWeightProjMatrixT; FanIn, FanOut: Integer);
-procedure InitializeTransformer(var WModelParams: TWModelParams);
+procedure InitializeTransformer(var WModelParams: TWModelParams; var WModelState: TWModelState);
 procedure ZeroGradients(var WModelParams: TWModelParams; var WModelState: TWModelState; const Blk: Integer);
 procedure UpdateParam(const N: Integer; const LearningRate: Single; const Grad: PSingle; Param: PSingle);
 procedure Optimization(var WModelParams: TWModelParams; var WModelState: TWModelState; const Blk: Integer);
@@ -44,17 +43,6 @@ var
 begin
 for i := 0 to SeqLen - 1 do
   N[i] := 0.0;
-end;
-
-// Apply at initialization of transformer.
-procedure InitRoPE(var InvFreq: TFVector; ModelDim: Integer);
-var
-  j: Integer;
-begin
-  // ModelDim must be even.
-  SetLength(InvFreq, ModelDim div 2);
-  for j := 0 to (ModelDim div 2) - 1 do
-    InvFreq[j] := Exp( - (2.0 * j) / ModelDim * Ln(10000.0) );
 end;
 
 // Xavier-Glorot initialization on W0 matrix.
@@ -118,41 +106,43 @@ begin
 end;
 
 // Initialize the transformer state stage.
-procedure InitializeTransformer(var WModelParams: TWModelParams);
+procedure InitializeTransformer(var WModelParams: TWModelParams; var WModelState: TWModelState);
 var
   i, j, k: Integer;
 begin
-  // Init grads and probs.
-  // Where init State?
+  // May be able to delete second parameter above.
+  // Do not zero the param grads -- thet is done in zero gradient.
+  // Do not zero the state grads -- thet is done in zero gradient.
+  // As to the param values -- they are zeroed below.
+  // Do not zero the state values -- thet is not necessary.
+  // Do I need to zero topgradient and prob.
   for k := 0 to nBlock - 1 do
     with WModelParams.ParamBlock[k] do begin
-    // Initialize RoPE.
-    InitRoPE(InvFreq, ModelDim);
 
-    // Initialize weight matrix W0.
-    XGUniformW(W0.Value, ModelDim, ModelDim);
+      // Initialize weight matrix W0.
+      XGUniformW(W0.Value, ModelDim, ModelDim);
 
-    // Initialize the weights with Xavier-Glorot function.
-    XGUniformW(Wq.Value, ModelDim, ModelDim);
-    XGUniformW(Wk.Value, ModelDim, ModelDim);
-    XGUniformW(Wv.Value, ModelDim, ModelDim);
+      // Initialize the weights with Xavier-Glorot function.
+      XGUniformW(Wq.Value, ModelDim, ModelDim);
+      XGUniformW(Wk.Value, ModelDim, ModelDim);
+      XGUniformW(Wv.Value, ModelDim, ModelDim);
 
-    // Initialize W1 and W2 weight matrices.
-    XGUniformW1(W1.Value, ModelDim, ModelDimProj);
-    XGUniformW2(W2.Value, ModelDimProj, ModelDim);
+      // Initialize W1 and W2 weight matrices.
+      XGUniformW1(W1.Value, ModelDim, ModelDimProj);
+      XGUniformW2(W2.Value, ModelDimProj, ModelDim);
 
-    // Initialize b1 and b2.
-    FillChar(b1.Value, SizeOf(b1.Value), 0);
-    FillChar(b2.Value, SizeOf(b2.Value), 0);
+      // Initialize b1 and b2.
+      FillChar(b1.Value, SizeOf(b1.Value), 0);
+      FillChar(b2.Value, SizeOf(b2.Value), 0);
 
-    // Initialize Beta and Gamma, LN 1 and 2, with SD and mean.
-    FillChar(Beta1.Value, SizeOf(Beta1.Value), 0);
-    FillChar(Beta2.Value, SizeOf(Beta2.Value), 0);
-    for j := 0 to ModelDim - 1 do begin
-      Gamma1.Value[j] := 1.0;
-      Gamma2.Value[j] := 1.0;
+      // Initialize Beta and Gamma, LN 1 and 2, with SD and mean.
+      FillChar(Beta1.Value, SizeOf(Beta1.Value), 0);
+      FillChar(Beta2.Value, SizeOf(Beta2.Value), 0);
+      for j := 0 to ModelDim - 1 do begin
+        Gamma1.Value[j] := 1.0;
+        Gamma2.Value[j] := 1.0;
+      end;
     end;
-  end;
 end;
 
 // Zero out all gradients.
@@ -175,20 +165,20 @@ begin
     FillChar(V.Grad, SizeOf(V.Grad), 0);
     FillChar(Hidden1.Grad, SizeOf(Hidden1.Grad), 0);
     FillChar(Hidden2.Grad, SizeOf(Hidden2.Grad), 0);
-    with WModelParams.ParamBlock[Blk] do begin
-      FillChar(Wk.Grad, SizeOf(Wk.Grad), 0);
-      FillChar(Wq.Grad, SizeOf(Wq.Grad), 0);
-      FillChar(Wv.Grad, SizeOf(Wv.Grad), 0);
-      FillChar(W0.Grad, SizeOf(W0.Grad), 0);
-      FillChar(W1.Grad, SizeOf(W1.Grad), 0);
-      FillChar(W2.Grad, SizeOf(W2.Grad), 0);
-      FillChar(b1.Grad, SizeOf(b1.Grad), 0);
-      FillChar(b2.Grad, SizeOf(b2.Grad), 0);
-      FillChar(Gamma1.Grad, SizeOf(Gamma1.Grad), 0);
-      FillChar(Gamma2.Grad, SizeOf(Gamma2.Grad), 0);
-      FillChar(Beta1.Grad, SizeOf(Beta1.Grad), 0);
-      FillChar(Beta2.Grad, SizeOf(Beta2.Grad), 0);
-    end;
+  end;
+  with WModelParams.ParamBlock[Blk] do begin
+    FillChar(Wk.Grad, SizeOf(Wk.Grad), 0);
+    FillChar(Wq.Grad, SizeOf(Wq.Grad), 0);
+    FillChar(Wv.Grad, SizeOf(Wv.Grad), 0);
+    FillChar(W0.Grad, SizeOf(W0.Grad), 0);
+    FillChar(W1.Grad, SizeOf(W1.Grad), 0);
+    FillChar(W2.Grad, SizeOf(W2.Grad), 0);
+    FillChar(b1.Grad, SizeOf(b1.Grad), 0);
+    FillChar(b2.Grad, SizeOf(b2.Grad), 0);
+    FillChar(Gamma1.Grad, SizeOf(Gamma1.Grad), 0);
+    FillChar(Gamma2.Grad, SizeOf(Gamma2.Grad), 0);
+    FillChar(Beta1.Grad, SizeOf(Beta1.Grad), 0);
+    FillChar(Beta2.Grad, SizeOf(Beta2.Grad), 0);
   end;
 end;
 

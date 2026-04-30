@@ -180,6 +180,17 @@ begin
   until QueryString = EmptyStr;
 end;
 
+// Apply at initialization of program.
+procedure InitRoPE(var InvFreq: TFVector; const ModelDim: Integer);
+var
+  j: Integer;
+begin
+  // ModelDim must be even.
+  SetLength(InvFreq, ModelDim div 2);
+  for j := 0 to (ModelDim div 2) - 1 do
+    InvFreq[j] := Exp( - (2.0 * j) / ModelDim * Ln(10000.0) );
+end;
+
 // Start of main program.
 begin
   { Necessary because JSON will throw dupe errors otherwise }
@@ -189,6 +200,9 @@ begin
   { Below is not working on my Lazarus console }
   SetConsoleOutputCP(CP_UTF8);
   SetConsoleCP(CP_UTF8);
+
+  // Init RoPE.
+  InitRope(InvFreq, ModelDim);
 
   Writeln('WesChat, Version 1.2, begun January 19, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wespar.com.');
   Writeln;

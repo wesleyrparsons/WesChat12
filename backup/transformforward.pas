@@ -25,8 +25,7 @@ implementation
 procedure RunTransformForward(var WModelParams: TWModelParams; var WModelState: TWModelState; var QueryOutput: TIVector; const Blk: Integer);
 // Run the transformer.
 var
-  h, i, j, k, HeadOffset, BestTok: Integer;
-  BestProb: Single;
+  h, i, j, HeadOffset: Integer;
 
 begin
   // Display entry to transform.

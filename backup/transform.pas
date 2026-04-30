@@ -23,22 +23,19 @@ procedure RunTransform(var WModelParams: TWModelParams; var WModelState: TWModel
 implementation
 
 // Run the transformer.
-procedure RunTransform(var WModelParams: TWModelParams; var WModelState: TWModelState; var QueryOutput: TIVector);
+procedure RunTransform(var WModelParams: TWModelParams; var WModelState: TWModelState; var QueryOutput: TIVector; const Blk: Integer);
 var
-  h, i, j, HeadOffset, BestTok: Integer;
+  h, i, j, k, HeadOffset, BestTok: Integer;
   BestProb: Single;
 
 begin
   // Display entry to transform.
   writeln('Entering Transformer/FFN/Head Output');
 
-  // Zero gradients.
-  ZeroGradients(WModelParams, WModelState);
-
   // Display X.Value matrix.
-  VTPDisplayX('Display X.Value in transform, before any action.', WModelState.X.Value, G);
+  VTPDisplayX('Display X.Value in transform, before any action.', WModelState.StateBlock[0].X.Value, G);
 
-  with WModelParams do with WModelState do begin
+  with WModelParams.ParamBlock[Blk] do with WModelState.StateBlock[Blk] do begin
   // BLOCK 0.
 
   // 1. FORWARD STAGE: ATTENTION.
@@ -252,13 +249,13 @@ begin
 
         // Multiplication: Input X7, Vocab. Output Probs.
         // Equation: Probs = X7 · Embeddingsᵀ. Probs in R^{L x nVocab}. X in R^{L x D}.  Embeddings in R^{nVocab x D}.
-        MatMulFullNT(@X7.Value[0, 0], @Embeddings.Value[0, 0], @Probs[0, 0], SeqLen, nVocab, ModelDim, ModelDim, ModelDim, DimVocab);
+//        MatMulFullNT(@X7.Value[0, 0], @Embeddings.Value[0, 0], @Probs[0, 0], SeqLen, nVocab, ModelDim, ModelDim, ModelDim, DimVocab);
 
          // Display Probs matrix.
-        VTPDisplayX('Display Probs, in transform, before softmax.', Probs, B);
+     //   VTPDisplayX('Display Probs, in transform, before softmax.', Probs, B);
 
         // Display Embeddings.Value matrix.
-        VTPDisplayX('Display Embeddings.Value in transform, before computing Logit.', Embeddings.Value, B);
+       // VTPDisplayX('Display Embeddings.Value in transform, before computing Logit.', Embeddings.Value, B);
 
         // 3B. Softmax. Obtain Probs from Probs.
         Writeln('            Transform Forward Stage 3B');
@@ -266,15 +263,15 @@ begin
         // Softmax: Input Logit. Output Logit.
         // Equation: Logit = Softmax(Logit).
         // Use SoftmaxForwardN here.
-        for i := 0 to SeqLen - 1 do
-          SoftmaxForwardN(@Probs[i,0], @Probs[i,0], nVocab);
+//        for i := 0 to SeqLen - 1 do
+  //        SoftmaxForwardN(@Probs[i,0], @Probs[i,0], nVocab);
 
         // Display Probs matrix.
-        VTPDisplayX('Display Probs, in transform, after softmax.', Probs, B);
+//        VTPDisplayX('Display Probs, in transform, after softmax.', Probs, B);
 
         // 3C. Is QueryForward, then pick the largest probs, and save them.
         Writeln('            Transform Forward Stage 3C');
-        if not Training then begin
+{        if not Training then begin
           SetLength(QueryOutput, SeqLen);
           for i := 0 to SeqLen - 1 do begin
             BestProb := Probs[i, 0];
@@ -288,7 +285,7 @@ begin
           end;
           Exit;
         end;
-
+ }
         // 3D. Cross-Entropy Loss. Obtain TopGradient from Probs.
         Writeln('            Transform Forward Stage 3D');
         // Gradient: Input Probs. Output TopGradient. Also option of CalculateGradient from KLDivergence.
@@ -297,7 +294,7 @@ begin
         //GradientFromKLDivergence(WModelState);
 
         // Display TopGradient matrix.
-        VTPDisplayX('Display TopGradient, in transform, after Logit calculation.', TopGradient, B);
+//        VTPDisplayX('Display TopGradient, in transform, after Logit calculation.', TopGradient, B);
 
       // BACK PROPAGATION. FEED BACKWARD NETWORK.
 
@@ -305,7 +302,7 @@ begin
       Writeln('            Transform Backprop Stage 2F');
 
       // Equation: X7.Grad = TopGradient · Embeddings.Value. X7.Grad in R^{L x D}. TopGradient in R^{L x nVocab}. Embeddings.Value in R^{nVocab x D}.
-      MatMulFullNN(@TopGradient[0, 0], @Embeddings.Value[0, 0], @X7.Grad[0, 0], SeqLen, ModelDim, nVocab, DimVocab, ModelDim, ModelDim);
+//      MatMulFullNN(@TopGradient[0, 0], @Embeddings.Value[0, 0], @X7.Grad[0, 0], SeqLen, ModelDim, nVocab, DimVocab, ModelDim, ModelDim);
       {cblas_sgemm(101, 111, 111, SeqLen, ModelDim, nVocab, 1.0, @TopGradient[0, 0], DimVocab,
       @Embeddings.Value[0, 0], ModelDim, 0.0, @X7.Grad[0, 0], ModelDim);}
 
@@ -314,7 +311,7 @@ begin
       // Backprop TopGradient modifies/overwrites Embeddingsᵀ: Input X7ᵀ, TopGradient. Output Embeddingsᵀ.Grad.
       // Equation: Embeddingsᵀ.Grad = X7ᵀ · TopGradient. Embeddingsᵀ.Grad in R^{nVocab x D}. X7ᵀ in R^(D x L}. TopGradient in R^{L x nVocab}.
       // Problem here was I had NT rather than TN.
-      MatMulFullAccTN(@TopGradient[0,0], @X7.Value[0,0], @Embeddings.Grad[0,0], nVocab, ModelDim, SeqLen, DimVocab, ModelDim, ModelDim);
+  //    MatMulFullAccTN(@TopGradient[0,0], @X7.Value[0,0], @Embeddings.Grad[0,0], nVocab, ModelDim, SeqLen, DimVocab, ModelDim, ModelDim);
       Writeln('Finished Embeddings.Grad GEMM.');
 
       // Backprop Split X7 Grad into X5 and X6: Input X5.Grad, X7.Grad. Output dX.Grad.
@@ -536,11 +533,11 @@ begin
     VTPDisplayX('Display X.Grad, in transform, at end.', X.Grad, G);
 
     // Modify weights and biases.
-    Optimization(WModelParams, WModelState);
+   // Optimization(WModelParams, WModelState);
 
     // Place X7 in X for next block.
     Writeln('          Transform Backprop Copy X matrix');
-    FastCopyXMatrix(X7.Value, X.Value);
+    CopyXTensor(X7, X);
     If VerboseTransform then begin
       Writeln('End of tranformer block.');
       Pause;

@@ -15,10 +15,10 @@ procedure XGUniformW(var W: TWeightMatrix; FanIn, FanOut: Integer);
 procedure XGUniformWHead(var W: TWeightHeadMatrix; FanIn, FanOut: Integer);
 procedure XGUniformW1(var W: TWeightProjMatrix; FanIn, FanOut: Integer);
 procedure XGUniformW2(var W: TWeightProjMatrixT; FanIn, FanOut: Integer);
-procedure InitializeTransformer(var WModel: TWModelParams);
-procedure ZeroGradients(var WModelParams: TWModelParams; var WModelState: TWModelState);
+procedure InitializeTransformer(var WModelParams: TWModelParams);
+procedure ZeroGradients(var WModelParams: TWModelParams; var WModelState: TWModelState; const Blk: Integer);
 procedure UpdateParam(const N: Integer; const LearningRate: Single; const Grad: PSingle; Param: PSingle);
-procedure Optimization(var WModelParams: TWModelParams; var WModelState: TWModelState);
+procedure Optimization(var WModelParams: TWModelParams; var WModelState: TWModelState; const Blk: Integer);
 procedure ApplyRoPE(var H: TSeqMatrix;  const InvFreq: TFVector; SeqLen, ModelDim: Integer);
 procedure ApplyAutoregressiveMask(var ScoresHead: TScoresMatrix; const L: Integer);
 procedure SoftmaxForward(const x: TFVector; out y: array of Single);
@@ -33,6 +33,9 @@ procedure GradientFromCEProbabilities(var WModelState: TWModelState);
 procedure BackpropAdd(const dOut: TSeqMatrix; var dA, dB: TSeqMatrix; const L, D: Integer);
 
 implementation
+
+var
+  InvFreq:    TFVector;           // For RoPE.
 
 // Initialize test vector.
 procedure InitTestVector(var N: TFSVector);           // Test procedure, not used.
@@ -114,13 +117,15 @@ begin
     end;
 end;
 
-// Initialize the transformer stage.
-procedure InitializeTransformer(var WModel: TWModelParams);
+// Initialize the transformer state stage.
+procedure InitializeTransformer(var WModelParams: TWModelParams);
 var
-  j: Integer;
+  i, j, k: Integer;
 begin
-  with WModel do begin
-    // InitTestVector(TestVector);
+  // Init grads and probs.
+  // Where init State?
+  for k := 0 to nBlock - 1 do
+    with WModelParams.ParamBlock[k] do begin
     // Initialize RoPE.
     InitRoPE(InvFreq, ModelDim);
 
@@ -135,9 +140,6 @@ begin
     // Initialize W1 and W2 weight matrices.
     XGUniformW1(W1.Value, ModelDim, ModelDimProj);
     XGUniformW2(W2.Value, ModelDimProj, ModelDim);
-
-    // Initialize WVocab weight matrices.
-    //XGUniformWVocab(Embeddings.Value, nVocab, ModelDim);
 
     // Initialize b1 and b2.
     FillChar(b1.Value, SizeOf(b1.Value), 0);
@@ -154,9 +156,9 @@ begin
 end;
 
 // Zero out all gradients.
-procedure ZeroGradients(var WModelParams: TWModelParams; var WModelState: TWModelState);
+procedure ZeroGradients(var WModelParams: TWModelParams; var WModelState: TWModelState; const Blk: Integer);
 begin
-  with WModelState do begin
+  with WModelState.StateBlock[Blk] do begin
     FillChar(X.Grad, SizeOf(X.Grad), 0);
     FillChar(X1.Grad, SizeOf(X1.Grad), 0);
     FillChar(X2.Grad, SizeOf(X2.Grad), 0);
@@ -173,14 +175,13 @@ begin
     FillChar(V.Grad, SizeOf(V.Grad), 0);
     FillChar(Hidden1.Grad, SizeOf(Hidden1.Grad), 0);
     FillChar(Hidden2.Grad, SizeOf(Hidden2.Grad), 0);
-    with WModelParams do begin
+    with WModelParams.ParamBlock[Blk] do begin
       FillChar(Wk.Grad, SizeOf(Wk.Grad), 0);
       FillChar(Wq.Grad, SizeOf(Wq.Grad), 0);
       FillChar(Wv.Grad, SizeOf(Wv.Grad), 0);
       FillChar(W0.Grad, SizeOf(W0.Grad), 0);
       FillChar(W1.Grad, SizeOf(W1.Grad), 0);
       FillChar(W2.Grad, SizeOf(W2.Grad), 0);
-      FillChar(Embeddings.Grad, SizeOf(Embeddings.Grad), 0);
       FillChar(b1.Grad, SizeOf(b1.Grad), 0);
       FillChar(b2.Grad, SizeOf(b2.Grad), 0);
       FillChar(Gamma1.Grad, SizeOf(Gamma1.Grad), 0);
@@ -199,11 +200,11 @@ end;
 
 { Optimization }
 // Update the weights and biases.
-procedure Optimization(var WModelParams: TWModelParams; var WModelState: TWModelState);
-var
-  i, v: Integer;
+procedure Optimization(var WModelParams: TWModelParams; var WModelState: TWModelState; const Blk: Integer);
+var                        //don't need state parameter above?
+  i: Integer;
 begin
-  with WModelParams do begin
+  with WModelParams.ParamBlock[Blk] do begin
     // W0 weights: main attention output.
     UpdateParam(ModelDim * ModelDim, LearningRate, @W0.Grad[0,0], @W0.Value[0,0]);
     //cblas_saxpy(ModelDim * ModelDim, -LearningRate, @W0.Grad[0, 0], 1, @W0.Value[0, 0], 1);
@@ -240,14 +241,12 @@ begin
 
     // Embeddings.
     // Add input-side embedding gradients into Embeddings.Grad.
-    for i := 0 to SeqLen - 1 do begin
-      v := TokenID[i];
-      AddScaled(ModelDim, 1.0, @WModelState.X.Grad[i,0], @Embeddings.Grad[v,0]);
+    for i := 0 to SeqLen - 1 do
+      AddScaled(ModelDim, 1.0, @WModelState.StateBlock[Blk].X.Grad[i,0], @WModelParams.Embeddings.Grad[TokenID[i], 0]);
       //cblas_saxpy(ModelDim, 1.0, @WModelState.X.Grad[i,0], 1, @Embeddings.Grad[v,0], 1);
-    end;
 
     // Apply the total embedding gradient (output-side + input-side).
-    UpdateParam(nVocab * ModelDim, LearningRate, @Embeddings.Grad[0,0], @Embeddings.Value[0,0]);
+    UpdateParam(nVocab * ModelDim, LearningRate, @WModelParams.Embeddings.Grad[0,0], @WModelParams.Embeddings.Value[0,0]);
     //cblas_saxpy(nVocab * ModelDim, -LearningRate, @Embeddings.Grad[0,0], 1, @Embeddings.Value[0,0], 1);
     {for i := 0 to SeqLen - 1 do begin
       v := TokenID[i];    // Same as TokenizedCorpus;

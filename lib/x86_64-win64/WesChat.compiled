@@ -2,4 +2,5 @@
 <CONFIG>
   <Compiler Value="C:\lazarus\fpc\3.2.2\bin\x86_64-win64\fpc.exe" Date="1549053250"/>
   <Params Value="-MObjFPC -Scghi -O1 -gw3 -gl -l -vewnhibq -vm5094,5092,5091,5060,5058,5057,2005 -FiC:\LazarusProject\WesChat12\lib\x86_64-win64 -FuC:\LazarusProject\WesChat12\ -FuC:\lazarus\lcl\units\x86_64-win64\win32 -FuC:\lazarus\lcl\units\x86_64-win64 -FuC:\lazarus\components\freetype\lib\x86_64-win64 -FuC:\lazarus\components\lazutils\lib\x86_64-win64 -FuC:\lazarus\packager\units\x86_64-win64 -FUC:\LazarusProject\WesChat12\lib\x86_64-win64\ -FEC:\LazarusProject\WesChat12\ -oC:\LazarusProject\WesChat12\WesChat.exe -dLCL -dLCLwin32 WesChat.lpr"/>
+  <Complete Value="False"/>
 </CONFIG>

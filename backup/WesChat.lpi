@@ -108,6 +108,16 @@
         <IsPartOfProject Value="True"/>
         <UnitName Value="Util"/>
       </Unit>
+      <Unit>
+        <Filename Value="transformforward.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="TransformForward"/>
+      </Unit>
+      <Unit>
+        <Filename Value="transformbackprop.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="TransformBackprop"/>
+      </Unit>
     </Units>
   </ProjectOptions>
   <CompilerOptions>

@@ -7,7 +7,9 @@ unit Notes;
 General
 1. Replace nStmbols with nVocab.
 
-2. Forward and Backprop Transform units.
+2. Where do I use scale, invfreq? Need?
+
+Init state, init grads and probs
 
 3. Test SaveModel and LoadModel procedures.
 

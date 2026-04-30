@@ -19,8 +19,8 @@ procedure LoadSymbolTable(const FileName: string; var SymbolTable: TSymbolTable)
 procedure LoadTokenList(const TokenFileName: string; var TokenizedCorpus: TIVector);
 procedure SaveSymbolTable(const SymbolFileName: string; const SymbolTable: TSymbolTable);
 procedure SaveTokenList(const TokenizedCorpus: TIVector; const TokenFileName: String);
-//procedure SaveModel(const FileName: string; var Model: TWModelParams; var Success: Boolean);
-//procedure LoadModel(const FileName: string; var Model: TWModelParams; var Success: Boolean);
+procedure SaveModel(const FileName: string; var Model: TWModelParams; var Success: Boolean);
+procedure LoadModel(const FileName: string; var Model: TWModelParams; var Success: Boolean);
 
 implementation
 
@@ -206,29 +206,9 @@ begin
   Writeln;
 end;
 
-{procedure SaveModelParams(const W: TWModelParams; const FileName: String);
+procedure SaveModel(const FileName: string; var Model: TWBlockModelParams; var Success: Boolean);
 var
-  S: TFileStream;
-begin
-  S := TFileStream.Create(FileName, fmCreate);
-
-  // 1. Save the static part of the record (safe!)
-  S.WriteBuffer(W, SizeOf(W));
-
-  // 2. Save the dynamic embeddings array length
-  S.WriteBuffer(W.Embeddings.Length, SizeOf(Integer));
-
-  // 3. Save the dynamic embeddings data
-  if W.Embeddings.Length > 0 then
-    S.WriteBuffer(W.Embeddings.Value[0],
-                  W.Embeddings.Length * SizeOf(Single));
-
-  S.Free;
-end;
-}
-{procedure SaveModel(const FileName: string; var Model: TWModelParams; var Success: Boolean);
-var
-  F: file of TWModelParams;
+  F: file of TWBlockModelParams;
 begin
   Success := False;   // Ddefault.
   Assign(F, FileName);
@@ -243,31 +223,10 @@ begin
 
   Close(F);           // Safe even if Rewrite failed.
 end;
-{procedure LoadModelParams(var W: TWModelParams; const FileName: String);
+
+procedure LoadModel(const FileName: string; var Model: TWModelBlockParams; var Success: Boolean);
 var
-  S: TFileStream;
-  Len: Integer;
-begin
-  S := TFileStream.Create(FileName, fmOpenRead);
-
-  // 1. Load static part
-  S.ReadBuffer(W, SizeOf(W));
-
-  // 2. Load embeddings length
-  S.ReadBuffer(Len, SizeOf(Integer));
-
-  // 3. Allocate and load embeddings
-  SetLength(W.Embeddings.Value, Len);
-
-  if Len > 0 then
-    S.ReadBuffer(W.Embeddings.Value[0], Len * SizeOf(Single));
-
-  S.Free;
-end;
-}
-procedure LoadModel(const FileName: string; var Model: TWModelParams; var Success: Boolean);
-var
-  F: file of TWModelParams;
+  F: file of TWBlockModelParams;
 begin
   Assign(F, FileName);
   Reset(F);
@@ -276,6 +235,6 @@ begin
   finally
     Close(F);
   end;
-end;    }
+end;
 
 end.

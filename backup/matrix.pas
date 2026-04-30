@@ -17,6 +17,18 @@ const
   RowMajor = 101;       // Row Major.
   NoTrans  = 111;       // No transposition.
   Trans    = 112;       // Transposition.
+{ NVBlas Code
+const BLAS_LIB = 'nvblas64_13.dll';
+
+procedure cblas_sgemm(order, TransA, TransB: Integer;
+M, N, K: TMKLInt;
+Alpha: Single;
+const A: PSingle; LDA: TMKLInt;
+const B: PSingle; LDB: TMKLInt;
+Beta: Single;
+C: PSingle;  LDC: TMKLInt);
+cdecl; external BLAS_LIB;
+}
 
 // Multiply and add procedures.
 procedure MatMulFullNN(const A, B: PSingle; C: PSingle; M, N, K, lda, ldb, ldc: Integer);
@@ -45,6 +57,7 @@ procedure ReLUMaskForward(const A: THiddenMatrix; var B: THiddenMatrix);
 // Copy matrix procedure.
 procedure CopyXMatrix(const A: array of TSeqVector; var B: array of TSeqVector;
   const Rows, Cols: Integer);
+procedure FastCopyXMatrix(const A: TSeqMatrix; var B: TSeqMatrix);
 
 // cblas sgemm.
 procedure cblas_sgemm(Layout: LongInt;

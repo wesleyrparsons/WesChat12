@@ -7,7 +7,6 @@ unit Notes;
 General
 1. Replace nStmbols with nVocab.
 
-2. Forward and Backprop Transform units.
 3. Test SaveModel and LoadModel procedures.
 
 4. In main program: Read Corpus, Read Files (vocab and merge), Tokenize, Embed, Transform.

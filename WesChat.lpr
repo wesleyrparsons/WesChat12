@@ -3,7 +3,7 @@ program WesChat;
 {$mode ObjFPC}{$H+}{$I proprietary.txt}
 
 { WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wespar.com }
-{ Note: Edited 4/28/2026 8 pm -- saved as WesChat12 on GitHub and Kopia}
+{ Note: Edited 4/30/2026 8 am -- saved as WesChat12 on GitHub and Kopia}
 { Notes: TokCorpus comes from WesTokenize or ChatGPTTokenize; WModelParams (with Embeddings) and WModelState are from here }
 { Notes: Corpus, QueryCorpus (TBVector) are here; QueryOutput (TIVector) is in Global }
 {        Input Train        Input Query        Output
@@ -26,17 +26,21 @@ uses
   Windows;
 
 var
+  // Corpus vars.
   Corpus, QueryCorpus: TBVector;            // Vector of byte.
-  Ch: string;                               // For option menu.
-  Success: Boolean;                         // For loading and saving files.
-  CorpusFileName, SymbolFileName,           // File names.
-    TokenFileName, ModelFileName, ListFile: string;
+  // Model vars.
   WModelParams: TWModelParams;
   WModelState: TWModelState;
-  CombinedSymbolTable: TSymbolTable;        // For combining two symbol tables.
+  // Saving and loading vars.
+  CorpusFileName, SymbolFileName,           // File names.
+    TokenFileName, ModelFileName, ListFile: string;
   MinSymbols: Integer = 50;                 // Minimum for loading.
   MinTokens: Integer = 50;                  // Minimum for loading.
   MinCorpus: Integer = 50;                  // Minimum for loading.
+  // Utility vars.
+  Ch: string;                               // For option menu.
+  Success: Boolean;                         // For loading and saving files.
+  CombinedSymbolTable: TSymbolTable;        // For combining two symbol tables.
 
 // Create and name directory and file for saving.
 Procedure LogFile(const Eponym: string);
@@ -169,7 +173,7 @@ begin
     for i := 0 to Length(QueryOutput) - 1 do
       Writeln(QueryOutput[i]);
     RunWesTokenize(QueryCorpus, TokenizedCorpus);
-    RunInfer(WModelParams, WModelState, TokenizedCorpus, QueryOutput);
+    //RunInfer(WModelParams, WModelState, TokenizedCorpus, QueryOutput);
     Writeln('Output: ');
     for i := 0 to Length(QueryOutput) do
       Writeln(QueryOutput[i]);
@@ -209,7 +213,7 @@ begin
   Writeln;
   Writeln('The symbol table and other information, including if desired the token list, will be written to disk.');
   Writeln('Ater tokenization, WesChat prompts for training the transformer, which consists');
-  Writeln('of 4 to 8 blocks. The attention stage has 8 heads. There are a weight stage wih a bias');
+  Writeln('of 4 to 8 s. The attention stage has 8 heads. There are a weight stage wih a bias');
   Writeln('and a weight stage without a bias. The activation function is softmax with temperature.');
   Writeln('Model dimensions are 160 or 256. The activation stage expands dimensionality fourfold.');
   Writeln('Precision is single. Sequence length is 128 or 256 bytes. Pre-layer normalization');

@@ -33,9 +33,6 @@ procedure BackpropAdd(const dOut: TSeqMatrix; var dA, dB: TSeqMatrix; const L, D
 
 implementation
 
-var
-  InvFreq:    TFVector;           // For RoPE.
-
 // Initialize test vector.
 procedure InitTestVector(var N: TFSVector);           // Test procedure, not used.
 var
@@ -108,7 +105,7 @@ end;
 // Initialize the transformer state stage.
 procedure InitializeTransformer(var WModelParams: TWModelParams; var WModelState: TWModelState);
 var
-  i, j, k: Integer;
+  j, k: Integer;
 begin
   // May be able to delete second parameter above.
   // Do not zero the param grads -- thet is done in zero gradient.
@@ -116,6 +113,13 @@ begin
   // As to the param values -- they are zeroed below.
   // Do not zero the state values -- thet is not necessary.
   // Do I need to zero topgradient and prob.
+
+  // Compute InvFreq.
+  SetLength(WModelState.InvFreq, ModelDim div 2);
+  for j := 0 to (ModelDim div 2) - 1 do     // ModelDim must be even.
+    WModelState.InvFreq[j] := Exp( - (2.0 * j) / ModelDim * Ln(10000.0) );
+
+  // Initialize param values.
   for k := 0 to nBlock - 1 do
     with WModelParams.ParamBlock[k] do begin
 

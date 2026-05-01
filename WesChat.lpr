@@ -3,7 +3,7 @@ program WesChat;
 {$mode ObjFPC}{$H+}{$I proprietary.txt}
 
 { WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wespar.com }
-{ Note: Edited 4/30/2026 8 am -- saved as WesChat12 on GitHub and Kopia}
+{ Note: Edited 5/1/2026 1 pm -- saved as WesChat12 on GitHub and Kopia}
 { Notes: TokCorpus comes from WesTokenize or ChatGPTTokenize; WModelParams (with Embeddings) and WModelState are from here }
 { Notes: Corpus, QueryCorpus (TBVector) are here; QueryOutput (TIVector) is in Global }
 {        Input Train        Input Query        Output
@@ -180,17 +180,6 @@ begin
   until QueryString = EmptyStr;
 end;
 
-// Apply at initialization of program.
-procedure InitRoPE(var InvFreq: TFVector; const ModelDim: Integer);
-var
-  j: Integer;
-begin
-  // ModelDim must be even.
-  SetLength(InvFreq, ModelDim div 2);
-  for j := 0 to (ModelDim div 2) - 1 do
-    InvFreq[j] := Exp( - (2.0 * j) / ModelDim * Ln(10000.0) );
-end;
-
 // Start of main program.
 begin
   { Necessary because JSON will throw dupe errors otherwise }
@@ -200,9 +189,6 @@ begin
   { Below is not working on my Lazarus console }
   SetConsoleOutputCP(CP_UTF8);
   SetConsoleCP(CP_UTF8);
-
-  // Init RoPE.
-  InitRope(InvFreq, ModelDim);
 
   Writeln('WesChat, Version 1.2, begun January 19, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wespar.com.');
   Writeln;

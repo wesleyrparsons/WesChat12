@@ -190,10 +190,6 @@ begin
   SetConsoleOutputCP(CP_UTF8);
   SetConsoleCP(CP_UTF8);
 
-  // Init RoPE.
-  SetLength(InvFreq, ModelDim div 2);
-  InitRope(InvFreq, ModelDim);
-
   Writeln('WesChat, Version 1.2, begun January 19, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wespar.com.');
   Writeln;
   Writeln('Options:');

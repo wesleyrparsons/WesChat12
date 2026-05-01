@@ -129,6 +129,7 @@ type                                                                           /
   end;
   TWModelState = record                                         // Model of non-trainable parameters.
     StateBlock:                     TStateBlock;
+    InvFreq:                        TFVector;
     Probs, TopGradient:             TSeqVocabMatrix;            // Logit and Gradient.
   end;
 

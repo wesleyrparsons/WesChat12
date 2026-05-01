@@ -33,9 +33,6 @@ procedure BackpropAdd(const dOut: TSeqMatrix; var dA, dB: TSeqMatrix; const L, D
 
 implementation
 
-var
-  InvFreq:    TFVector;           // For RoPE.
-
 // Initialize test vector.
 procedure InitTestVector(var N: TFSVector);           // Test procedure, not used.
 var
@@ -116,39 +113,46 @@ begin
   // As to the param values -- they are zeroed below.
   // Do not zero the state values -- thet is not necessary.
   // Do I need to zero topgradient and prob.
+
+  // Compute InvFreq.
+  SetLength(WModelState.InvFreq, ModelDim div 2);
+  for j := 0 to (ModelDim div 2) - 1 do     // ModelDim must be even.
+    WModelState.InvFreq[j] := Exp( - (2.0 * j) / ModelDim * Ln(10000.0) );
+
+  // Initialize param values.
   for k := 0 to nBlock - 1 do
     with WModelParams.ParamBlock[k] do begin
-    // Initialize RoPE.
-    InitRoPE(InvFreq, ModelDim);
 
-    // Initialize weight matrix W0.
-    XGUniformW(W0.Value, ModelDim, ModelDim);
+      // Initialize weight matrix W0.
+      XGUniformW(W0.Value, ModelDim, ModelDim);
 
-    // Initialize the weights with Xavier-Glorot function.
-    XGUniformW(Wq.Value, ModelDim, ModelDim);
-    XGUniformW(Wk.Value, ModelDim, ModelDim);
-    XGUniformW(Wv.Value, ModelDim, ModelDim);
+      // Initialize the weights with Xavier-Glorot function.
+      XGUniformW(Wq.Value, ModelDim, ModelDim);
+      XGUniformW(Wk.Value, ModelDim, ModelDim);
+      XGUniformW(Wv.Value, ModelDim, ModelDim);
 
-    // Initialize W1 and W2 weight matrices.
-    XGUniformW1(W1.Value, ModelDim, ModelDimProj);
-    XGUniformW2(W2.Value, ModelDimProj, ModelDim);
+      // Initialize W1 and W2 weight matrices.
+      XGUniformW1(W1.Value, ModelDim, ModelDimProj);
+      XGUniformW2(W2.Value, ModelDimProj, ModelDim);
 
-    // Initialize b1 and b2.
-    FillChar(b1.Value, SizeOf(b1.Value), 0);
-    FillChar(b2.Value, SizeOf(b2.Value), 0);
+      // Initialize b1 and b2.
+      FillChar(b1.Value, SizeOf(b1.Value), 0);
+      FillChar(b2.Value, SizeOf(b2.Value), 0);
 
-    // Initialize Beta and Gamma, LN 1 and 2, with SD and mean.
-    FillChar(Beta1.Value, SizeOf(Beta1.Value), 0);
-    FillChar(Beta2.Value, SizeOf(Beta2.Value), 0);
-    for j := 0 to ModelDim - 1 do begin
-      Gamma1.Value[j] := 1.0;
-      Gamma2.Value[j] := 1.0;
+      // Initialize Beta and Gamma, LN 1 and 2, with SD and mean.
+      FillChar(Beta1.Value, SizeOf(Beta1.Value), 0);
+      FillChar(Beta2.Value, SizeOf(Beta2.Value), 0);
+      for j := 0 to ModelDim - 1 do begin
+        Gamma1.Value[j] := 1.0;
+        Gamma2.Value[j] := 1.0;
+      end;
     end;
-  end;
 end;
 
 // Zero out all gradients.
 procedure ZeroGradients(var WModelParams: TWModelParams; var WModelState: TWModelState; const Blk: Integer);
+var
+  j: Integer;
 begin
   with WModelState.StateBlock[Blk] do begin
     FillChar(X.Grad, SizeOf(X.Grad), 0);

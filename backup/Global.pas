@@ -38,6 +38,7 @@ const
   DimVocab = 1000;                // Need maximum of vocab symbols to dimension array. Needed for Embeddings.
 
 type                                                                           // SeqLen = L, ModelDim = D, ModelDim/nHead = H, DB is Proj*D, DV is DimVocab.
+  TcublasHandle = Pointer;
   // Seq, Model, Vocab, Head, Proj types.
   TSeqVector = array [0..ModelDim - 1] of Single;                              // D
   TSeqVectorProj = array[0..ModelDimProj - 1] of Single;                       // DB (DB is like D)
@@ -134,7 +135,8 @@ type                                                                           /
   end;
 
 var
-  // Corpus vars.
+  CuHandle: TcublasHandle;
+// Corpus vars.
   CorpusFileNames: TSVector;                     // Name of corpus file.
   SymbolTable: TSymbolTable;                     // Symbol table.
   WorkingName, WorkingDir: string;               // Saving data.
@@ -157,7 +159,7 @@ var
   LearningRate: Single = 0.01;                   // LearningRate for Gradient.
   Temperature: Single = 1.0;                     // Temperature for softmax.
   Training: Boolean = True;                      // In training as opposed to inference mode.
-  InvFreq: TFVector;
+  //InvFreq: TFVector;
   // Other.
   TestVector: TFSVector;          // Vector for testing. [0..SeqLen] of Single.
 

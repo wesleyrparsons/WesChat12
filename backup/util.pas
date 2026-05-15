@@ -105,7 +105,7 @@ end;
 // Initialize the transformer state stage.
 procedure InitializeTransformer(var WModelParams: TWModelParams; var WModelState: TWModelState);
 var
-  i, j, k: Integer;
+  j, k: Integer;
 begin
   // May be able to delete second parameter above.
   // Do not zero the param grads -- thet is done in zero gradient.
@@ -151,8 +151,6 @@ end;
 
 // Zero out all gradients.
 procedure ZeroGradients(var WModelParams: TWModelParams; var WModelState: TWModelState; const Blk: Integer);
-var
-  j: Integer;
 begin
   with WModelState.StateBlock[Blk] do begin
     FillChar(X.Grad, SizeOf(X.Grad), 0);

@@ -206,9 +206,9 @@ begin
   Writeln;
 end;
 
-procedure SaveModel(const FileName: string; var Model: TWBlockModelParams; var Success: Boolean);
+procedure SaveModel(const FileName: string; var Model: TWModelParams; var Success: Boolean);
 var
-  F: file of TWBlockModelParams;
+  F: file of TWModelParams;
 begin
   Success := False;   // Ddefault.
   Assign(F, FileName);
@@ -224,9 +224,9 @@ begin
   Close(F);           // Safe even if Rewrite failed.
 end;
 
-procedure LoadModel(const FileName: string; var Model: TWModelBlockParams; var Success: Boolean);
+procedure LoadModel(const FileName: string; var Model: TWModelParams; var Success: Boolean);
 var
-  F: file of TWBlockModelParams;
+  F: file of TWModelParams;
 begin
   Assign(F, FileName);
   Reset(F);

@@ -72,8 +72,8 @@ begin
     MatMulNN(@X1.Value[0, 0], @Wv.Value[0, 0], @V.Value[0, 0], SeqLen, ModelDim, ModelDim);
 
     // 1D. RoPE.
-    ApplyRoPE(Q.Value, InvFreq, SeqLen, ModelDim);
-    ApplyRoPE(K.Value, InvFreq, SeqLen, ModelDim);
+    ApplyRoPE(Q.Value, WModelState.InvFreq, SeqLen, ModelDim);
+    ApplyRoPE(K.Value, WModelState.InvFreq, SeqLen, ModelDim);
 
     // 1E. Multiplication. Obtain Scores1.
     Writeln('          Transform Forward Stage 1E');

@@ -18,12 +18,12 @@ const
   NoTrans  = 111;       // No transposition.
   Trans    = 112;       // Transposition.
 
-procedure RunTransformBackprop(var WModelParams: TWModelParams; var WModelState: TWModelState; var QueryOutput: TIVector; const Blk: Integer);
+procedure RunTransformBackprop(var WModelParams: TWModelParams; var WModelState: TWModelState; const Blk: Integer);
 
 implementation
 
 // Run the transformer backprop.
-procedure RunTransformBackprop(var WModelParams: TWModelParams; var WModelState: TWModelState; var QueryOutput: TIVector; const Blk: Integer);
+procedure RunTransformBackprop(var WModelParams: TWModelParams; var WModelState: TWModelState; const Blk: Integer);
 var
   h, i, j, HeadOffset, BestTok: Integer;
   BestProb: Single;

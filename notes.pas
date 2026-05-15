@@ -38,6 +38,8 @@ when popping, discard stale entries. What heap unit to use in FPC?
 
 2. Where does nCorpus live?
 
+3. Do not use Float instead of Single. Need to use compiler directive.
+
 4. Corpus array of byte. Use RawByteString. Done, but check.
 
 5. Drop linked lists. So if you later optimize training hard, use

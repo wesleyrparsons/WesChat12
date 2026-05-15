@@ -130,6 +130,9 @@ var
   end;
 
 begin
+  if cublasCreate_v2(CuHandle) <> 0 then
+    writeln('cuBLAS initialization failed.');
+
   nVocab := nSymbols;    // Need nVocab (second name for variable) for Transform.
 
   if VeryVerbose then
@@ -367,6 +370,7 @@ begin
     Start := Start + Stride;
   end;
 
+  cublasDestroy_v2(CuHandle);
   Writeln('End of training. Press <CR> to continue.');
   Readln;
 end;

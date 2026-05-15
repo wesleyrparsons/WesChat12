@@ -130,6 +130,9 @@ var
   end;
 
 begin
+  if cublasCreate_v2(CuHandle) <> CUBLAS_STATUS_SUCCESS then
+    writeln('cuBLAS initialization failed.');
+
   nVocab := nSymbols;    // Need nVocab (second name for variable) for Transform.
 
   if VeryVerbose then
@@ -288,7 +291,7 @@ begin
       Writeln('     $$$ Backpropd Block loop: start ', Blk, '  Sequence Start ', Start, ' $$$');
       if VerboseTransform then Pause;
 
-      RunTransformBackprop(WModelParams, WModelState, QueryOutput, Blk);
+      RunTransformBackprop(WModelParams, WModelState, Blk);
 
       if Blk > 0 then
         CopyXTensor(WModelState.StateBlock[Blk].X1, WModelState.StateBlock[Blk - 1].X7);
@@ -367,6 +370,7 @@ begin
     Start := Start + Stride;
   end;
 
+  cublasDestroy_v2(CuHandle);
   Writeln('End of training. Press <CR> to continue.');
   Readln;
 end;

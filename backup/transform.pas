@@ -18,7 +18,7 @@ const
   NoTrans  = 111;       // No transposition.
   Trans    = 112;       // Transposition.
 
-procedure RunTransform(var WModelParams: TWModelParams; var WModelState: TWModelState; var QueryOutput: TIVector);
+//procedure RunTransform(var WModelParams: TWModelParams; var WModelState: TWModelState; var QueryOutput: TIVector);
 
 implementation
 

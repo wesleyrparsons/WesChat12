@@ -7,6 +7,10 @@ unit Notes;
 General
 1. Replace nStmbols with nVocab.
 
+2. Where do I use scale, invfreq? Need?
+
+Init state, init grads and probs
+
 3. Test SaveModel and LoadModel procedures.
 
 4. In main program: Read Corpus, Read Files (vocab and merge), Tokenize, Embed, Transform.
@@ -33,6 +37,8 @@ push updated (pair, count, version) records
 when popping, discard stale entries. What heap unit to use in FPC?
 
 2. Where does nCorpus live?
+
+3. Do not use Float instead of Single. Need to use compiler directive.
 
 4. Corpus array of byte. Use RawByteString. Done, but check.
 

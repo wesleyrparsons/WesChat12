@@ -116,7 +116,7 @@ const
 var
   h, k: Integer;
 begin
-  for k := 0 to nBlock - 1 do
+  for k := 0 to nBlock - 1 do begin
     with WModelParams.ParamBlock[k] do begin
       cudaMalloc(@Wq.dValue, WeightSize);
       cudaMalloc(@Wq.dGrad, WeightSize);
@@ -142,8 +142,7 @@ begin
       cudaMalloc(@Gamma2.dGrad, SeqSize);
       cudaMalloc(@Beta2.dValue, SeqSize);
       cudaMalloc(@Beta2.dGrad, SeqSize);
-  end;
-  for k := 0 to nBlock - 1 do
+    end;
     with WModelState.StateBlock[k] do begin
       cudaMalloc(@X.dValue, XSize);
       cudaMalloc(@X.dGrad, XSize);
@@ -183,6 +182,90 @@ begin
       cudaMalloc(@Hidden1.dGrad, HiddenSize);
       cudaMalloc(@Hidden2.dValue, HiddenSize);
       cudaMalloc(@Hidden2.dGrad, HiddenSize);
+    end;
+  end;
+end;
+
+procedure MDeallocCublas(var WModelParams: TWModelParams; var WModelState: TWModelState);
+const
+  WeightSize: Integer = ModelDim * ModelDim * SizeOf(Single);
+  WeightProjSize: Integer = ModelDim * ModelDimProj * SizeOf(Single);
+  bProjSize: Integer = ModelDimProj * SizeOf(Single);
+  bSize: Integer = ModelDim * SizeOf(Single);
+  SeqSize: Integer = ModelDim * SizeOf(Single);
+  XSize: Integer = SeqLen * ModelDim * SizeOf(Single);
+  HiddenSize: Integer = SeqLen * ModelDimProj * SizeOf(Single);
+  ScoresSize: Integer = SeqLen * SeqLen * SizeOf(Single);
+var
+  h, k: Integer;
+begin
+  for k := 0 to nBlock - 1 do begin
+    with WModelParams.ParamBlock[k] do begin
+      cudaFree(@Wq.dValue);
+      cudaFree(@Wq.dGrad);
+      cudaFree(@Wk.dValue);
+      cudaFree(@Wk.dGrad);
+      cudaFree(@Wv.dValue;
+      cudaFree(@Wv.dGrad);
+      cudaFree(@W0.dValue);
+      cudaFree(@W0.dGrad);
+      cudaFree(@W1.dValue);
+      cudaFree(@W1.dGrad);
+      cudaFree(@W2.dValue);
+      cudaFree(@W2.dGrad);
+      cudaFree(@b1.dValue);
+      cudaFree(@b1.dGrad);
+      cudaFree(@b2.dValue);
+      cudaFree(@b2.dGrad);
+      cudaFree(@Gamma1.dValue);
+      cudaFree(@Gamma1.dGrad);
+      cudaFree(@Beta1.dValue);
+      cudaFree(@Beta1.dGrad);
+      cudaFree(@Gamma2.dValue);
+      cudaFree(@Gamma2.dGrad);
+      cudaFree(@Beta2.dValue);
+      cudaFree(@Beta2.dGrad);
+    end;
+    with WModelState.StateBlock[k] do begin
+      cudaFree(@X.dValue);
+      cudaFree(@X.dGrad);
+      cudaFree(@X1.dValue);
+      cudaFree(@X1.dGrad);
+      cudaFree(@X2.dValue);
+      cudaFree(@X2.dGrad);
+      cudaFree(@X3.dValue);
+      cudaFree(@X3.dGrad);
+      cudaFree(@X4.dValue);
+      cudaFree(@X4.dGrad);
+      cudaFree(@X5.dValue);
+      cudaFree(@X5.dGrad);
+      cudaFree(@X6.dValue);
+      cudaFree(@X6.dGrad);
+      cudaFree(@X7.dValue);
+      cudaFree(@X7.dGrad);
+      cudaFree(@X1q.dValue);
+      cudaFree(@X1q.dGrad);
+      cudaFree(@X1k.dValue);
+      cudaFree(@X1k.dGrad);
+      cudaFree(@X1v.dValue);
+      cudaFree(@X1v.dGrad);
+      cudaFree(@Q.dValue);
+      cudaFree(@Q.dGrad);
+      cudaFree(@K.dValue);
+      cudaFree(@K.dGrad);
+      cudaFree(@V.dValue);
+      cudaFree(@V.dGrad);
+      for h := 0 to nHead - 1 do begin
+        cudaFree(@ScoresHead1[h].dValue);
+        cudaFree(@ScoresHead1[h].dGrad);
+        cudaFree(@ScoresHead2[h].dValue);
+        cudaFree(@ScoresHead2[h].dGrad);
+      end;
+      cudaFree(@Hidden1.dValue);
+      cudaFree(@Hidden1.dGrad);
+      cudaFree(@Hidden2.dValue);
+      cudaFree(@Hidden2.dGrad);
+    end;
   end;
 end;
 

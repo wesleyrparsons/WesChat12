@@ -130,7 +130,7 @@ var
   end;
 
 begin
-  if cublasCreate_v2(CuHandle) <> CUBLAS_STATUS_SUCCESS then
+  if cublasCreate_v2(CuHandle) <> 0 then
     writeln('cuBLAS initialization failed.');
 
   nVocab := nSymbols;    // Need nVocab (second name for variable) for Transform.

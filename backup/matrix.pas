@@ -19,7 +19,7 @@ const
   Trans    = 112;       // Transposition.
   cublasDLL = 'cublas64_13.dll';
 
-// Cublas functions.
+// cublas functions.
 function cublasCreate_v2(out handle: TcublasHandle): Integer; cdecl; external cublasDLL;
 function cublasDestroy_v2(handle: TcublasHandle): Integer; cdecl; external cublasDLL;
 function cudaMalloc(devPtr: PPointer; size: NativeUInt): Integer; cdecl; external cublasDLL;

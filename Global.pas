@@ -38,6 +38,7 @@ const
   DimVocab = 1000;                // Need maximum of vocab symbols to dimension array. Needed for Embeddings.
 
 type                                                                           // SeqLen = L, ModelDim = D, ModelDim/nHead = H, DB is Proj*D, DV is DimVocab.
+  // cublas type.
   TcublasHandle = Pointer;
   // Seq, Model, Vocab, Head, Proj types.
   TSeqVector = array [0..ModelDim - 1] of Single;                              // D
@@ -109,7 +110,7 @@ type                                                                           /
   TBVector = array of Byte;            // Array of integers (UTF-8) for initial corpus.
   TRBSVector = array of RawByteString; // Array of raw byte strings for initial corpus.
   TSVector = array of String;          // Array of string.
-  //Utility types.
+  // Utility types.
   TFVector = array of Single;          // Array of single for RoPE.
   // Display types.
   TPart = (B, E, F, G);                // Length = VocabSize * Dimension. But only use nSymbols in rows.
@@ -146,8 +147,9 @@ type                                                                           /
   end;
 
 var
+  // cublas vars.
   CuHandle: TcublasHandle;
-// Corpus vars.
+  // Corpus vars.
   CorpusFileNames: TSVector;                     // Name of corpus file.
   SymbolTable: TSymbolTable;                     // Symbol table.
   WorkingName, WorkingDir: string;               // Saving data.

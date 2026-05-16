@@ -12,7 +12,6 @@ uses
 
 type
   TMKLInt = LongInt;    // MKL_INT is 32-bit int in CBLAS interface.
-  TcublasHandle = Pointer;
 
 const
   RowMajor = 101;       // Row Major.
@@ -23,6 +22,7 @@ const
 // Cublas functions.
 function cublasCreate_v2(out handle: TcublasHandle): Integer; cdecl; external cublasDLL;
 function cublasDestroy_v2(handle: TcublasHandle): Integer; cdecl; external cublasDLL;
+function cudaMalloc(devPtr: PPointer; size: NativeUInt): Integer; cdecl; external cublasDLL;
 
 // Multiply and add procedures.
 procedure MatMulFullNN(const A, B: PSingle; C: PSingle; M, N, K, lda, ldb, ldc: Integer);

@@ -102,6 +102,90 @@ begin
     end;
 end;
 
+// Allocate cublas memory.       Separate for State and Params?
+procedure MAllocCublas(var WModelParams: TWModelParams; var WModelState: TWModelState);
+const
+  WeightSize: Integer = ModelDim * ModelDim * SizeOf(Single);
+  WeightProjSize: Integer = ModelDim * ModelDimProj * SizeOf(Single);
+  bProjSize: Integer = ModelDimProj * SizeOf(Single);
+  bSize: Integer = ModelDim * SizeOf(Single);
+  SeqSize: Integer = ModelDim * SizeOf(Single);
+  XSize: Integer = SeqLen * ModelDim * SizeOf(Single);
+  HiddenSize: Integer = SeqLen * ModelDimProj * SizeOf(Single);
+  ScoresSize: Integer = SeqLen * SeqLen * SizeOf(Single);
+var
+  h, k: Integer;
+begin
+  for k := 0 to nBlock - 1 do begin
+    with WModelParams.ParamBlock[k] do begin
+      cudaMalloc(@Wq.dValue, WeightSize);
+      cudaMalloc(@Wq.dGrad, WeightSize);
+      cudaMalloc(@Wk.dValue, WeightSize);
+      cudaMalloc(@Wk.dGrad, WeightSize);
+      cudaMalloc(@Wv.dValue, WeightSize);
+      cudaMalloc(@Wv.dGrad, WeightSize);
+      cudaMalloc(@W0.dValue, WeightSize);
+      cudaMalloc(@W0.dGrad, WeightSize);
+      cudaMalloc(@W1.dValue, WeightProjSize);
+      cudaMalloc(@W1.dGrad, WeightProjSize);
+      cudaMalloc(@W2.dValue, WeightProjSize);
+      cudaMalloc(@W2.dGrad, WeightProjSize);
+      cudaMalloc(@b1.dValue, bProjSize);
+      cudaMalloc(@b1.dGrad, bProjSize);
+      cudaMalloc(@b2.dValue, bSize);
+      cudaMalloc(@b2.dGrad, bSize);
+      cudaMalloc(@Gamma1.dValue, SeqSize);
+      cudaMalloc(@Gamma1.dGrad, SeqSize);
+      cudaMalloc(@Beta1.dValue, SeqSize);
+      cudaMalloc(@Beta1.dGrad, SeqSize);
+      cudaMalloc(@Gamma2.dValue, SeqSize);
+      cudaMalloc(@Gamma2.dGrad, SeqSize);
+      cudaMalloc(@Beta2.dValue, SeqSize);
+      cudaMalloc(@Beta2.dGrad, SeqSize);
+    end;
+    with WModelState.StateBlock[k] do begin
+      cudaMalloc(@X.dValue, XSize);
+      cudaMalloc(@X.dGrad, XSize);
+      cudaMalloc(@X1.dValue, XSize);
+      cudaMalloc(@X1.dGrad, XSize);
+      cudaMalloc(@X2.dValue, XSize);
+      cudaMalloc(@X2.dGrad, XSize);
+      cudaMalloc(@X3.dValue, XSize);
+      cudaMalloc(@X3.dGrad, XSize);
+      cudaMalloc(@X4.dValue, XSize);
+      cudaMalloc(@X4.dGrad, XSize);
+      cudaMalloc(@X5.dValue, XSize);
+      cudaMalloc(@X5.dGrad, XSize);
+      cudaMalloc(@X6.dValue, XSize);
+      cudaMalloc(@X6.dGrad, XSize);
+      cudaMalloc(@X7.dValue, XSize);
+      cudaMalloc(@X7.dGrad, XSize);
+      cudaMalloc(@X1q.dValue, XSize);
+      cudaMalloc(@X1q.dGrad, XSize);
+      cudaMalloc(@X1k.dValue, XSize);
+      cudaMalloc(@X1k.dGrad, XSize);
+      cudaMalloc(@X1v.dValue, XSize);
+      cudaMalloc(@X1v.dGrad, XSize);
+      cudaMalloc(@Q.dValue, XSize);
+      cudaMalloc(@Q.dGrad, XSize);
+      cudaMalloc(@K.dValue, XSize);
+      cudaMalloc(@K.dGrad, XSize);
+      cudaMalloc(@V.dValue, XSize);
+      cudaMalloc(@V.dGrad, XSize);
+      for h := 0 to nHead - 1 do begin
+        cudaMalloc(@ScoresHead1[h].dValue, ScoresSize);
+        cudaMalloc(@ScoresHead1[h].dGrad, ScoresSize);
+        cudaMalloc(@ScoresHead2[h].dValue, ScoresSize);
+        cudaMalloc(@ScoresHead2[h].dGrad, ScoresSize);
+      end;
+      cudaMalloc(@Hidden1.dValue, HiddenSize);
+      cudaMalloc(@Hidden1.dGrad, HiddenSize);
+      cudaMalloc(@Hidden2.dValue, HiddenSize);
+      cudaMalloc(@Hidden2.dGrad, HiddenSize);
+    end;
+  end;
+end;
+
 // Initialize the transformer state stage.
 procedure InitializeTransformer(var WModelParams: TWModelParams; var WModelState: TWModelState);
 var

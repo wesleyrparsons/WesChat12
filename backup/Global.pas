@@ -61,36 +61,47 @@ type                                                                           /
   // Tensor types.
   TSeqTensor = record
     Value, Grad:  TSeqMatrix;
+    dValue, dGrad:  PSingle;
   end;
   TSeqHeadTensor = record
     Value, Grad:  TSeqHeadMatrix;
+    dValue, dGrad:  PSingle;
   end;
   TSeqVectorTensor = record
     Value, Grad:  TSeqVector;
+    dValue, dGrad:  PSingle;
   end;
   THiddenTensor = record
     Value, Grad:  THiddenMatrix;
+    dValue, dGrad:  PSingle;
   end;
   TSeqVectorProjTensor = record
     Value, Grad:  TSeqVectorProj;
+    dValue, dGrad:  PSingle;
   end;
   TWeightTensor = record
     Value, Grad:  TWeightMatrix;
+    dValue, dGrad:  PSingle;
   end;
   TWeightHeadTensor = record
     Value, Grad:  TWeightHeadMatrix;
+    dValue, dGrad:  PSingle;
   end;
   TWeightProjTensor = record
     Value, Grad:  TWeightProjMatrix;
+    dValue, dGrad:  PSingle;
   end;
   TWeightProjTensorT = record
     Value, Grad:  TWeightProjMatrixT;
+    dValue, dGrad:  PSingle;
   end;
   TScoresHeadTensor = record
     Value, Grad:  TScoresMatrix;
+    dValue, dGrad:  PSingle;
   end;
   TEmbeddingsTensor = record
     Value, Grad:  TEmbeddingsMatrix;
+    dValue, dGrad:  PSingle;
   end;
   // Corpus and IO types.
   TBooleanVector = array of Boolean;   // Array of boolean.

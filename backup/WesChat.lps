@@ -142,8 +142,8 @@
         <UnitName Value="Util"/>
         <IsVisibleTab Value="True"/>
         <EditorIndex Value="12"/>
-        <TopLine Value="194"/>
-        <CursorPos X="26" Y="208"/>
+        <TopLine Value="193"/>
+        <CursorPos X="27" Y="208"/>
         <UsageCount Value="229"/>
         <Loaded Value="True"/>
       </Unit>
@@ -193,10 +193,6 @@
       </Unit>
     </Units>
     <JumpHistory HistoryIndex="29">
-      <Position>
-        <Filename Value="util.pas"/>
-        <Caret Line="60" Column="22" TopLine="34"/>
-      </Position>
       <Position>
         <Filename Value="util.pas"/>
         <Caret Line="75" Column="22" TopLine="49"/>
@@ -312,6 +308,10 @@
       <Position>
         <Filename Value="util.pas"/>
         <Caret Line="253" Column="63" TopLine="244"/>
+      </Position>
+      <Position>
+        <Filename Value="util.pas"/>
+        <Caret Line="208" Column="26" TopLine="194"/>
       </Position>
     </JumpHistory>
     <RunParams>

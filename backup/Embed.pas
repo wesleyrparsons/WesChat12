@@ -171,8 +171,7 @@ begin
     if VerboseTransform then Pause;
 
     // Build X from TokenizedCorpus[start .. start + SeqLen - 1].
-    for k := 0 to nBlock - 1 do
-      BuildInputMatrix(WModelState.StateBlock[k].X.Value, TokenizedCorpus, WModelParams, Start, SeqLen);
+    BuildInputMatrix(WModelState.StateBlock[0].X.Value, TokenizedCorpus, WModelParams, Start, SeqLen);
 
     // Optional transformer-style embedding scaling by sqrt(d_model).
     for i := 0 to SeqLen - 1 do
@@ -196,8 +195,8 @@ begin
 
       RunTransformForward(WModelParams, WModelState, QueryOutput, Blk);
 
-      if Blk < nBlock then
-        CopyXTensor(WModelState.StateBlock[Blk].X7, WModelState.StateBlock[Blk + 1].X1);
+      if Blk < nBlock - 1 then
+        CopyXTensor(WModelState.StateBlock[Blk].X7, WModelState.StateBlock[Blk + 1].X);
 
       if PauseIfKeyPressed then
         ReadEmbedIfKeyPressed;
@@ -282,10 +281,6 @@ begin
 
     end; // End gradient stage.
 
-    // Modify weights and biases.
-    for k := 0 to nBlock - 1 do
-      Optimization(WModelParams, WModelState, k);
-
     // Backprop pass thru transformer.
     for Blk := nBlock - 1 downto 0 do begin
       Writeln('     $$$ Backpropd Block loop: start ', Blk, '  Sequence Start ', Start, ' $$$');
@@ -299,6 +294,10 @@ begin
       if PauseIfKeyPressed then
         ReadEmbedIfKeyPressed;
     end;
+
+    // Modify weights and biases.
+    for k := 0 to nBlock - 1 do
+      Optimization(WModelParams, WModelState, k);
 
     Start := Start + Stride;
   end; // End sequence loop.
@@ -345,26 +344,26 @@ begin
 
     if VerboseTransform then Pause;
 
-    // Forward pass thru transformer.
+    // Build X only for block 0.
+    BuildInputMatrix(WModelState.StateBlock[0].X.Value, TokenizedCorpus, WModelParams, Start, SeqLen);
+
+    // Scale only block 0 input.
+    for i := 0 to SeqLen - 1 do
+      for j := 0 to ModelDim - 1 do
+        WModelState.StateBlock[0].X.Value[i, j] :=
+          WModelState.StateBlock[0].X.Value[i, j] * Scale;
+
+    // Forward pass through stacked transformer blocks.
     for Blk := 0 to nBlock - 1 do begin
       Writeln('$$$ Starting Block ', Blk, '  Sequence Start ', Start, ' $$$');
-      if VerboseTransform then Pause;
-
-      // Build X from TokenizedCorpus[start .. start + SeqLen - 1].
-      BuildInputMatrix(WModelState.StateBlock[Blk].X.Value, TokenizedCorpus, WModelParams, Start, SeqLen);
-
-      // Optional transformer-style embedding scaling by sqrt(d_model).
-      for i := 0 to SeqLen - 1 do
-        for j := 0 to ModelDim - 1 do
-          WModelState.StateBlock[Blk].X.Value[i, j] := WModelState.StateBlock[Blk].X.Value[i, j] * Scale;
-
-      // Build the target vector, one ahead, for the loss stage.
-      BuildTargetVector(TargetTokens, TokenizedCorpus, Start + 1, SeqLen);
 
       VTPDisplayX('Display X.Value before transform.', WModelState.StateBlock[Blk].X.Value, G);
 
-
       RunTransformForward(WModelParams, WModelState, QueryOutput, Blk);
+
+      // Feed this block's output into the next block's input.
+      if Blk < nBlock - 1 then
+        CopyXTensor(WModelState.StateBlock[Blk].X7, WModelState.StateBlock[Blk + 1].X);
     end;
 
     Start := Start + Stride;

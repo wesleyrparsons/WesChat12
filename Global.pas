@@ -33,7 +33,7 @@ const
   nHead = 8;                      // Number of heads for multi-headed attention.
   HeadDim = ModelDim div nHead;   // Length of one head.
   nBlock = 4;                     // Number of blocks in transformer.
-  ADropout = 0.1;                 // Probability of attention dropout.
+  ADropOut = 0.1;                 // Probability of attention dropout.
   RDropout = 0.1;                 // Probability of residual dropout.
   DimVocab = 1000;                // Need maximum of vocab symbols to dimension array. Needed for Embeddings.
 

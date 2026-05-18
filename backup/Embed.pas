@@ -71,11 +71,11 @@ end;
 procedure RunEmbed(var WModelParams: TWModelParams; var WModelState: TWModelState;
   const TokenizedCorpus: TIVector);
 var
-  i, j, k, Blk: Integer;
+  i, j, k, Blk, LastBlk: Integer;
   Start, EmbedLoop: Integer;
   BestTok: Integer;
   BestProb: Single;
-  InvFreq:    TFVector;           // For RoPE.
+  InvFreq:    TFVector;      // For RoPE.
   Stride: Integer = 64;      // Stride 64 tokens every sequence.
 
   procedure ReadEmbedIfKeyPressed;
@@ -202,6 +202,8 @@ begin
         ReadEmbedIfKeyPressed;
     end;
 
+    LastBlk := nBlock - 1;
+
     // 3. FORWARD HEAD OUTPUT STAGE.
 
     with WModelParams do with WModelState do begin
@@ -210,7 +212,7 @@ begin
 
       // Multiplication: Input X7, Vocab. Output Probs.
       // Equation: Probs = X7 · Embeddingsᵀ. Probs in R^{L x nVocab}. X in R^{L x D}.  Embeddings in R^{nVocab x D}.
-      MatMulFullNT(@StateBlock[Blk].X7.Value[0, 0], @Embeddings.Value[0, 0], @Probs[0, 0], SeqLen, nVocab, ModelDim, ModelDim, ModelDim, DimVocab);
+      MatMulFullNT(@StateBlock[LastBlk].X7.Value[0, 0], @Embeddings.Value[0, 0], @Probs[0, 0], SeqLen, nVocab, ModelDim, ModelDim, ModelDim, DimVocab);
 
        // Display Probs matrix.
       VTPDisplayX('Display Probs, in transform, before softmax.', Probs, B);
@@ -260,7 +262,7 @@ begin
       Writeln('              Transform Backprop Stage 3E');
 
       // Equation: X7.Grad = TopGradient · Embeddings.Value. X7.Grad in R^{L x D}. TopGradient in R^{L x nVocab}. Embeddings.Value in R^{nVocab x D}.
-      MatMulFullNN(@TopGradient[0, 0], @Embeddings.Value[0, 0], @WModelState.StateBlock[Blk].X7.Grad[0, 0], SeqLen, ModelDim, nVocab, DimVocab, ModelDim, ModelDim);
+      MatMulFullNN(@TopGradient[0, 0], @Embeddings.Value[0, 0], @WModelState.StateBlock[LastBlk].X7.Grad[0, 0], SeqLen, ModelDim, nVocab, DimVocab, ModelDim, ModelDim);
       {cblas_sgemm(101, 111, 111, SeqLen, ModelDim, nVocab, 1.0, @TopGradient[0, 0], DimVocab,
       @Embeddings.Value[0, 0], ModelDim, 0.0, @X7.Grad[0, 0], ModelDim);}
 
@@ -269,15 +271,15 @@ begin
       // Backprop TopGradient modifies/overwrites Embeddingsᵀ: Input X7ᵀ, TopGradient. Output Embeddingsᵀ.Grad.
       // Equation: Embeddingsᵀ.Grad = X7ᵀ · TopGradient. Embeddingsᵀ.Grad in R^{nVocab x D}. X7ᵀ in R^(D x L}. TopGradient in R^{L x nVocab}.
       // Problem here was I had NT rather than TN.
-      MatMulFullAccTN(@TopGradient[0,0], @WModelState.StateBlock[Blk].X7.Value[0,0], @Embeddings.Grad[0,0], nVocab, ModelDim, SeqLen, DimVocab, ModelDim, ModelDim);
+      MatMulFullAccTN(@TopGradient[0,0], @WModelState.StateBlock[LastBlk].X7.Value[0,0], @Embeddings.Grad[0,0], nVocab, ModelDim, SeqLen, DimVocab, ModelDim, ModelDim);
       Writeln('Finished Embeddings.Grad GEMM.');
 
       // Backprop Split X7 Grad into X5 and X6: Input X5.Grad, X7.Grad. Output dX.Grad.
       // Equation: X5.Grad = X5.Grad + X7.Grad. All in R^{L x D}.
-      GradSplit(WModelState.StateBlock[Blk].X7.Grad, WModelState.StateBlock[Blk].X5.Grad, WModelState.StateBlock[Blk].X6.Grad, SeqLen, ModelDim);
+      GradSplit(WModelState.StateBlock[LastBlk].X7.Grad, WModelState.StateBlock[LastBlk].X5.Grad, WModelState.StateBlock[LastBlk].X6.Grad, SeqLen, ModelDim);
 
       // Display X7.Grad matrix.
-      VTPDisplayX('Display X7.Grad, in transform, after stage 2D.', WModelState.StateBlock[Blk].X7.Grad, G);
+      VTPDisplayX('Display X7.Grad, in transform, after stage 2D.', WModelState.StateBlock[LastBlk].X7.Grad, G);
 
     end; // End gradient stage.
 
@@ -289,7 +291,7 @@ begin
       RunTransformBackprop(WModelParams, WModelState, Blk);
 
       if Blk > 0 then
-        CopyXTensor(WModelState.StateBlock[Blk].X1, WModelState.StateBlock[Blk - 1].X7);
+        CopyXTensor(WModelState.StateBlock[LastBlk].X1, WModelState.StateBlock[LastBlk - 1].X7);
 
       if PauseIfKeyPressed then
         ReadEmbedIfKeyPressed;

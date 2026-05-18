@@ -10,17 +10,28 @@ uses
   Global,
   Matrix;
 
+const
+  WeightSize: Integer = ModelDim * ModelDim * SizeOf(Single);
+  WeightProjSize: Integer = ModelDim * ModelDimProj * SizeOf(Single);
+  bProjSize: Integer = ModelDimProj * SizeOf(Single);
+  bSize: Integer = ModelDim * SizeOf(Single);
+  SeqSize: Integer = ModelDim * SizeOf(Single);
+  XSize: Integer = SeqLen * ModelDim * SizeOf(Single);
+  HiddenSize: Integer = SeqLen * ModelDimProj * SizeOf(Single);
+  ScoresSize: Integer = SeqLen * SeqLen * SizeOf(Single);
+
 procedure XGUniformW(var W: TWeightMatrix; FanIn, FanOut: Integer);
 procedure XGUniformWHead(var W: TWeightHeadMatrix; FanIn, FanOut: Integer);
 procedure XGUniformW1(var W: TWeightProjMatrix; FanIn, FanOut: Integer);
 procedure XGUniformW2(var W: TWeightProjMatrixT; FanIn, FanOut: Integer);
 procedure InitializeTransformer(var WModelParams: TWModelParams; var WModelState: TWModelState);
+procedure MAllocCublas(var WModelParams: TWModelParams; var WModelState: TWModelState);
 procedure ZeroGradients(var WModelParams: TWModelParams; var WModelState: TWModelState; const Blk: Integer);
 procedure UpdateParam(const N: Integer; const LearningRate: Single; const Grad: PSingle; Param: PSingle);
 procedure Optimization(var WModelParams: TWModelParams; var WModelState: TWModelState; const Blk: Integer);
 procedure ApplyRoPE(var H: TSeqMatrix;  const InvFreq: TFVector; SeqLen, ModelDim: Integer);
 procedure ApplyAutoregressiveMask(var ScoresHead: TScoresMatrix; const L: Integer);
-procedure SoftmaxForward(const x: TFVector; out y: array of Single);
+//procedure SoftmaxForward(const x: TFVector; out y: array of Single);
 procedure SoftmaxForwardN(const x: PSingle; y: PSingle; const N: Integer);
 procedure SoftmaxBackward(const y, dy:  TFVector; out dx: array of Single);
 procedure LayerNormForward(const InX: TSeqMatrix; var OutX: TSeqMatrix; SeqLen: Integer;
@@ -104,15 +115,6 @@ end;
 
 // Allocate cublas memory.       Separate for State and Params?
 procedure MAllocCublas(var WModelParams: TWModelParams; var WModelState: TWModelState);
-const
-  WeightSize: Integer = ModelDim * ModelDim * SizeOf(Single);
-  WeightProjSize: Integer = ModelDim * ModelDimProj * SizeOf(Single);
-  bProjSize: Integer = ModelDimProj * SizeOf(Single);
-  bSize: Integer = ModelDim * SizeOf(Single);
-  SeqSize: Integer = ModelDim * SizeOf(Single);
-  XSize: Integer = SeqLen * ModelDim * SizeOf(Single);
-  HiddenSize: Integer = SeqLen * ModelDimProj * SizeOf(Single);
-  ScoresSize: Integer = SeqLen * SeqLen * SizeOf(Single);
 var
   h, k: Integer;
 begin
@@ -483,7 +485,7 @@ begin
 end;
 
 // Softmax procedure forward.
-procedure SoftmaxForward(const x: TFVector; out y: array of Single);
+{procedure SoftmaxForward(const x: TFVector; out y: array of Single);
 var
   i: Integer;
   MaxVal, SumVal, InvT: Single;
@@ -506,7 +508,7 @@ begin
   SumVal := 1.0 / SumVal;
   for i := 0 to High(x) do
     y[i] := y[i] * SumVal;
-end;
+end;}
 
 // Softmax procedure backward.
 procedure SoftmaxBackward(const y, dy:  TFVector; out dx: array of Single);

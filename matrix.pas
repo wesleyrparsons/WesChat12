@@ -18,16 +18,23 @@ const
   NoTrans  = 111;       // No transposition.
   Trans    = 112;       // Transposition.
   cublasDLL = 'cublas64_13.dll';
+  cudartDLL = 'cudart64_13.dll';
+  copenblasDLL = 'libopenblas.dll';
+  cudaMemcpyHostToHost   = 0;
+  cudaMemcpyHostToDevice = 1;
+  cudaMemcpyDeviceToHost = 2;
+  cudaMemcpyDeviceToDevice = 3;
 
 // cublas functions.
 function cublasCreate_v2(out handle: TcublasHandle): Integer; cdecl; external cublasDLL;
 function cublasDestroy_v2(handle: TcublasHandle): Integer; cdecl; external cublasDLL;
-function cudaMalloc(devPtr: PPointer; size: NativeUInt): Integer; cdecl; external cublasDLL;
-function cudaFree(devPtr: PPointer): Integer; cdecl; external cublasDLL;
+function cudaMalloc(devPtr: PPointer; size: NativeUInt): Integer; cdecl; external cudartDLL;
+function cudaMemcpy(dst: Pointer; src: Pointer; count: NativeUInt; kind: LongInt): LongInt; cdecl; external cudartDLL;
+function cudaFree(devPtr: PPointer): Integer; cdecl; external cudartDLL;
 
 // Multiply and add procedures.
 procedure MatMulFullNN(const A, B: PSingle; C: PSingle; M, N, K, lda, ldb, ldc: Integer);
-procedure CuGemmNN(handle: TcublasHandle; const A, B: PSingle; C: PSingle; M, N, K: Integer; alpha, beta: Single);
+procedure CuMatMulFullNN(Handle: TcublasHandle; const A, B: PSingle; C: PSingle; M, N, K, lda, ldb, ldc: Integer);
 procedure MatMulFullTN(const A, B: PSingle; C: PSingle; M, N, K, lda, ldb, ldc: Integer);
 procedure CuGemmTN(handle: TcublasHandle; const A, B: PSingle; C: PSingle; M, N, K: Integer; alpha, beta: Single);
 procedure MatMulFullNT(const A, B: PSingle; C: PSingle; M, N, K, lda, ldb, ldc: Integer);
@@ -63,7 +70,6 @@ procedure CuMatMulAccNT(handle: TcublasHandle; const A, B: PSingle; C: PSingle; 
 procedure MatMulAccNN(const A, B: PSingle; C: PSingle; M, N, K: Integer);
 procedure CuMatMulAccNN(handle: TcublasHandle; const A, B: PSingle; C: PSingle; M, N, K: Integer);
 
-
 // ReLU procedure.
 procedure ReLUMaskForward(const A: THiddenMatrix; var B: THiddenMatrix);
 
@@ -79,69 +85,64 @@ procedure cblas_sgemm(Layout: LongInt;
   const A: PSingle; LDA: TMKLInt;
   const B: PSingle; LDB: TMKLInt;
   Beta: Single;
-  C: PSingle;  LDC: TMKLInt); cdecl; external 'libopenblas.dll';
+  C: PSingle;  LDC: TMKLInt); cdecl; external copenblasDLL;
 
 function cublasSgemm_v2(handle: TcublasHandle;
-                        transa, transb: Integer;
-                        m, n, k: Integer;
-                        const alpha: PSingle;
-                        A: PSingle; lda: Integer;
-                        B: PSingle; ldb: Integer;
-                        const beta: PSingle;
-                        C: PSingle; ldc: Integer): Integer; cdecl;
-  external cublasDLL;
+  transa, transb: Integer;
+  m, n, k: Integer;
+  const alpha: PSingle;
+  A: PSingle; lda: Integer;
+  B: PSingle; ldb: Integer;
+  const beta: PSingle;
+  C: PSingle; ldc: Integer): Integer; cdecl; external cublasDLL;
 
 // cblas saxpy.
 procedure cblas_saxpy(N: LongInt;
   alpha: Single;
   X: PSingle; incX: LongInt;
-  Y: PSingle; incY: LongInt); cdecl; external 'libopenblas.dll';
+  Y: PSingle; incY: LongInt); cdecl; external copenblasDLL;
 
 // cublas saxpy.
 function cublasSaxpy_v2(handle: TcublasHandle;
-                        n: LongInt;
-                        const alpha: PSingle;
-                        const x: PSingle; incx: LongInt;
-                        y: PSingle; incy: LongInt): LongInt; cdecl; external cublasDLL;
+  n: LongInt;
+  const alpha: PSingle;
+  const x: PSingle; incx: LongInt;
+  y: PSingle; incy: LongInt): LongInt; cdecl; external cublasDLL;
 
 // cblas scopy.
 procedure cblas_scopy(N: LongInt;
   const X: PSingle; incX: LongInt;
-  Y: PSingle; incY: LongInt); cdecl; external 'libopenblas.dll';
+  Y: PSingle; incY: LongInt); cdecl; external copenblasDLL;
 
-function cublasScopy_v2(
-    handle: TcublasHandle;
-    n: LongInt;
-    const x: PSingle; incx: LongInt;
-    y: PSingle; incy: LongInt
-): LongInt; cdecl; external cublasDLL;
+function cublasScopy_v2(handle: TcublasHandle;
+  n: LongInt;
+  const x: PSingle; incx: LongInt;
+  y: PSingle; incy: LongInt): LongInt; cdecl; external cublasDLL;
 
 // cblas sscal.
 procedure cblas_sscal(N: LongInt;
   alpha: Single; X: PSingle;
-  incX: LongInt); cdecl; external 'libopenblas.dll';
+  incX: LongInt); cdecl; external copenblasDLL;
 
-function cublasSscal(
-    handle: TcublasHandle;
-    n: LongInt;
-    const alpha: PSingle;
-    x: PSingle;
-    incx: LongInt
-): LongInt; cdecl; external cublasDLL;
+function cublasSscal(handle: TcublasHandle;
+  n: LongInt;
+  const alpha: PSingle;
+  x: PSingle;
+  incx: LongInt): LongInt; cdecl; external cublasDLL;
 
 function cublasSscal_v2(handle: TcublasHandle;
-                        n: Integer;
-                        const alpha: PSingle;
-                        x: PSingle; incx: Integer): LongInt; cdecl; external cublasDLL;
+  n: Integer;
+  const alpha: PSingle;
+  x: PSingle; incx: Integer): LongInt; cdecl; external cublasDLL;
 
 // cblas sdot.
 function cblas_sdot(N: LongInt;
   const X: PSingle; incX: LongInt;
-  const Y: PSingle; incY: LongInt): Single; cdecl; external 'libopenblas.dll';
+  const Y: PSingle; incY: LongInt): Single; cdecl; external copenblasDLL;
 
 // cblas snrm2.
 function cblas_snrm2(N: LongInt;
-  const X: PSingle; incX: LongInt): Single; cdecl; external 'libopenblas.dll';
+  const X: PSingle; incX: LongInt): Single; cdecl; external copenblasDLL;
 
 implementation
 
@@ -171,22 +172,13 @@ begin
   n := Rows * Cols;
 
   // Left += Upstream.
-  cblas_saxpy(n,
-    1.0,
-    @Upstream[0,0], 1,
-    @Left[0,0], 1);
+  cblas_saxpy(n, 1.0, @Upstream[0,0], 1, @Left[0,0], 1);
 
   // Right += Upstream.
-  cblas_saxpy(n,
-    1.0,
-    @Upstream[0,0], 1,
-    @Right[0,0], 1);
+  cblas_saxpy(n, 1.0, @Upstream[0,0], 1, @Right[0,0], 1);
 end;
 
-procedure CuGradSplit(handle: TcublasHandle;
-                      const Upstream: PSingle;
-                      Left, Right: PSingle;
-                      Rows, Cols: Integer);
+procedure CuGradSplit(handle: TcublasHandle; const Upstream: PSingle; Left, Right: PSingle; Rows, Cols: Integer);
 var
   n: Integer;
   alpha: Single;
@@ -195,18 +187,10 @@ begin
   alpha := 1.0;
 
   // Left += Upstream
-  cublasSaxpy_v2(handle,
-                 n,
-                 @alpha,
-                 Upstream, 1,
-                 Left, 1);
+  cublasSaxpy_v2(handle, n, @alpha, Upstream, 1, Left, 1);
 
   // Right += Upstream
-  cublasSaxpy_v2(handle,
-                 n,
-                 @alpha,
-                 Upstream, 1,
-                 Right, 1);
+  cublasSaxpy_v2(handle, n, @alpha, Upstream, 1, Right, 1);
 end;
 
 // Accummulate Gradient.
@@ -233,15 +217,12 @@ begin
 
   // Row-major 1×n GEMM:
   //   Dst = 1.0 * (1×1 * Src[1×n]) + 1.0 * Dst
-  //
   // cuBLAS column-major trick:
   //   C_col = α * (B * A) + β * C
-  //
   // Dimensions:
   //   m = n
   //   n = 1
   //   k = 1
-  //
   // Leading dims:
   //   lda = 1
   //   ldb = n
@@ -270,35 +251,25 @@ begin
 end;
 
 // Cublas.
-procedure CuGemmNN(handle: TcublasHandle;
-                   const A, B: PSingle; C: PSingle;
-                   M, N, K: Integer;
-                   alpha, beta: Single);
+procedure CuMatMulFullNN(Handle: TcublasHandle; const A, B: PSingle; C: PSingle; M, N, K, lda, ldb, ldc: Integer);
+var
+  alpha, beta: Single;
 begin
-  // Row-major NN multiply:
-  //   C = alpha * (A[M×K] * B[K×N]) + beta * C[M×N]
-  //
-  // cuBLAS is column-major, so we compute:
-  //   C_colmajor = alpha * (B * A) + beta * C
-  //
-  // Dimensions become:
-  //   m = N
-  //   n = M
-  //   k = K
-  //
-  // Leading dimensions for row-major:
-  //   lda = K
-  //   ldb = N
-  //   ldc = N
+  alpha := 1.0;
+  beta  := 0.0;
 
-  cublasSgemm_v2(handle,
-                 0, 0,        // CUBLAS_OP_N, CUBLAS_OP_N
-                 N, M, K,     // swapped M,N
-                 @alpha,
-                 B, N,        // ldb
-                 A, K,        // lda
-                 @beta,
-                 C, N);       // ldc
+  // Row-major C = A * B
+  // cuBLAS column-major view: C^T = B^T * A^T
+  cublasSgemm_v2(
+    Handle,
+    0, 0,
+    N, M, K,
+    @alpha,
+    B, ldb,
+    A, lda,
+    @beta,
+    C, ldc
+  );
 end;
 
 // Full matrix multiplication (lda, ldb, ldc), A no transpose, B transpose, overwrite, row-major.
@@ -784,18 +755,10 @@ begin
   );
 end;
 
-procedure CuAddScaled(handle: TcublasHandle;
-                      N: Integer;
-                      Alpha: Single;
-                      const X: PSingle;
-                      Y: PSingle);
+procedure CuAddScaled(handle: TcublasHandle; N: Integer; Alpha: Single; const X: PSingle; Y: PSingle);
 begin
   // Performs: Y[i] := Alpha * X[i] + Y[i]
-  cublasSaxpy_v2(handle,
-                 N,
-                 @Alpha,
-                 X, 1,
-                 Y, 1);
+  cublasSaxpy_v2(handle, N, @Alpha, X, 1, Y, 1);
 end;
 
 // Scale vector.

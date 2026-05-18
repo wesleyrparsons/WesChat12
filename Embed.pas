@@ -154,6 +154,7 @@ begin
 
   // Initialize.
   InitializeTransformer(WModelParams, WModelState);
+  MAllocCublas(WModelParams, WModelState);
   SetLength(TokenID, Length(TokenizedCorpus));
   TokenID := TokenizedCorpus;
 

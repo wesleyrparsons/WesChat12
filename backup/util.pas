@@ -10,11 +10,22 @@ uses
   Global,
   Matrix;
 
+const
+  WeightSize: Integer = ModelDim * ModelDim * SizeOf(Single);
+  WeightProjSize: Integer = ModelDim * ModelDimProj * SizeOf(Single);
+  bProjSize: Integer = ModelDimProj * SizeOf(Single);
+  bSize: Integer = ModelDim * SizeOf(Single);
+  SeqSize: Integer = ModelDim * SizeOf(Single);
+  XSize: Integer = SeqLen * ModelDim * SizeOf(Single);
+  HiddenSize: Integer = SeqLen * ModelDimProj * SizeOf(Single);
+  ScoresSize: Integer = SeqLen * SeqLen * SizeOf(Single);
+
 procedure XGUniformW(var W: TWeightMatrix; FanIn, FanOut: Integer);
 procedure XGUniformWHead(var W: TWeightHeadMatrix; FanIn, FanOut: Integer);
 procedure XGUniformW1(var W: TWeightProjMatrix; FanIn, FanOut: Integer);
 procedure XGUniformW2(var W: TWeightProjMatrixT; FanIn, FanOut: Integer);
 procedure InitializeTransformer(var WModelParams: TWModelParams; var WModelState: TWModelState);
+procedure MAllocCublas(var WModelParams: TWModelParams; var WModelState: TWModelState);
 procedure ZeroGradients(var WModelParams: TWModelParams; var WModelState: TWModelState; const Blk: Integer);
 procedure UpdateParam(const N: Integer; const LearningRate: Single; const Grad: PSingle; Param: PSingle);
 procedure Optimization(var WModelParams: TWModelParams; var WModelState: TWModelState; const Blk: Integer);
@@ -104,15 +115,6 @@ end;
 
 // Allocate cublas memory.       Separate for State and Params?
 procedure MAllocCublas(var WModelParams: TWModelParams; var WModelState: TWModelState);
-const
-  WeightSize: Integer = ModelDim * ModelDim * SizeOf(Single);
-  WeightProjSize: Integer = ModelDim * ModelDimProj * SizeOf(Single);
-  bProjSize: Integer = ModelDimProj * SizeOf(Single);
-  bSize: Integer = ModelDim * SizeOf(Single);
-  SeqSize: Integer = ModelDim * SizeOf(Single);
-  XSize: Integer = SeqLen * ModelDim * SizeOf(Single);
-  HiddenSize: Integer = SeqLen * ModelDimProj * SizeOf(Single);
-  ScoresSize: Integer = SeqLen * SeqLen * SizeOf(Single);
 var
   h, k: Integer;
 begin
@@ -205,7 +207,7 @@ begin
       cudaFree(@Wq.dGrad);
       cudaFree(@Wk.dValue);
       cudaFree(@Wk.dGrad);
-      cudaFree(@Wv.dValue;
+      cudaFree(@Wv.dValue);
       cudaFree(@Wv.dGrad);
       cudaFree(@W0.dValue);
       cudaFree(@W0.dGrad);

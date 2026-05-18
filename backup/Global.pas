@@ -33,7 +33,7 @@ const
   nHead = 8;                      // Number of heads for multi-headed attention.
   HeadDim = ModelDim div nHead;   // Length of one head.
   nBlock = 4;                     // Number of blocks in transformer.
-  ADropout = 0.1;                 // Probability of attention dropout.
+  ADropOut = 0.1;                 // Probability of attention dropout.
   RDropout = 0.1;                 // Probability of residual dropout.
   DimVocab = 1000;                // Need maximum of vocab symbols to dimension array. Needed for Embeddings.
 
@@ -142,8 +142,10 @@ type                                                                           /
   end;
   TWModelState = record                                         // Model of non-trainable parameters.
     StateBlock:                     TStateBlock;
-    InvFreq:                        TFVector;
+    InvFreq:                        TFVector;                   // Rope.
+    dInvFreq:                       PSingle;
     Probs, TopGradient:             TSeqVocabMatrix;            // Logit and Gradient.
+    dProbs, dTopGradient:           PSingle;
   end;
 
 var
@@ -172,7 +174,6 @@ var
   LearningRate: Single = 0.01;                   // LearningRate for Gradient.
   Temperature: Single = 1.0;                     // Temperature for softmax.
   Training: Boolean = True;                      // In training as opposed to inference mode.
-  //InvFreq: TFVector;
   // Other.
   TestVector: TFSVector;          // Vector for testing. [0..SeqLen] of Single.
 

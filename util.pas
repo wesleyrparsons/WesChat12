@@ -19,6 +19,9 @@ const
   XSize: Integer = SeqLen * ModelDim * SizeOf(Single);
   HiddenSize: Integer = SeqLen * ModelDimProj * SizeOf(Single);
   ScoresSize: Integer = SeqLen * SeqLen * SizeOf(Single);
+  EmbeddingsSize: Integer = DimVocab * ModelDim;
+  InvFreqSize: Integer = (ModelDim div 2) * SizeOf(Single);  // Or HeadDim?
+  ProbsSize: Integer = SeqLen * DimVocab * SizeOf(Single);
 
 procedure XGUniformW(var W: TWeightMatrix; FanIn, FanOut: Integer);
 procedure XGUniformWHead(var W: TWeightHeadMatrix; FanIn, FanOut: Integer);
@@ -26,12 +29,12 @@ procedure XGUniformW1(var W: TWeightProjMatrix; FanIn, FanOut: Integer);
 procedure XGUniformW2(var W: TWeightProjMatrixT; FanIn, FanOut: Integer);
 procedure InitializeTransformer(var WModelParams: TWModelParams; var WModelState: TWModelState);
 procedure MAllocCublas(var WModelParams: TWModelParams; var WModelState: TWModelState);
+procedure MDeallocateCublas(var WModelParams: TWModelParams; var WModelState: TWModelState);
 procedure ZeroGradients(var WModelParams: TWModelParams; var WModelState: TWModelState; const Blk: Integer);
 procedure UpdateParam(const N: Integer; const LearningRate: Single; const Grad: PSingle; Param: PSingle);
 procedure Optimization(var WModelParams: TWModelParams; var WModelState: TWModelState; const Blk: Integer);
 procedure ApplyRoPE(var H: TSeqMatrix;  const InvFreq: TFVector; SeqLen, ModelDim: Integer);
 procedure ApplyAutoregressiveMask(var ScoresHead: TScoresMatrix; const L: Integer);
-//procedure SoftmaxForward(const x: TFVector; out y: array of Single);
 procedure SoftmaxForwardN(const x: PSingle; y: PSingle; const N: Integer);
 procedure SoftmaxBackward(const y, dy:  TFVector; out dx: array of Single);
 procedure LayerNormForward(const InX: TSeqMatrix; var OutX: TSeqMatrix; SeqLen: Integer;
@@ -145,6 +148,10 @@ begin
       cudaMalloc(@Beta2.dValue, SeqSize);
       cudaMalloc(@Beta2.dGrad, SeqSize);
     end;
+    with WModelParams do begin
+      cudaMalloc(@Embeddings.dValue, EmbeddingsSize);
+      cudaMalloc(@Embeddings.dGrad, EmbeddingsSize);
+    end;
     with WModelState.StateBlock[k] do begin
       cudaMalloc(@X.dValue, XSize);
       cudaMalloc(@X.dGrad, XSize);
@@ -185,19 +192,15 @@ begin
       cudaMalloc(@Hidden2.dValue, HiddenSize);
       cudaMalloc(@Hidden2.dGrad, HiddenSize);
     end;
+    with WModelState do begin
+      cudaMalloc(@dInvFreq, InvFreqSize); // Or HeadDim?
+      cudaMalloc(@dProbs, ProbsSize);
+      cudaMalloc(@dTopGradient, ProbsSize);
+    end;
   end;
 end;
 
-procedure MDeallocCublas(var WModelParams: TWModelParams; var WModelState: TWModelState);
-const
-  WeightSize: Integer = ModelDim * ModelDim * SizeOf(Single);
-  WeightProjSize: Integer = ModelDim * ModelDimProj * SizeOf(Single);
-  bProjSize: Integer = ModelDimProj * SizeOf(Single);
-  bSize: Integer = ModelDim * SizeOf(Single);
-  SeqSize: Integer = ModelDim * SizeOf(Single);
-  XSize: Integer = SeqLen * ModelDim * SizeOf(Single);
-  HiddenSize: Integer = SeqLen * ModelDimProj * SizeOf(Single);
-  ScoresSize: Integer = SeqLen * SeqLen * SizeOf(Single);
+procedure MDeallocateCublas(var WModelParams: TWModelParams; var WModelState: TWModelState);
 var
   h, k: Integer;
 begin
@@ -227,6 +230,10 @@ begin
       cudaFree(@Gamma2.dGrad);
       cudaFree(@Beta2.dValue);
       cudaFree(@Beta2.dGrad);
+    end;
+    with WModelParams do begin
+      cudaFree(@Embeddings.dValue);
+      cudaFree(@Embeddings.dGrad);
     end;
     with WModelState.StateBlock[k] do begin
       cudaFree(@X.dValue);
@@ -267,6 +274,11 @@ begin
       cudaFree(@Hidden1.dGrad);
       cudaFree(@Hidden2.dValue);
       cudaFree(@Hidden2.dGrad);
+    end;
+    with WModelState do begin
+      cudaFree(@dInvFreq);
+      cudaFree(@Probs);
+      cudaFree(@TopGradient);
     end;
   end;
 end;

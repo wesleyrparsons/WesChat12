@@ -18,15 +18,15 @@ var
   ShowMergeWork: Boolean = True;       // Show merge work in Tokenize units.
   ShowVerification: Boolean = True;    // Do verification by rebyulding corpus in Tokenize units.
   ShowEachByteRead: Boolean = False;   // Verify reading of bytes.
-  SaveFiles: Boolean = True;           // Save various files, otherwise not saved.
-  SavePartialSymbolTable: Boolean = True;   // Save intermediate symbol tables.
+  SaveFiles: Boolean = False;          // Save various files, otherwise not saved.
+  SavePartialSymbolTable: Boolean = False;   // Save intermediate symbol tables.
   PartialSymbolTableTrigger: Integer = 5000;// Trigger to save symbol tables.
   MaxMerges: Integer = 20000;          // Maximum number of merges.
   MaxPairCount: Integer = 400000;      // Maximum number of pair in BPE.
 
 const
   // Model constants.
-  ModelDim = 160;                 // Number of loadings for a symbol.
+  ModelDim = 512;                 // Number of loadings for a symbol.
   Proj = 4;                       // Projection to Hidden arrays.
   ModelDimProj = ModelDim * Proj; // Dimension of model of projected X matrix.
   SeqLen = 128;                   // Sequence length for X.
@@ -142,8 +142,10 @@ type                                                                           /
   end;
   TWModelState = record                                         // Model of non-trainable parameters.
     StateBlock:                     TStateBlock;
-    InvFreq:                        TFVector;
+    InvFreq:                        TFVector;                   // Rope.
+    dInvFreq:                       PSingle;
     Probs, TopGradient:             TSeqVocabMatrix;            // Logit and Gradient.
+    dProbs, dTopGradient:           PSingle;
   end;
 
 var
@@ -172,7 +174,6 @@ var
   LearningRate: Single = 0.01;                   // LearningRate for Gradient.
   Temperature: Single = 1.0;                     // Temperature for softmax.
   Training: Boolean = True;                      // In training as opposed to inference mode.
-  //InvFreq: TFVector;
   // Other.
   TestVector: TFSVector;          // Vector for testing. [0..SeqLen] of Single.
 

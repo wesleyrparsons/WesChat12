@@ -32,8 +32,8 @@ begin
   // Display entry to transform.
   writeln('Entering Backprop Transformer');
 
-  // Display X.Value matrix.
-  VTPDisplayX('Display X.Value in transform, before any action.', WModelState.StateBlock[0].X.Value, G);
+  // Display X6.Value matrix.
+  VTPDisplayX('Display X6.Value in transform, before any action.', WModelState.StateBlock[0].X6.Value, G);
 
   with WModelParams.ParamBlock[Blk] do with WModelState.StateBlock[Blk] do begin
 

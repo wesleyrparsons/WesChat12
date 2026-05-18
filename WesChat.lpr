@@ -39,7 +39,7 @@ var
   MinCorpus: Integer = 50;                  // Minimum for loading.
   // Utility vars.
   Ch: string;                               // For option menu.
-  Success: Boolean;                         // For loading and saving files.
+  // Success: Boolean;                         // For loading and saving files.
   CombinedSymbolTable: TSymbolTable;        // For combining two symbol tables.
 
 // Create and name directory and file for saving.
@@ -534,10 +534,10 @@ begin
         Readln(ModelFileName);
         //SaveModel(ModelFileName, WModelParams, Success);
         // ChDir('..');
-        if Success then
-          Writeln('File ', ModelFileName, ' successfully saved.')
+        { if Success then
+           Writeln('File ', ModelFileName, ' successfully saved.')
         else
-          Writeln('File not saved.');
+          Writeln('File not saved.');}
         Pause;
       end;
       '11': begin
@@ -546,12 +546,12 @@ begin
         Readln(ModelFileName);
         //LoadModel(ModelFileName, WModelParams, Success);
         // ChDir('..');
-        if Success then begin
+        {if Success then begin
           Writeln('File ', ModelFileName, ' loaded.');
           ForwardQuery;
         end
         else
-          Writeln('File not loaded.');
+          Writeln('File not loaded.');}
         Pause;
       end;
       'X':     Exit;

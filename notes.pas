@@ -66,7 +66,7 @@ No, keep it as Embed.
 
 Transform/Matrix/Utils.
 
-a. Create Saxpy wrapper.
+Is InvFreq dimmed as ModelDim or HeadDim?
 
 1. Many models reuse the embedding matrix for output projection.
 This is called weight tying. WVocab not needed. I am doing it.

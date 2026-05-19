@@ -193,6 +193,7 @@ begin
     // Merge Addition: Input X1, X3. Output X4.
     // Equation: X4 = X1 + X3. X4 in R^{L · D}. X1 in R^{L · D}. X2 in R^(L x D}.
     // cblas.
+    // MatAdd(X1.Value, X3.Value, X4.Value, SeqLen, ModelDim);
     // cublas.
     CuMatAdd(CuHandle, X1.dValue, X3.dValue, X4.dValue, SeqLen, ModelDim);     // No need to transfer X4.
 
@@ -217,7 +218,7 @@ begin
 
       // Expansion: Input X5, W1. Output Hidden1.
       // Equation: Hidden1 = X5 · W1. Hidden1 in R^{L x DB}. X5 in R^{L x D}. W1 in R^{D x DB}.
-      //cblas
+      // cblas
       // MatMulNN(@X5.Value[0, 0], @W1.Value[0, 0], @Hidden1.Value[0, 0], SeqLen, ModelDimProj, ModelDim);
       // cublas.
       cudaMemcpy(W1.dValue, @W1.Value[0, 0], WeightProjSize, cudaMemcpyHostToDevice);

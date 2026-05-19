@@ -32,8 +32,11 @@ begin
   // Display entry to transform.
   writeln('Entering Backprop Transformer');
 
-  // Display X6.Value matrix.
-  VTPDisplayX('Display X6.Value in transform, before any action.', WModelState.StateBlock[0].X6.Value, G);
+  // Display X6.Value matrix. X6.Value is in cublas.
+  with WModelState.StateBlock[0] do begin
+    cudaMemcpy(@X6.Value[0, 0], X6.dValue, XSize, cudaMemcpyDeviceToHost);
+    VTPDisplayX('Display X6.Value in transform, before any action.', WModelState.StateBlock[0].X6.Value, G);
+  end;
 
   with WModelParams.ParamBlock[Blk] do with WModelState.StateBlock[Blk] do begin
 
@@ -45,17 +48,27 @@ begin
       // Backprop X6 Grad creates b2 Grad. Input X6.Grad. Output b2.Grad.
       // Equation: b2.Grad = sum of X6.Grad. b2.Grad is R^{L x D}. X6.Grad in R^{L x D}.
       for i := 0 to SeqLen - 1 do
-        AddScaled(ModelDim, 1.0, @X6.Grad[i,0], @b2.Grad[0]);
+        // cblas.
+        // AddScaled(ModelDim, 1.0, @X6.Grad[i,0], @b2.Grad[0]);
+        // cublas. X6.Grad is in cublas. b2?
+        cublasSscal(CuHandle, ModelDim, @Zero, b2.dGrad, 1);    // Note different function used.
 
       // 2D. Backprop Multiplication/Overwrite. Obtain W2 from Hidden2 and X6.
       Writeln('            Transform Backprop Stage 2D');
 
       // Backprop X6 Grad creates W2 Grad: Input Hidden2ᵀ.Value, X6.Grad. Output W2.Grad.
       // Equation: W2.Grad = Hidden2ᵀ.Value · X6.Grad. W2.Grad is R^{DB x D}. Hidden2ᵀ.Value is R^{DB x L}. X6.Grad in R^{L x D}.
+      // cblas.
       MatMulTN(@Hidden2.Value, @X6.Grad, @W2.Grad, ModelDimProj, ModelDim, SeqLen);
+      // cublas. X6.Grad and Hidden2.Value are in cublas. No need to copy W2.Grad.
+      cudaMemcpy(W2.dValue, @W2.Value[0, 0], WeightSize, cudaMemcpyHostToDevice);
+      cuMatMulTN(CuHandle, Hidden2.dValue, X6.dGrad, W2.dGrad, ModelDimProj, ModelDim, SeqLen);
 
       // Backprop X6 Grad creates Hidden2 Grad: Input
       // Equation: Hidden2.Grad = X6.Grad * W2ᵀ.Value. X6.Grad in R^{L x D}. W2ᵀ.Value is R^{D x DB}. Hidden2.Grad is R^{L x DB}.
+      // cblas.
+      MatMulNT(@X6.Grad, @W2.Value, @Hidden2.Grad, SeqLen, ModelDimProj, ModelDim);
+      // cublas. X6.Grad is in cublas. No need to copy Hidden2.Grad.
       MatMulNT(@X6.Grad, @W2.Value, @Hidden2.Grad, SeqLen, ModelDimProj, ModelDim);
 
       // 2C. Backprop ReLU. Obtain Hidden1 from Hidden2.
@@ -76,7 +89,10 @@ begin
       // Backprop Hidden Grad creates b1 Grad: Input Hidden1.Grad. Output b1.Grad.
       // Equation: b1.Grad = sum of Hidden1.Grad. b1.Grad is R^{L x DB}. Hidden1.Grad in R^{L x DB}.
       for i := 0 to SeqLen - 1 do
-        AddScaled(ModelDimProj, 1.0, @Hidden1.Grad[i,0], @b1.Grad[0]);
+        // cblas.
+        // AddScaled(ModelDimProj, 1.0, @Hidden1.Grad[i,0], @b1.Grad[0]);
+        // cublas.
+        CuAddScaled(CuHandle, ModelDimProj, 1.0, PSingle(Hidden1.dGrad) + i * ModelDimProj, b1.dGrad);
 
       // 2A. Backprop Multiplication/Overwrite. Obtain W1 from X5ᵀ and Hidden1.
       Writeln('            Transform Backprop Stage 2A');
@@ -84,19 +100,26 @@ begin
       // Obtain X5 from Hidden1 and W1.
       // Backprop Hidden1 Grad creates W1 Grad. Input: X5ᵀ.Value, Hidden1.Grad. Output: W1.Grad.
       // Equation: W1.Grad = X5ᵀ.Value · Hidden1.Grad. W1.Grad is R^{D x DB}. X5ᵀ.Value is R^{L x D}. Hidden1.Grad is R^{D x DB).
-      MatMulTN(@X5.Value, @Hidden1.Grad, @W1.Grad, SeqLen, ModelDimProj, ModelDim);
+      // cblas.
+      // MatMulTN(@X5.Value, @Hidden1.Grad, @W1.Grad, SeqLen, ModelDimProj, ModelDim);
+      // cublas. No need to copy W1.Grad. X5.Value already in cublas.
+      cudaMemcpy(Hidden1.dGrad, @Hidden1.Grad[0, 0], HiddenSize, cudaMemcpyHostToDevice);
+      CuMatMulTN(CuHandle, X5.dValue, Hidden1.dGrad, W1.dGrad, SeqLen, ModelDimProj, ModelDim);
 
       // Backprop Hidden1 Grad accumulates into X5 Grad. Input: Hidden1.Grad, W1ᵀ.Value. Output: X5.Grad.
       // Equation: X5.Grad = Hidden1.Grad · W1ᵀ.Value. Hidden1.Grad is R^{D x DB). W1ᵀ.Value is R^{DB x D}. X5.Grad is R^{L x D}.
-      MatMulAccNT(@Hidden1.Grad, @W1.Value, @X5.Grad, SeqLen, ModelDim, ModelDimProj);
-
+      // cblas.
+      // MatMulAccNT(CuHandle, @Hidden1.Grad, @W1.Value, @X5.Grad, SeqLen, ModelDim, ModelDimProj);
+      // cublas. Hidden1.Grad and W1.Value already in cublas. No need to copy X5.Grad.
+      CuMatMulAccNT(CuHandle, Hidden1.dGrad, W1.dValue, X5.dGrad, SeqLen, ModelDim, ModelDimProj);
+                                                          stop
     // 1. BACKPROP STAGE TRANSFORMER.
 
     // 1J. Backprop Layer-Norm. Obtain X5 from X4.
     Writeln('          Transform Backprop Stage 1J');
-
-    // Backprop Layer-Norm: Input X5, dX5. Output X4.Grad, Gamma2.Grad, Beta2.Grad.
-    // Equation: X4.Grad, Gamma2.Grad, Beta2.Grad = LayerNorm(X5, X5.Grad, Gamma2, Beta2). X4.Grad, X5.Grad in R^{L x D}. Gamma2.Grad, Beta2.Grad in R^{D}.
+          check this
+    // Backprop Layer-Norm: Input X5.Grad, Gamma2.Value, Beta2.Value. Output X4.Grad, Gamma2.Grad, Beta2.Grad.
+    // Equation: X4.Grad, Gamma2.Grad, Beta2.Grad = LayerNorm(X5.Grad, Gamma2.Value, Beta2.Value). X4.Grad, X5.Grad in R^{L x D}. Gamma2.Grad, Beta2.Grad in R^{D}.
     LayerNormBackward(X5.Grad, X4.Grad, Gamma2.Grad, Beta2.Grad, SeqLen, Gamma2.Value, LNXhat2, LNInvStd2);
 
     // Display X4.Grad matrix.

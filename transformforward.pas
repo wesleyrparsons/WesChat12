@@ -304,7 +304,7 @@ begin
       VTPDisplayX('Display X7.Value, in transform, after residual added to X6.', X7.Value, B);
 
   end;   // End with WModel.
-end;     // End RunTransform.
+end;     // End RunTransformForward.
 
 end.
 

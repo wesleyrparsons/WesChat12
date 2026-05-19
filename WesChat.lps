@@ -8,8 +8,7 @@
       <Unit>
         <Filename Value="WesChat.lpr"/>
         <IsPartOfProject Value="True"/>
-        <TopLine Value="46"/>
-        <CursorPos X="34" Y="47"/>
+        <CursorPos X="30" Y="6"/>
         <UsageCount Value="233"/>
         <Loaded Value="True"/>
       </Unit>
@@ -17,10 +16,9 @@
         <Filename Value="matrix.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="Matrix"/>
-        <IsVisibleTab Value="True"/>
         <EditorIndex Value="11"/>
-        <TopLine Value="787"/>
-        <CursorPos X="34" Y="816"/>
+        <TopLine Value="489"/>
+        <CursorPos Y="521"/>
         <UsageCount Value="205"/>
         <Loaded Value="True"/>
       </Unit>
@@ -45,8 +43,6 @@
         <Filename Value="Embed.pas"/>
         <IsPartOfProject Value="True"/>
         <EditorIndex Value="9"/>
-        <TopLine Value="322"/>
-        <CursorPos X="3" Y="339"/>
         <UsageCount Value="210"/>
         <Loaded Value="True"/>
       </Unit>
@@ -155,8 +151,8 @@
         <IsPartOfProject Value="True"/>
         <UnitName Value="TransformForward"/>
         <EditorIndex Value="1"/>
-        <TopLine Value="66"/>
-        <CursorPos X="19" Y="86"/>
+        <TopLine Value="208"/>
+        <CursorPos X="41" Y="222"/>
         <UsageCount Value="251"/>
         <Loaded Value="True"/>
       </Unit>
@@ -164,17 +160,18 @@
         <Filename Value="transformbackprop.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="TransformBackprop"/>
+        <IsVisibleTab Value="True"/>
         <EditorIndex Value="10"/>
-        <TopLine Value="32"/>
-        <CursorPos X="12" Y="48"/>
+        <TopLine Value="96"/>
+        <CursorPos X="9" Y="114"/>
         <UsageCount Value="213"/>
         <Loaded Value="True"/>
       </Unit>
       <Unit>
         <Filename Value="Global.pas"/>
         <EditorIndex Value="8"/>
-        <TopLine Value="10"/>
-        <CursorPos X="17" Y="42"/>
+        <TopLine Value="136"/>
+        <CursorPos X="31" Y="153"/>
         <UsageCount Value="118"/>
         <Loaded Value="True"/>
       </Unit>
@@ -189,121 +186,121 @@
     </Units>
     <JumpHistory HistoryIndex="29">
       <Position>
-        <Filename Value="Embed.pas"/>
-        <Caret Line="302" TopLine="282"/>
+        <Filename Value="transformbackprop.pas"/>
+        <Caret Line="39" TopLine="19"/>
       </Position>
       <Position>
-        <Filename Value="Embed.pas"/>
-        <Caret Line="307" Column="45" TopLine="287"/>
+        <Filename Value="transformbackprop.pas"/>
+        <Caret Line="36" Column="33" TopLine="21"/>
       </Position>
       <Position>
-        <Filename Value="Embed.pas"/>
-        <Caret Line="305" Column="69" TopLine="288"/>
+        <Filename Value="transformbackprop.pas"/>
+        <Caret Line="54" Column="43" TopLine="38"/>
       </Position>
       <Position>
-        <Filename Value="Embed.pas"/>
-        <Caret Line="304" Column="74" TopLine="288"/>
+        <Filename Value="transformforward.pas"/>
+        <Caret Line="219" Column="26" TopLine="213"/>
       </Position>
       <Position>
-        <Filename Value="Embed.pas"/>
-        <Caret Line="378" TopLine="353"/>
+        <Filename Value="transformbackprop.pas"/>
+        <Caret Line="64" Column="48" TopLine="48"/>
       </Position>
       <Position>
-        <Filename Value="Embed.pas"/>
+        <Filename Value="transformbackprop.pas"/>
+        <Caret Line="66" Column="11" TopLine="48"/>
       </Position>
       <Position>
-        <Filename Value="Embed.pas"/>
-        <Caret Line="381" Column="16" TopLine="357"/>
-      </Position>
-      <Position>
-        <Filename Value="Embed.pas"/>
-      </Position>
-      <Position>
-        <Filename Value="Embed.pas"/>
-        <Caret Line="378" Column="16" TopLine="352"/>
-      </Position>
-      <Position>
-        <Filename Value="Embed.pas"/>
-        <Caret Line="2" Column="5"/>
-      </Position>
-      <Position>
-        <Filename Value="Embed.pas"/>
-        <Caret Line="32" Column="8" TopLine="5"/>
-      </Position>
-      <Position>
-        <Filename Value="Embed.pas"/>
-        <Caret Line="180" TopLine="152"/>
-      </Position>
-      <Position>
-        <Filename Value="Embed.pas"/>
-        <Caret Line="398" TopLine="375"/>
-      </Position>
-      <Position>
-        <Filename Value="Embed.pas"/>
-        <Caret Line="370" TopLine="354"/>
-      </Position>
-      <Position>
-        <Filename Value="Embed.pas"/>
-        <Caret Line="355" Column="29" TopLine="341"/>
-      </Position>
-      <Position>
-        <Filename Value="util.pas"/>
-        <Caret Line="203" TopLine="200"/>
-      </Position>
-      <Position>
-        <Filename Value="util.pas"/>
-        <Caret Line="33" TopLine="25"/>
-      </Position>
-      <Position>
-        <Filename Value="util.pas"/>
-        <Caret Line="32" Column="22" TopLine="25"/>
-      </Position>
-      <Position>
-        <Filename Value="util.pas"/>
-        <Caret Line="656" TopLine="624"/>
-      </Position>
-      <Position>
-        <Filename Value="util.pas"/>
-        <Caret Line="203" Column="22" TopLine="200"/>
-      </Position>
-      <Position>
-        <Filename Value="util.pas"/>
-        <Caret Line="205" Column="39" TopLine="195"/>
-      </Position>
-      <Position>
-        <Filename Value="util.pas"/>
-      </Position>
-      <Position>
-        <Filename Value="util.pas"/>
-        <Caret Line="14" Column="10"/>
-      </Position>
-      <Position>
-        <Filename Value="util.pas"/>
-        <Caret Line="204" TopLine="188"/>
-      </Position>
-      <Position>
-        <Filename Value="WesChat.lpr"/>
-        <Caret Line="554" Column="40" TopLine="533"/>
-      </Position>
-      <Position>
-        <Filename Value="Global.pas"/>
-        <Caret Line="42" Column="17" TopLine="10"/>
-      </Position>
-      <Position>
-        <Filename Value="Embed.pas"/>
-        <Caret Line="339" Column="3" TopLine="322"/>
-      </Position>
-      <Position>
-        <Filename Value="iohandler.pas"/>
-        <Caret Line="23" Column="75" TopLine="7"/>
+        <Filename Value="transformbackprop.pas"/>
+        <Caret Line="73" Column="11" TopLine="50"/>
       </Position>
       <Position>
         <Filename Value="matrix.pas"/>
-        <Caret Line="287" TopLine="273"/>
+        <Caret Line="582" Column="42" TopLine="573"/>
       </Position>
       <Position>
         <Filename Value="matrix.pas"/>
-        <Caret Line="29" Column="26" TopLine="9"/>
+        <Caret Line="55" Column="18" TopLine="39"/>
+      </Position>
+      <Position>
+        <Filename Value="transformbackprop.pas"/>
+        <Caret Line="99" Column="11" TopLine="76"/>
+      </Position>
+      <Position>
+        <Filename Value="transformbackprop.pas"/>
+        <Caret Line="109" Column="38" TopLine="86"/>
+      </Position>
+      <Position>
+        <Filename Value="transformbackprop.pas"/>
+      </Position>
+      <Position>
+        <Filename Value="transformforward.pas"/>
+        <Caret Line="79" Column="25" TopLine="71"/>
+      </Position>
+      <Position>
+        <Filename Value="transformforward.pas"/>
+        <Caret Line="216" Column="70" TopLine="202"/>
+      </Position>
+      <Position>
+        <Filename Value="transformforward.pas"/>
+        <Caret Line="219" Column="34" TopLine="202"/>
+      </Position>
+      <Position>
+        <Filename Value="transformforward.pas"/>
+        <Caret Line="220" Column="39" TopLine="202"/>
+      </Position>
+      <Position>
+        <Filename Value="transformforward.pas"/>
+        <Caret Line="234" Column="25" TopLine="211"/>
+      </Position>
+      <Position>
+        <Filename Value="Embed.pas"/>
+        <Caret Line="222" Column="52" TopLine="211"/>
+      </Position>
+      <Position>
+        <Filename Value="Embed.pas"/>
+      </Position>
+      <Position>
+        <Filename Value="transformforward.pas"/>
+        <Caret Line="214" Column="20" TopLine="210"/>
+      </Position>
+      <Position>
+        <Filename Value="transformforward.pas"/>
+        <Caret Line="225" Column="34" TopLine="219"/>
+      </Position>
+      <Position>
+        <Filename Value="transformforward.pas"/>
+        <Caret Line="298" Column="21" TopLine="278"/>
+      </Position>
+      <Position>
+        <Filename Value="transformbackprop.pas"/>
+        <Caret Line="108" Column="48" TopLine="83"/>
+      </Position>
+      <Position>
+        <Filename Value="transformbackprop.pas"/>
+        <Caret Line="113" Column="74" TopLine="91"/>
+      </Position>
+      <Position>
+        <Filename Value="transformbackprop.pas"/>
+      </Position>
+      <Position>
+        <Filename Value="Embed.pas"/>
+        <Caret Line="233" Column="58" TopLine="228"/>
+      </Position>
+      <Position>
+        <Filename Value="transformforward.pas"/>
+        <Caret Line="199" Column="29" TopLine="193"/>
+      </Position>
+      <Position>
+        <Filename Value="transformforward.pas"/>
+        <Caret Line="229" Column="24" TopLine="208"/>
+      </Position>
+      <Position>
+        <Filename Value="transformbackprop.pas"/>
+        <Caret Line="115" Column="63" TopLine="89"/>
+      </Position>
+      <Position>
+        <Filename Value="transformbackprop.pas"/>
+        <Caret Line="108" Column="34" TopLine="92"/>
       </Position>
     </JumpHistory>
     <RunParams>

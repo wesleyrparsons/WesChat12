@@ -39,7 +39,7 @@ var
   MinCorpus: Integer = 50;                  // Minimum for loading.
   // Utility vars.
   Ch: string;                               // For option menu.
-  Success: Boolean;                         // For loading and saving files.
+  // Success: Boolean;                         // For loading and saving files.
   CombinedSymbolTable: TSymbolTable;        // For combining two symbol tables.
 
 // Create and name directory and file for saving.

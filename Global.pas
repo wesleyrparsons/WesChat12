@@ -151,6 +151,8 @@ type                                                                           /
 var
   // cublas vars.
   CuHandle: TcublasHandle;
+  One: Single = 1.0;
+  Zero: Single = 0.0;
   // Corpus vars.
   CorpusFileNames: TSVector;                     // Name of corpus file.
   SymbolTable: TSymbolTable;                     // Symbol table.

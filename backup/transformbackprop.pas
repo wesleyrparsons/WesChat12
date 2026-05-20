@@ -141,14 +141,14 @@ begin
     cudaMemcpy(X1.dGrad, @X1.Grad[0, 0], XSize, cudaMemcpyHostToDevice);
     cudaMemcpy(X3.dGrad, @X3.Grad[0, 0], XSize, cudaMemcpyHostToDevice);
     cuGradSplit(cuHandle, X4.dGrad, X1.dGrad, X3.dGrad, SeqLen, ModelDim);
-                 stop
+
     // Guide: To find the change for the weights: dW0 = X6ᵀ ·  dX7.
     //        To find the error for the input: dX6 = dX7  · W0ᵀ.
     // Guide: To find the change for the multiplication: dScores = dX2 · Vᵀ.
     //        To find the error for the input: dV = Sᵀ · dX2.
 
     // 1H. Backprop Mutiplication/Overwrite. Obtain W0 Grad from X3 Grad: Input: X2ᵀ.Value, X3.Grad. Output: W0.Grad.
-
+    stop
     // Equations: W0.Grad = X2ᵀ.Value · X3.Grad. W0.Grad is R^{L x D}. X3.Grad is R^{L x D}.
     MatMulTN(@X2.Value, @X3.Grad, @W0.Grad, ModelDim, SeqLen, ModelDim);
 

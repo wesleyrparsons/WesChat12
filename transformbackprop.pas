@@ -156,7 +156,7 @@ begin
     // Equations: X2.Grad = X3.Grad · W0ᵀ. W0.Grad is R^{L x D}. X2.Grad, X3.Grad is R^{L x D}. W0ᵀ.Value is R^{D x L}.
     MatMulNT(@X3.Grad, @W0.Value, @X2.Grad, SeqLen, ModelDim, ModelDim);
 
-    // Display X3.Grad matrix.
+    // Display X3.Grad matrix. X3.Grad already in cblas.
     VTPDisplayX('Display X3.Grad, in transform, before stage 1G.', X3.Grad, G);
 
     // 1G. Backprop Multiplication/Overwrite. Obtain Scores2.Grad from X2.Grad: Input X2.Grad, Vᵀ.Value. Output: Scores2.Grad.

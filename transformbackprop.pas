@@ -112,24 +112,35 @@ begin
       // MatMulAccNT(CuHandle, @Hidden1.Grad, @W1.Value, @X5.Grad, SeqLen, ModelDim, ModelDimProj);
       // cublas. Hidden1.Grad and W1.Value already in cublas. No need to copy X5.Grad.
       CuMatMulAccNT(CuHandle, Hidden1.dGrad, W1.dValue, X5.dGrad, SeqLen, ModelDim, ModelDimProj);
-                                                          stop
-    // 1. BACKPROP STAGE TRANSFORMER.
 
-    // 1J. Backprop Layer-Norm. Obtain X5 from X4.
+      // 1. BACKPROP STAGE TRANSFORMER.
+
+    // 1J. Backprop LayerNorm: X5 = LayerNorm(X4, Gamma2, Beta2).
+    // Input:  X5.Grad, Gamma2.Value, cached LNXhat2, cached LNInvStd2. Output: X4.Grad, Gamma2.Grad, Beta2.Grad.
+    //   X5.Grad, X4.Grad, LNXhat2: L x D
+    //   Gamma2.Value, Gamma2.Grad, Beta2.Grad: D
+    //   LNInvStd2: L    // 1J. Backprop Layer-Norm. Obtain X4 from X5.
     Writeln('          Transform Backprop Stage 1J');
-          check this
-    // Backprop Layer-Norm: Input X5.Grad, Gamma2.Value, Beta2.Value. Output X4.Grad, Gamma2.Grad, Beta2.Grad.
-    // Equation: X4.Grad, Gamma2.Grad, Beta2.Grad = LayerNorm(X5.Grad, Gamma2.Value, Beta2.Value). X4.Grad, X5.Grad in R^{L x D}. Gamma2.Grad, Beta2.Grad in R^{D}.
-    LayerNormBackward(X5.Grad, X4.Grad, Gamma2.Grad, Beta2.Grad, SeqLen, Gamma2.Value, LNXhat2, LNInvStd2);
+    // Backprop Layer-Norm: Input X5.Grad, Gamma2.Grad, Beta2.Value. Output X4.Grad, Gamma2.Grad, Beta2.Grad.
+    // Equation: X4.Grad, Gamma2.Grad, Beta2.Grad = LayerNorm(X5.Grad, Gamma2.Value, Beta2.Value).
+    // X4.Grad, X5.Grad, LNXHat2 in R^{L x D}. Gamma2.Grad, Beta2.Grad in R^{D}.
+    // cblas.
+    LayerNormBackward(X5.Grad, X4.Grad, Gamma2.Grad, Beta2.Grad, SeqLen, Gamma2.Value, LNXHat2, LNInvStd2);
 
     // Display X4.Grad matrix.
+    cudaMemcpy(X5.dGrad, @X5.Grad[0, 0], XSize, cudaMemcpyHostToDevice);
     VTPDisplayX('Display X4.Grad, in transform, after stage 1J, layer-norm.', X4.Grad, G);
 
     // 1I. Backprop Split. Input: X1.Grad. Output: X3.Grad. Output X4.Grad,
     Writeln('          Transform Bacprop Stage 1I');
 
     // Equation: X3.Grad, X4.Grad = X1.Grad. All in R^{L x D}.
-    GradSplit(X4.Grad, X1.Grad, X3.Grad, SeqLen, ModelDim);
+    // cblas.
+    // GradSplit(X4.Grad, X1.Grad, X3.Grad, SeqLen, ModelDim);
+    // cublas. NeedX1 and X3 in cublas.
+    cudaMemcpy(X1.dGrad, @X1.Grad[0, 0], XSize, cudaMemcpyHostToDevice);
+    cudaMemcpy(X3.dGrad, @X3.Grad[0, 0], XSize, cudaMemcpyHostToDevice);
+    cuGradSplit(cuHandle, X4.dGrad, X1.dGrad, X3.dGrad, SeqLen, ModelDim);
 
     // Guide: To find the change for the weights: dW0 = X6ᵀ ·  dX7.
     //        To find the error for the input: dX6 = dX7  · W0ᵀ.
@@ -137,7 +148,7 @@ begin
     //        To find the error for the input: dV = Sᵀ · dX2.
 
     // 1H. Backprop Mutiplication/Overwrite. Obtain W0 Grad from X3 Grad: Input: X2ᵀ.Value, X3.Grad. Output: W0.Grad.
-
+    stop
     // Equations: W0.Grad = X2ᵀ.Value · X3.Grad. W0.Grad is R^{L x D}. X3.Grad is R^{L x D}.
     MatMulTN(@X2.Value, @X3.Grad, @W0.Grad, ModelDim, SeqLen, ModelDim);
 

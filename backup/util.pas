@@ -15,12 +15,13 @@ const
   WeightProjSize: Integer = ModelDim * ModelDimProj * SizeOf(Single);
   bProjSize: Integer = ModelDimProj * SizeOf(Single);
   bSize: Integer = ModelDim * SizeOf(Single);
-  SeqSize: Integer = ModelDim * SizeOf(Single);
+  SeqSize: Integer = SeqLen * SizeOf(Single);
+  ModelSize: Integer = ModelDim * SizeOf(Single);
   XSize: Integer = SeqLen * ModelDim * SizeOf(Single);
   HiddenSize: Integer = SeqLen * ModelDimProj * SizeOf(Single);
   ScoresSize: Integer = SeqLen * SeqLen * SizeOf(Single);
   EmbeddingsSize: Integer = DimVocab * ModelDim;
-  InvFreqSize: Integer = (ModelDim div 2) * SizeOf(Single);  // Or HeadDim?
+  InvFreqSize: Integer = (ModelDim div 2) * SizeOf(Single);
   ProbsSize: Integer = SeqLen * DimVocab * SizeOf(Single);
 
 procedure XGUniformW(var W: TWeightMatrix; FanIn, FanOut: Integer);
@@ -34,11 +35,16 @@ procedure ZeroGradients(var WModelParams: TWModelParams; var WModelState: TWMode
 procedure UpdateParam(const N: Integer; const LearningRate: Single; const Grad: PSingle; Param: PSingle);
 procedure Optimization(var WModelParams: TWModelParams; var WModelState: TWModelState; const Blk: Integer);
 procedure ApplyRoPE(var H: TSeqMatrix;  const InvFreq: TFVector; SeqLen, ModelDim: Integer);
-procedure ApplyAutoregressiveMask(var ScoresHead: TScoresMatrix; const L: Integer);
+procedure ApplyAutoRegressiveMask(var ScoresHead: TScoresMatrix; const L: Integer);
+procedure LaunchAutoRegressiveMask(Scores: PSingle; SeqLen: Integer); cdecl; external 'WesKernelAutoRegressiveMask.dll';
 procedure SoftmaxForwardN(const x: PSingle; y: PSingle; const N: Integer);
 procedure SoftmaxBackward(const y, dy:  TFVector; out dx: array of Single);
 procedure LayerNormForward(const InX: TSeqMatrix; var OutX: TSeqMatrix; SeqLen: Integer;
   const Gamma, Beta: TSeqVector; var LNXhat: TSeqMatrix; var LNInvStd: TFSVector);
+procedure LaunchLayerNormForward(InX, OutX, Gamma, Beta, LNXhat, LNInvStd: PSingle; SeqLen, ModelDim: Integer);
+  cdecl; external 'WesKernelLNF.dll';
+procedure LaunchRoPEForward(H: PSingle; InvFreq: PSingle; SeqLen: Integer; ModelDim: Integer);
+  cdecl; external 'WesKernelRoPE.dll';
 procedure LayerNormBackward(const dY: TSeqMatrix; var dX: TSeqMatrix; var dGamma, dBeta: TSeqVector;
   SeqLen: Integer; const Gamma: TSeqVector; var LNXhat: TSeqMatrix; var LNInvStd: TFSVector);
 procedure GradientFromKLDivergence(var WModelState: TWModelState);
@@ -139,7 +145,7 @@ begin
       cudaMalloc(@b1.dGrad, bProjSize);
       cudaMalloc(@b2.dValue, bSize);
       cudaMalloc(@b2.dGrad, bSize);
-      cudaMalloc(@Gamma1.dValue, SeqSize);
+      cudaMalloc(@Gamma1.dValue, ModelSize);
       cudaMalloc(@Gamma1.dGrad, SeqSize);
       cudaMalloc(@Beta1.dValue, SeqSize);
       cudaMalloc(@Beta1.dGrad, SeqSize);
@@ -191,9 +197,13 @@ begin
       cudaMalloc(@Hidden1.dGrad, HiddenSize);
       cudaMalloc(@Hidden2.dValue, HiddenSize);
       cudaMalloc(@Hidden2.dGrad, HiddenSize);
+      cudaMalloc(@dLNInvStd1, SeqlSize);
+      cudaMalloc(@dLNXHat1, SeqSize);
+      cudaMalloc(@dLNInvStd2, SeqSize);
+      cudaMalloc(@dLNXHat2, SeqSize);
     end;
     with WModelState do begin
-      cudaMalloc(@dInvFreq, InvFreqSize); // Or HeadDim?
+      cudaMalloc(@dInvFreq, InvFreqSize);
       cudaMalloc(@dProbs, ProbsSize);
       cudaMalloc(@dTopGradient, ProbsSize);
     end;
@@ -201,15 +211,6 @@ begin
 end;
 
 procedure MDeallocateCublas(var WModelParams: TWModelParams; var WModelState: TWModelState);
-const
-  WeightSize: Integer = ModelDim * ModelDim * SizeOf(Single);
-  WeightProjSize: Integer = ModelDim * ModelDimProj * SizeOf(Single);
-  bProjSize: Integer = ModelDimProj * SizeOf(Single);
-  bSize: Integer = ModelDim * SizeOf(Single);
-  SeqSize: Integer = ModelDim * SizeOf(Single);
-  XSize: Integer = SeqLen * ModelDim * SizeOf(Single);
-  HiddenSize: Integer = SeqLen * ModelDimProj * SizeOf(Single);
-  ScoresSize: Integer = SeqLen * SeqLen * SizeOf(Single);
 var
   h, k: Integer;
 begin
@@ -283,6 +284,10 @@ begin
       cudaFree(@Hidden1.dGrad);
       cudaFree(@Hidden2.dValue);
       cudaFree(@Hidden2.dGrad);
+      cudaFree(@dLNInvStd1);
+      cudaFree(@dLNXHat1);
+      cudaFree(@dLNInvStd2);
+      cudaFree(@dLNXHat2);
     end;
     with WModelState do begin
       cudaFree(@dInvFreq);

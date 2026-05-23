@@ -35,6 +35,7 @@ function cudaFree(devPtr: PPointer): Integer; cdecl; external cudartDLL;
 procedure MatMulFullNN(const A, B: PSingle; C: PSingle; M, N, K, lda, ldb, ldc: Integer);
 procedure CuMatMulFullNN(Handle: TcublasHandle; const A, B: PSingle; C: PSingle; M, N, K, lda, ldb, ldc: Integer);
 procedure MatMulFullTN(const A, B: PSingle; C: PSingle; M, N, K, lda, ldb, ldc: Integer);
+procedure CuMatMulFullTN(Handle: TcublasHandle; const A, B: PSingle; C: PSingle; M, N, K, lda, ldb, ldc: Integer);
 procedure MatMulFullNT(const A, B: PSingle; C: PSingle; M, N, K, lda, ldb, ldc: Integer);
 procedure CuMatMulFullNT(Handle: TcublasHandle; const A, B: PSingle; C: PSingle; M, N, K, lda, ldb, ldc: Integer);
 procedure MatMulFullAccNN(const A, B: PSingle; C: PSingle; M, N, K, lda, ldb, ldc: Integer);
@@ -266,6 +267,15 @@ begin
 end;
 
 // cublas.
+procedure CuMatMulFullTN(Handle: TcublasHandle; const A, B: PSingle; C: PSingle; M, N, K, lda, ldb, ldc: Integer);
+var
+  alpha, beta: Single;
+begin
+  alpha := 1.0;
+  beta  := 0.0;
+  cublasSgemm_v2(Handle, 1, 0, N, M, K, @alpha,
+    B, ldb, A, lda, @beta, C, ldc);
+end;
 
 // Full matrix multiply, A no transpose, B no transpose, accumulate.
 // C := C + A * B

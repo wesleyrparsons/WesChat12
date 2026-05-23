@@ -135,10 +135,14 @@ type                                                                           /
     ScoresHead1, ScoresHead2:       array[0..nHead - 1] of TScoresHeadTensor;  // Scores partitioned into nHeads.
     Hidden1, Hidden2:               THiddenTensor;              // Neural net layer.
     // Caches for LayerNorm.
-    LNInvStd1:  TFSVector;
-    LNXhat1:    TSeqMatrix;
-    LNInvStd2:  TFSVector;
-    LNXhat2:    TSeqMatrix;
+    LNInvStd1:  TFSVector;                                 // Cache for inverse standard deviation in LayerNorm.
+    dLNInvStd1: PSingle;
+    LNXhat1:    TSeqMatrix;                                // Cache for Xhat in LayerNorm.
+    dLNXhat1:   PSingle;
+    LNInvStd2:  TFSVector;                                 // Cache for inverse standard deviation in LayerNorm.
+    dLNInvStd2:  PSingle;
+    LNXhat2:    TSeqMatrix;                                // Cache for Xhat in LayerNorm.
+    dLNXhat2:   PSingle;
   end;
   TWModelState = record                                         // Model of non-trainable parameters.
     StateBlock:                     TStateBlock;
@@ -151,6 +155,8 @@ type                                                                           /
 var
   // cublas vars.
   CuHandle: TcublasHandle;
+  One: Single = 1.0;
+  Zero: Single = 0.0;
   // Corpus vars.
   CorpusFileNames: TSVector;                     // Name of corpus file.
   SymbolTable: TSymbolTable;                     // Symbol table.

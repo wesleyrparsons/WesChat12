@@ -66,7 +66,9 @@ No, keep it as Embed.
 
 Transform/Matrix/Utils.
 
-Is InvFreq dimmed as ModelDim or HeadDim?
+a. Is InvFreq dimmed as ModelDim or HeadDim?
+
+0. ApplyRope inside each rather than across all model.
 
 1. Many models reuse the embedding matrix for output projection.
 This is called weight tying. WVocab not needed. I am doing it.

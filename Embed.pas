@@ -270,40 +270,41 @@ begin
       // 3E. Backprop TopGradient creates X7 Grad: Input TopGradient, WVocabᵀ. Output X7.Grad.
       Writeln('              Transform Backprop Stage 3E');
 
-      // Equation: X7.Grad = TopGradient · Embeddings.Value. X7.Grad in R^{L x D}. TopGradient in R^{L x nVocab}. Embeddings.Value in R^{nVocab x D}.
-      // cblas.
-      MatMulFullNN(@TopGradient[0, 0], @Embeddings.Value[0, 0], @StateBlock[LastBlk].X7.Grad[0, 0], SeqLen, ModelDim, nVocab, DimVocab, ModelDim, ModelDim);
-      {cblas_sgemm(101, 111, 111, SeqLen, ModelDim, nVocab, 1.0, @TopGradient[0, 0], DimVocab,
-      @Embeddings.Value[0, 0], ModelDim, 0.0, @X7.Grad[0, 0], ModelDim);}
-      // cublas.   Embeddings amd X7 already copied.
-      cudaMemcpy(dTopGradient, @TopGradient[0, 0], ProbsSize, cudaMemcpyHostToDevice);
-      CuMatMulFullNN(CuHandle, dTopGradient, Embeddings.dValue, StateBlock[LastBlk].X7.dGrad, SeqLen, ModelDim, nVocab, DimVocab, ModelDim, ModelDim);
-      Writeln('Finished MatMul X7.Grad loop.');
+      with StateBlock[LastBlk] do begin
+        // Equation: X7.Grad = TopGradient · Embeddings.Value. X7.Grad in R^{L x D}. TopGradient in R^{L x nVocab}. Embeddings.Value in R^{nVocab x D}.
+        // cblas.
+        MatMulFullNN(@TopGradient[0, 0], @Embeddings.Value[0, 0], @X7.Grad[0, 0], SeqLen, ModelDim, nVocab, DimVocab, ModelDim, ModelDim);
+        {cblas_sgemm(101, 111, 111, SeqLen, ModelDim, nVocab, 1.0, @TopGradient[0, 0], DimVocab,
+        @Embeddings.Value[0, 0], ModelDim, 0.0, @X7.Grad[0, 0], ModelDim);}
+        // cublas.   Embeddings amd X7 already copied.
+        cudaMemcpy(dTopGradient, @TopGradient[0, 0], ProbsSize, cudaMemcpyHostToDevice);
+        CuMatMulFullNN(CuHandle, dTopGradient, Embeddings.dValue, X7.dGrad, SeqLen, ModelDim, nVocab, DimVocab, ModelDim, ModelDim);
+        Writeln('Finished MatMul X7.Grad loop.');
 
-      // Backprop TopGradient modifies/overwrites Embeddingsᵀ: Input X7ᵀ, TopGradient. Output Embeddingsᵀ.Grad.
-      // Equation: Embeddingsᵀ.Grad = X7ᵀ · TopGradient. Embeddingsᵀ.Grad in R^{nVocab x D}. X7ᵀ in R^(D x L}. TopGradient in R^{L x nVocab}.
-      // Problem here was I had NT rather than TN.
-      // cblas.
-      MatMulFullAccTN(@TopGradient[0,0], @StateBlock[LastBlk].X7.Value[0,0], @Embeddings.Grad[0,0], nVocab, ModelDim, SeqLen, DimVocab, ModelDim, ModelDim);
-      // cublas.
-      CuMatMulFullAccTN(CuHandle, dTopGradient, StateBlock[LastBlk].X7.dValue, Embeddings.dGrad, nVocab, ModelDim, SeqLen, DimVocab, ModelDim, ModelDim);
+        // Backprop TopGradient modifies/overwrites Embeddingsᵀ: Input X7ᵀ, TopGradient. Output Embeddingsᵀ.Grad.
+        // Equation: Embeddingsᵀ.Grad = X7ᵀ · TopGradient. Embeddingsᵀ.Grad in R^{nVocab x D}. X7ᵀ in R^(D x L}. TopGradient in R^{L x nVocab}.
+        // Problem here was I had NT rather than TN.
+        // cblas.
+        // MatMulFullAccTN(@TopGradient[0,0], @X7.Value[0,0], @Embeddings.Grad[0,0], nVocab, ModelDim, SeqLen, DimVocab, ModelDim, ModelDim);
+        // cublas.
+        CuMatMulFullAccTN(CuHandle, dTopGradient, X7.dValue, Embeddings.dGrad, nVocab, ModelDim, SeqLen, DimVocab, ModelDim, ModelDim);
 
-      Writeln('Finished Embeddings.Grad GEMM.');
+        Writeln('Finished Embeddings.Grad GEMM.');
 
-      // Backprop Split X7 Grad into X5 and X6: Input X5.Grad, X7.Grad. Output dX.Grad.
-      // Equation: X5.Grad = X5.Grad + X7.Grad. All in R^{L x D}.
-      // cblas.
-      // GradSplit(StateBlock[LastBlk].X7.Grad, StateBlock[LastBlk].X5.Grad, WModelState.StateBlock[LastBlk].X6.Grad, SeqLen, ModelDim);
-      // cublas.
-      cudaMemcpy(StateBlock[LastBlk].X7.dGrad, @StateBlock[LastBlk].X7.Grad[0, 0], XSize, cudaMemcpyHostToDevice);
-      cudaMemcpy(StateBlock[LastBlk].X6.dGrad, @StateBlock[LastBlk].X6.Grad[0, 0], XSize, cudaMemcpyHostToDevice);
-      cudaMemcpy(StateBlock[LastBlk].X5.dGrad, @StateBlock[LastBlk].X5.Grad[0, 0], XSize, cudaMemcpyHostToDevice);
-      CuGradSplit(CuHandle, StateBlock[LastBlk].X7.dGrad, WModelState.StateBlock[LastBlk].X5.dGrad, WModelState.StateBlock[LastBlk].X6.dGrad, SeqLen, ModelDim);
+        // Backprop Split X7 Grad into X5 and X6: Input X5.Grad, X7.Grad. Output dX.Grad.
+        // Equation: X5.Grad = X5.Grad + X7.Grad. All in R^{L x D}.
+        // cblas.
+        // GradSplit(X7.Grad, X5.Grad, X6.Grad, SeqLen, ModelDim);
+        // cublas.
+        cudaMemcpy(X7.dGrad, @X7.Grad[0, 0], XSize, cudaMemcpyHostToDevice);
+        cudaMemcpy(X6.dGrad, @X6.Grad[0, 0], XSize, cudaMemcpyHostToDevice);
+        cudaMemcpy(X5.dGrad, @X5.Grad[0, 0], XSize, cudaMemcpyHostToDevice);
+        CuGradSplit(CuHandle, X7.dGrad, WModelState.StateBlock[LastBlk].X5.dGrad, WModelState.StateBlock[LastBlk].X6.dGrad, SeqLen, ModelDim);
 
-      // Display X7.Grad matrix.
-      cudaMemcpy(@StateBlock[LastBlk].X7.Grad[0, 0], StateBlock[LastBlk].X7.dGrad, XSize, cudaMemcpyDeviceToHost);
-      VTPDisplayX('Display X7.Grad, in transform, after stage 2D.', StateBlock[LastBlk].X7.Grad, G);
-
+        // Display X7.Grad matrix.
+        cudaMemcpy(@X7.Grad[0, 0], X7.dGrad, XSize, cudaMemcpyDeviceToHost);
+        VTPDisplayX('Display X7.Grad, in transform, after stage 2D.', X7.Grad, G);
+      end;
     end; // End gradient stage.
 
     // Backprop pass thru transformer.

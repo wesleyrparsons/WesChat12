@@ -59,8 +59,6 @@ Lengthen tabs in printouts like most frequent symbols.array[ or symboltable...1]
 
 Embed.
 
-Is InvFreq dimmed as ModelDim or HeadDim?
-
 The name RunEmbed understates what it does. It seems to:
 initialize embeddings, initialize transformer, create training windows,
 build input and targets, and run transformer blocks.
@@ -68,7 +66,7 @@ No, keep it as Embed.
 
 Transform/Matrix/Utils.
 
-a. Create Saxpy wrapper.
+Is InvFreq dimmed as ModelDim or HeadDim?
 
 1. Many models reuse the embedding matrix for output projection.
 This is called weight tying. WVocab not needed. I am doing it.

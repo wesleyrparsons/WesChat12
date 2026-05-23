@@ -42,9 +42,16 @@ begin
     // Obtain input X from Tokenizer for Transformer stage.
     // Purpose: Normalization.
     // Equation: X1 = LayerNorm(X). X, X1 in R^{L × D}. Gamma1, Beta1 in R^{D}.
-    LayerNormForward(X.Value, X1.Value, SeqLen, Gamma1.Value, Beta1.Value, LNXhat1, LNInvStd1);
+    // cblas.
+    // LayerNormForward(X.Value, X1.Value, SeqLen, Gamma1.Value, Beta1.Value, LNXhat1, LNInvStd1);
+    // cuda kernel. No need to copy X1.dValue, or dLNXHat1 or dLNInvStd1; they ar outputs.
+    cudaMemcpy(X.dValue, @X.Value[0, 0], XSize, cudaMemcpyHostToDevice);
+    cudaMemcpy(Gamma1.dValue, @Gamma1.Value[0], ModelSize, cudaMemcpyHostToDevice);
+    cudaMemcpy(Beta1.dValue, @Beta1.Value[0], ModelSize, cudaMemcpyHostToDevice);
+    LaunchLayerNormForward(X.dValue, X1.dValue, Gamma1.dValue, Beta1.dValue, dLNXhat1, dLNInvStd1, SeqLen, ModelDim);
 
     // Display X1.Value matrix.
+    cudaMemcpy(@X1.Value[0, 0], X1.dValue, XSize, cudaMemcpyDeviceToHost);
     VTPDisplayX('Display X1.Value after layer-norming.', X1.Value, B);
 
     // 1B. Split. Implicit split into X1 and accumulate into X4.
@@ -58,7 +65,7 @@ begin
     // cblas.
     // MatMulNN(@X1.Value[0, 0], @Wq.Value[0, 0], @Q.Value[0, 0], SeqLen, ModelDim, ModelDim);
     // cublas.
-    cudaMemcpy(X1.dValue, @X1.Value[0, 0], XSize, cudaMemcpyHostToDevice);
+    cudaMemcpy(Q.dValue, @Q.Value[0, 0], XSize, cudaMemcpyHostToDevice);
     cudaMemcpy(Wq.dValue, @Wq.Value[0, 0], WeightSize, cudaMemcpyHostToDevice);
     CuMatMulNN(cuHandle, X1.dValue, Wq.dValue, Q.dValue, SeqLen, ModelDim, ModelDim);
 
@@ -71,7 +78,8 @@ begin
     // cblas.
     // MatMulNN(@X1.Value[0, 0], @Wk.Value[0, 0], @K.Value[0, 0], SeqLen, ModelDim, ModelDim);
     // cublas.
-    cudaMemcpy(Wk.dValue, @Wk.Value[0, 0], WeightSize, cudaMemcpyHostToDevice);     // No need to copy X1.
+    cudaMemcpy(K.dValue, @K.Value[0, 0], XSize, cudaMemcpyHostToDevice);
+    cudaMemcpy(Wk.dValue, @Wk.Value[0, 0], WeightSize, cudaMemcpyHostToDevice);
     CuMatMulNN(cuHandle, X1.dValue, Wk.dValue, K.dValue, SeqLen, ModelDim, ModelDim);
 
     // Display K.Value matrix.
@@ -83,15 +91,18 @@ begin
     // cblas.
     // MatMulNN(@X1.Value[0, 0], @Wv.Value[0, 0], @V.Value[0, 0], SeqLen, ModelDim, ModelDim);
     // cublas.
+    cudaMemcpy(V.dValue, @V.Value[0, 0], XSize, cudaMemcpyHostToDevice);
     cudaMemcpy(Wv.dValue, @Wv.Value[0, 0], WeightSize, cudaMemcpyHostToDevice);     // No need to copy V.
     CuMatMulNN(cuHandle, X1.dValue, Wv.dValue, V.dValue, SeqLen, ModelDim, ModelDim);
 
     // 1D. RoPE.
     // Q and K were copied from cublas above.
-    ApplyRoPE(Q.Value, WModelState.InvFreq, SeqLen, ModelDim);
-    ApplyRoPE(K.Value, WModelState.InvFreq, SeqLen, ModelDim);
-    cudaMemcpy(Wq.dValue, @Wq.Value[0, 0], WeightSize, cudaMemcpyHostToDevice);
-    cudaMemcpy(Wk.dValue, @Wk.Value[0, 0], WeightSize, cudaMemcpyHostToDevice);
+    // cblas.
+    // ApplyRoPE(Q.Value, WModelState.InvFreq, SeqLen, ModelDim);
+    // ApplyRoPE(K.Value, WModelState.InvFreq, SeqLen, ModelDim);
+    // cuda kernel.
+    LaunchRoPEForward(Q.dValue, WModelState.dInvFreq, SeqLen, ModelDim);
+    LaunchRoPEForward(K.dValue, WModelState.dInvFreq, SeqLen, ModelDim);
 
     // 1E. Multiplication. Obtain Scores1.
     Writeln('          Transform Forward Stage 1E');
@@ -129,8 +140,12 @@ begin
 
     // Masking: Input ScoresHead1. Output ScoresHead1.
     // Equation: ScoresHead1 = Mask(ScoresHead1). ScoresHead1 in R^{L x L}.
+    // cblas.
+    // for h := 0 to nHead - 1 do
+    // ApplyAutoRegressiveMask(ScoresHead1[h].Value, SeqLen);
+    // cuda kernel.
     for h := 0 to nHead - 1 do
-      ApplyAutoRegressiveMask(ScoresHead1[h].Value, SeqLen);
+      LaunchAutoRegressiveMask(ScoresHead1[h].dValue, SeqLen);
 
     // Softmax: Input ScoresHead1. Output ScoresHead2.
     // Equation: ScoresHead2 = Softmax(ScoresHead1). ScoresHead in R^{L x L}.
@@ -251,14 +266,14 @@ begin
       // Equation: Hidden2 = ReLU(Hidden1).
       ReLUMaskForward(Hidden1.Value, Hidden2.Value);
 
-      // Do attention dropout.
+      // Do MLP dropout.
       if Training then
         for i := 0 to SeqLen - 1 do
           for j := 0 to ModelDimProj - 1 do
-            if Random < RDropout then
+            if Random < MLPDropout then
               Hidden2.Value[i, j] := 0.0
             else
-              Hidden2.Value[i, j] := Hidden2.Value[i, j] / (1.0 - RDropOut);
+              Hidden2.Value[i, j] := Hidden2.Value[i, j] / (1.0 - MLPDropOut);
 
       // 2D. Multiplication/Overwrite. Obtain X6 from Hidden2.
       Writeln('            Transform Forward Stage 2D');
@@ -289,14 +304,24 @@ begin
       cudaMemcpy(@X6.Value[0, 0], X6.dValue, XSize, cudaMemcpyDeviceToHost);
       VTPDisplayX('Display X6, in transform, after contraction.', X6.Value, B);
 
-      // 2F. Addition/Merge. Obtain X7 from X5 and X6.
+      // 2F. Addition/Merge and residual dropout. Obtain X7 from X5 and X6.
       Writeln('            Transform Forward Stage 2F');
+
+      // Do residual dropout.
+      if Training then
+        for i := 0 to SeqLen - 1 do
+          for j := 0 to ModelDim - 1 do
+            if Random < RDropout then
+              X6.Value[i, j] := 0.0
+            else
+              X6.Value[i, j] := Hidden2.Value[i, j] / (1.0 - RDropOut);
 
       // Backprop Merge Addition: Input Residual X6, X5. Output X7.
       // Equation: X7 = X5 + X6. X7 in R^{L · D}. X5 in R^{L · D}. X6 in R^{L x D}.
       // cblas.
       // MatAdd(X5.Value, X6.Value, X7.Value, SeqLen, ModelDim);
-      // cublas. Already have X5 and X6 in cublas.
+      // cublas. Already have X5 in cublas.
+      cudaMemcpy(X6.dValue, @X6.Value[0, 0], XSize, cudaMemcpyHostToDevice);
       CuMatAdd(CuHandle, X5.dValue, X6.dValue, X7.dValue, SeqLen, ModelDim);   // No need to memcpy X7.
 
       // Display X7.Value matrix.

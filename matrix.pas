@@ -71,6 +71,7 @@ procedure CuMatMulAccNN(handle: TcublasHandle; const A, B: PSingle; C: PSingle; 
 
 // ReLU procedure.
 procedure ReLUMaskForward(const A: THiddenMatrix; var B: THiddenMatrix);
+procedure LaunchReLUForward(A: PSingle; B: PSingle; Rows: Integer; Cols: Integer); cdecl; external 'WesChatKernel12.dll';
 
 // Copy matrix procedure.
 procedure CopyXTensor(const A: TSeqTensor; var B: TSeqTensor);

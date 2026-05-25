@@ -19,8 +19,8 @@ procedure LoadSymbolTable(const FileName: string; var SymbolTable: TSymbolTable)
 procedure LoadTokenList(const TokenFileName: string; var TokenizedCorpus: TIVector);
 procedure SaveSymbolTable(const SymbolFileName: string; const SymbolTable: TSymbolTable);
 procedure SaveTokenList(const TokenizedCorpus: TIVector; const TokenFileName: String);
-procedure SaveModel(const FileName: string; var Model: TWModelParams; var Success: Boolean);
-procedure LoadModel(const FileName: string; var Model: TWModelParams; var Success: Boolean);
+function SaveModel(const FileName: string; var Model: TWModelParams): Boolean;
+function LoadModel(const FileName: string; var Model: TWModelParams): Boolean;
 
 implementation
 
@@ -206,35 +206,81 @@ begin
   Writeln;
 end;
 
-procedure SaveModel(const FileName: string; var Model: TWModelParams; var Success: Boolean);
+// Clear pointers read from Model.ParamBlock.
+procedure ClearDevicePointers(var Model: TWModelParams);
 var
-  F: file of TWModelParams;
+  b: Integer;
 begin
-  Success := False;   // Ddefault.
-  Assign(F, FileName);
+  Model.Embeddings.dValue := nil;
+  Model.Embeddings.dGrad := nil;
 
-  try
-    Rewrite(F);       // May err.
-    Write(F, Model);  // May err.
-    Success := True;  // Only reached if both succeed.
-  except
-    Success := False;
+  for b := 0 to nBlock - 1 do begin
+    with Model.ParamBlock[b] do begin
+      Wq.dValue := nil; Wq.dGrad := nil;
+      Wk.dValue := nil; Wk.dGrad := nil;
+      Wv.dValue := nil; Wv.dGrad := nil;
+      W0.dValue := nil; W0.dGrad := nil;
+      W1.dValue := nil; W1.dGrad := nil;
+      W2.dValue := nil; W2.dGrad := nil;
+      b1.dValue := nil; b1.dGrad := nil;
+      b2.dValue := nil; b2.dGrad := nil;
+      Gamma1.dValue := nil; Gamma1.dGrad := nil;
+      Beta1.dValue := nil; Beta1.dGrad := nil;
+      Gamma2.dValue := nil; Gamma2.dGrad := nil;
+      Beta2.dValue := nil; Beta2.dGrad := nil;
+    end;
   end;
-
-  Close(F);           // Safe even if Rewrite failed.
 end;
 
-procedure LoadModel(const FileName: string; var Model: TWModelParams; var Success: Boolean);
+// Save a model.
+function SaveModel(const FileName: string; var Model: TWModelParams): Boolean;
 var
   F: file of TWModelParams;
+  IOModelDim: Integer;
+
 begin
   Assign(F, FileName);
-  Reset(F);
+  Result := False;
+  IOModelDim := ModelDim;
   try
-    Read(F, Model);
-  finally
+    Rewrite(F, 1);
+    BlockWrite(F, 'WES1', 4);
+    BlockWrite(F, Version, 16);
+    BlockWrite(F, IOModelDim, SizeOf(Integer));
+    BlockWrite(F, nVocab, SizeOf(Integer));
+    Write(F, Model);
+    Result := True;
+    Close(F);
+    Result := False;
+    Close(F);
+    Result := True;
+  except
     Close(F);
   end;
+end;
+
+// Load a model.
+function LoadModel(const FileName: string; var Model: TWModelParams): Boolean;
+var
+  F: file of TWModelParams;
+  Magic: array[0..3] of Char;
+  IOModelDim: Integer;
+  nVocabRead: Integer;
+begin
+  Assign(F, FileName);
+  Result := False;
+  try
+    Reset(F, 1);
+    BlockRead(F, Magic, 4);
+    BlockWrite(F, Version, 16);
+    BlockRead(F, IOModelDim, SizeOf(Integer));
+    BlockRead(F, nVocabRead, SizeOf(Integer));
+    Close(F);
+    Result := True;
+  except
+    Close(F);
+  end;
+  ClearDevicePointers(Model);
 end;
 
 end.

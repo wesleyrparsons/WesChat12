@@ -158,6 +158,11 @@ var
   CuHandle: TcublasHandle;
   One: Single = 1.0;
   Zero: Single = 0.0;
+  // DLL accessibility vars.
+  CublasPresent: Boolean;
+  CudartPresent: Boolean;
+  WesChatKernelPresent: Boolean;
+  CblasPresent: Boolean;
   // Corpus vars.
   CorpusFileNames: TSVector;                     // Name of corpus file.
   SymbolTable: TSymbolTable;                     // Symbol table.
@@ -166,7 +171,9 @@ var
   MultipleFileName: string;                      // Using multiple corpuses and outputting single file name.
   nTokenizedCorpus: Integer;                     // Length of tokenized corpus.
   // Target and Query vars.
-  TargetTokens: TIDimVector;                     // Input and target tokenns. Input lags by one.
+  InputTokens: TIDimVector;                      // Input tokens.
+  TargetTokens: TIDimVector;                     // Target tokens. Shited by  +1.
+  dTargetTokens: PInteger;
   QueryOutput: TIVector;                         // Eventually make this a passed param to RunEmbed.
   // Utility vars.
   Mt0, Mt1, t0, t1, StopTime: TDateTime;         // For timing.

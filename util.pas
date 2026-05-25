@@ -30,25 +30,34 @@ procedure XGUniformW1(var W: TWeightProjMatrix; FanIn, FanOut: Integer);
 procedure XGUniformW2(var W: TWeightProjMatrixT; FanIn, FanOut: Integer);
 procedure InitializeTransformer(var WModelParams: TWModelParams; var WModelState: TWModelState);
 procedure MAllocCublas(var WModelParams: TWModelParams; var WModelState: TWModelState);
+procedure CopyParamsToDevice(var WModelParams: TWModelParams);
+procedure CopyInvFreqToDevice(var WModelState: TWModelState);
 procedure MDeallocateCublas(var WModelParams: TWModelParams; var WModelState: TWModelState);
 procedure ZeroGradients(var WModelParams: TWModelParams; var WModelState: TWModelState; const Blk: Integer);
 procedure UpdateParam(const N: Integer; const LearningRate: Single; const Grad: PSingle; Param: PSingle);
-procedure Optimization(var WModelParams: TWModelParams; var WModelState: TWModelState; const Blk: Integer);
+procedure Optimization(var WModelParams: TWModelParams; const Blk: Integer);
+procedure UpdateEmbeddings(var WModelParams: TWModelParams; var WModelState: TWModelState; const InputTokens: TIDimVector);
+//procedure UpdateEmbeddings(var WModelParams: TWModelParams);
 procedure ApplyRoPE(var H: TSeqMatrix;  const InvFreq: TFVector; SeqLen, ModelDim: Integer);
 procedure ApplyAutoRegressiveMask(var ScoresHead: TScoresMatrix; const L: Integer);
-procedure LaunchAutoRegressiveMask(Scores: PSingle; SeqLen: Integer); cdecl; external 'WesKernelAutoRegressiveMask.dll';
+procedure LaunchAutoRegressiveMask(Scores: PSingle; SeqLen: Integer); cdecl; external 'WesChatKernel12.dll';
+procedure LaunchDropout(X: PSingle; N: Integer; DropProb: Single; Seed: UInt64); cdecl; external 'WesChatKernel12.dll';
 procedure SoftmaxForwardN(const x: PSingle; y: PSingle; const N: Integer);
+procedure LaunchSoftmaxForwardN(X: PSingle; Y: PSingle; Rows: Integer; N: Integer; Temperature: Single);
+  cdecl; external 'WesChatKernel12.dll';
 procedure SoftmaxBackward(const y, dy:  TFVector; out dx: array of Single);
 procedure LayerNormForward(const InX: TSeqMatrix; var OutX: TSeqMatrix; SeqLen: Integer;
   const Gamma, Beta: TSeqVector; var LNXhat: TSeqMatrix; var LNInvStd: TFSVector);
 procedure LaunchLayerNormForward(InX, OutX, Gamma, Beta, LNXhat, LNInvStd: PSingle; SeqLen, ModelDim: Integer);
-  cdecl; external 'WesKernelLNF.dll';
+  cdecl; external 'WesChatKernel12.dll';
 procedure LaunchRoPEForward(H: PSingle; InvFreq: PSingle; SeqLen: Integer; ModelDim: Integer);
-  cdecl; external 'WesKernelRoPE.dll';
+  cdecl; external 'WesChatKernel12.dll';
 procedure LayerNormBackward(const dY: TSeqMatrix; var dX: TSeqMatrix; var dGamma, dBeta: TSeqVector;
   SeqLen: Integer; const Gamma: TSeqVector; var LNXhat: TSeqMatrix; var LNInvStd: TFSVector);
-procedure GradientFromKLDivergence(var WModelState: TWModelState);
 procedure GradientFromCEProbabilities(var WModelState: TWModelState);
+procedure LaunchGradientFromCEProbabilities(Probs: PSingle; TopGradient: PSingle; TargetTokens: PInteger; SeqLen: Integer; nVocab: Integer);
+  cdecl; external 'WesChatKernel12.dll';
+procedure GradientFromKLDivergence(var WModelState: TWModelState);
 procedure BackpropAdd(const dOut: TSeqMatrix; var dA, dB: TSeqMatrix; const L, D: Integer);
 
 implementation
@@ -127,6 +136,17 @@ procedure MAllocCublas(var WModelParams: TWModelParams; var WModelState: TWModel
 var
   h, k: Integer;
 begin
+  // Global/shared parameters.
+  with WModelParams do begin
+    cudaMalloc(@Embeddings.dValue, EmbeddingsSize);
+    cudaMalloc(@Embeddings.dGrad, EmbeddingsSize);
+  end;
+  with WModelState do begin
+    cudaMalloc(@dInvFreq, InvFreqSize);
+    cudaMalloc(@dProbs, ProbsSize);
+    cudaMalloc(@dTopGradient, ProbsSize);
+  end;
+  // Per block parameters.
   for k := 0 to nBlock - 1 do begin
     with WModelParams.ParamBlock[k] do begin
       cudaMalloc(@Wq.dValue, WeightSize);
@@ -146,17 +166,13 @@ begin
       cudaMalloc(@b2.dValue, bSize);
       cudaMalloc(@b2.dGrad, bSize);
       cudaMalloc(@Gamma1.dValue, ModelSize);
-      cudaMalloc(@Gamma1.dGrad, SeqSize);
-      cudaMalloc(@Beta1.dValue, SeqSize);
-      cudaMalloc(@Beta1.dGrad, SeqSize);
-      cudaMalloc(@Gamma2.dValue, SeqSize);
-      cudaMalloc(@Gamma2.dGrad, SeqSize);
-      cudaMalloc(@Beta2.dValue, SeqSize);
-      cudaMalloc(@Beta2.dGrad, SeqSize);
-    end;
-    with WModelParams do begin
-      cudaMalloc(@Embeddings.dValue, EmbeddingsSize);
-      cudaMalloc(@Embeddings.dGrad, EmbeddingsSize);
+      cudaMalloc(@Gamma1.dGrad, ModelSize);
+      cudaMalloc(@Beta1.dValue, ModelSize);
+      cudaMalloc(@Beta1.dGrad, ModelSize);
+      cudaMalloc(@Gamma2.dValue, ModelSize);
+      cudaMalloc(@Gamma2.dGrad, ModelSize);
+      cudaMalloc(@Beta2.dValue, ModelSize);
+      cudaMalloc(@Beta2.dGrad, ModelSize);
     end;
     with WModelState.StateBlock[k] do begin
       cudaMalloc(@X.dValue, XSize);
@@ -198,22 +214,27 @@ begin
       cudaMalloc(@Hidden2.dValue, HiddenSize);
       cudaMalloc(@Hidden2.dGrad, HiddenSize);
       cudaMalloc(@dLNInvStd1, SeqSize);
-      cudaMalloc(@dLNXHat1, SeqSize);
+      cudaMalloc(@dLNXHat1, XSize);
       cudaMalloc(@dLNInvStd2, SeqSize);
-      cudaMalloc(@dLNXHat2, SeqSize);
-    end;
-    with WModelState do begin
-      cudaMalloc(@dInvFreq, InvFreqSize);
-      cudaMalloc(@dProbs, ProbsSize);
-      cudaMalloc(@dTopGradient, ProbsSize);
+      cudaMalloc(@dLNXHat2, XSize);
     end;
   end;
 end;
 
+// De-allocate cublas memory.
 procedure MDeallocateCublas(var WModelParams: TWModelParams; var WModelState: TWModelState);
 var
   h, k: Integer;
 begin
+  with WModelParams do begin
+    cudaFree(@Embeddings.dValue);
+    cudaFree(@Embeddings.dGrad);
+  end;
+  with WModelState do begin
+    cudaFree(@dInvFreq);
+    cudaFree(@Probs);
+    cudaFree(@TopGradient);
+  end;
   for k := 0 to nBlock - 1 do begin
     with WModelParams.ParamBlock[k] do begin
       cudaFree(@Wq.dValue);
@@ -240,10 +261,6 @@ begin
       cudaFree(@Gamma2.dGrad);
       cudaFree(@Beta2.dValue);
       cudaFree(@Beta2.dGrad);
-    end;
-    with WModelParams do begin
-      cudaFree(@Embeddings.dValue);
-      cudaFree(@Embeddings.dGrad);
     end;
     with WModelState.StateBlock[k] do begin
       cudaFree(@X.dValue);
@@ -289,12 +306,46 @@ begin
       cudaFree(@dLNInvStd2);
       cudaFree(@dLNXHat2);
     end;
-    with WModelState do begin
-      cudaFree(@dInvFreq);
-      cudaFree(@Probs);
-      cudaFree(@TopGradient);
-    end;
   end;
+end;
+
+// Copy parameters from host to device.
+procedure CopyParamsToDevice(var WModelParams: TWModelParams);
+var
+  k: Integer;
+begin
+  // Embeddings (global).
+  cudaMemcpy(WModelParams.Embeddings.dValue, @WModelParams.Embeddings.Value[0,0], EmbeddingsSize, cudaMemcpyHostToDevice);
+
+  for k := 0 to nBlock - 1 do
+    with WModelParams.ParamBlock[k] do begin
+
+      // Attention weights.
+      cudaMemcpy(Wq.dValue, @Wq.Value[0,0], WeightSize, cudaMemcpyHostToDevice);
+      cudaMemcpy(Wk.dValue, @Wk.Value[0,0], WeightSize, cudaMemcpyHostToDevice);
+      cudaMemcpy(Wv.dValue, @Wv.Value[0,0], WeightSize, cudaMemcpyHostToDevice);
+      cudaMemcpy(W0.dValue, @W0.Value[0,0], WeightSize, cudaMemcpyHostToDevice);
+
+      // MLP.
+      cudaMemcpy(W1.dValue, @W1.Value[0,0], WeightProjSize, cudaMemcpyHostToDevice);
+      cudaMemcpy(W2.dValue, @W2.Value[0,0], WeightProjSize, cudaMemcpyHostToDevice);
+
+      // Biases.
+      cudaMemcpy(b1.dValue, @b1.Value[0], bProjSize, cudaMemcpyHostToDevice);
+      cudaMemcpy(b2.dValue, @b2.Value[0], bSize, cudaMemcpyHostToDevice);
+
+      // LayerNorm.
+      cudaMemcpy(Gamma1.dValue, @Gamma1.Value[0], ModelSize, cudaMemcpyHostToDevice);
+      cudaMemcpy(Beta1.dValue,  @Beta1.Value[0],  ModelSize, cudaMemcpyHostToDevice);
+      cudaMemcpy(Gamma2.dValue, @Gamma2.Value[0], ModelSize, cudaMemcpyHostToDevice);
+      cudaMemcpy(Beta2.dValue,  @Beta2.Value[0],  ModelSize, cudaMemcpyHostToDevice);
+  end;
+end;
+
+// Copy InvFreq from host to device.
+procedure CopyInvFreqToDevice(var WModelState: TWModelState);
+begin
+  cudaMemcpy(WModelState.dInvFreq, @WModelState.InvFreq[0], InvFreqSize, cudaMemcpyHostToDevice);
 end;
 
 // Initialize the transformer state stage.
@@ -384,64 +435,93 @@ end;
 // Parameter update. Param := Param - LearningRate * Grad.
 procedure UpdateParam(const N: Integer; const LearningRate: Single; const Grad: PSingle; Param: PSingle);
 begin
-  AddScaled(N, -LearningRate, Grad, Param);
+  AddScaled(N, -LearningRate, Grad, Param); // Not efficient to use cublas here.
 end;
 
 { Optimization }
 // Update the weights and biases.
-procedure Optimization(var WModelParams: TWModelParams; var WModelState: TWModelState; const Blk: Integer);
-var                        //don't need state parameter above?
+procedure Optimization(var WModelParams: TWModelParams; const Blk: Integer);
+var
   i: Integer;
 begin
   with WModelParams.ParamBlock[Blk] do begin
     // W0 weights: main attention output.
     UpdateParam(ModelDim * ModelDim, LearningRate, @W0.Grad[0,0], @W0.Value[0,0]);
-    //cblas_saxpy(ModelDim * ModelDim, -LearningRate, @W0.Grad[0, 0], 1, @W0.Value[0, 0], 1);
+    // cblas_saxpy(ModelDim * ModelDim, -LearningRate, @W0.Grad[0, 0], 1, @W0.Value[0, 0], 1);
 
     // Wq, Wk, Wv weights: Q, K, V.
     UpdateParam(ModelDim * ModelDim, LearningRate, @Wq.Grad[0,0], @Wq.Value[0,0]);
-    //cblas_saxpy(ModelDim * ModelDim, -LearningRate, @Wq.Grad[0, 0], 1, @Wq.Value[0, 0], 1);
+    // cblas_saxpy(ModelDim * ModelDim, -LearningRate, @Wq.Grad[0, 0], 1, @Wq.Value[0, 0], 1);
     UpdateParam(ModelDim * ModelDim, LearningRate, @Wk.Grad[0,0], @Wk.Value[0,0]);
-    //cblas_saxpy(ModelDim * ModelDim, -LearningRate, @Wk.Grad[0, 0], 1, @Wk.Value[0, 0], 1);
+    // cblas_saxpy(ModelDim * ModelDim, -LearningRate, @Wk.Grad[0, 0], 1, @Wk.Value[0, 0], 1);
     UpdateParam(ModelDim * ModelDim, LearningRate, @Wv.Grad[0,0], @Wv.Value[0,0]);
-    //cblas_saxpy(ModelDim * ModelDim, -LearningRate, @Wv.Grad[0, 0], 1, @Wv.Value[0, 0], 1);
+    // cblas_saxpy(ModelDim * ModelDim, -LearningRate, @Wv.Grad[0, 0], 1, @Wv.Value[0, 0], 1);
 
     // W1, W2: feed-forward and vocab projection.
     UpdateParam(ModelDim * ModelDimProj, LearningRate, @W1.Grad[0,0], @W1.Value[0,0]);
     UpdateParam(ModelDimProj * ModelDim, LearningRate, @W2.Grad[0,0], @W2.Value[0,0]);
-    UpdateParam(ModelDimProj * ModelDim, LearningRate, @W2.Grad[0,0], @W2.Value[0,0]);
-    //cblas_saxpy(ModelDimProj * ModelDim, -LearningRate, @W2.Grad[0, 0], 1, @W2.Value[0, 0], 1);
+    // cblas_saxpy(ModelDimProj * ModelDim, -LearningRate, @W2.Grad[0, 0], 1, @W2.Value[0, 0], 1);
 
     // b1, b2: biases.
     UpdateParam(ModelDimProj, LearningRate, @b1.Grad[0], @b1.Value[0]);
-    //cblas_saxpy(ModelDimProj, -LearningRate, @b1.Grad[0], 1, @b1.Value[0], 1);
+    // cblas_saxpy(ModelDimProj, -LearningRate, @b1.Grad[0], 1, @b1.Value[0], 1);
     UpdateParam(ModelDim, LearningRate, @b2.Grad[0], @b2.Value[0]);
-    //cblas_saxpy(ModelDim, -LearningRate, @b2.Grad[0], 1, @b2.Value[0], 1);
+    // cblas_saxpy(ModelDim, -LearningRate, @b2.Grad[0], 1, @b2.Value[0], 1);
 
     // Gamma1, Gamm2, Beta1, Beta2: Layer-Norm parameters.
     UpdateParam(ModelDim, LearningRate, @Gamma1.Grad[0], @Gamma1.Value[0]);
-    //cblas_saxpy(ModelDim, -LearningRate, @Gamma1.Grad[0], 1, @Gamma1.Value[0], 1);
+    // cblas_saxpy(ModelDim, -LearningRate, @Gamma1.Grad[0], 1, @Gamma1.Value[0], 1);
     UpdateParam(ModelDim, LearningRate, @Gamma2.Grad[0], @Gamma2.Value[0]);
-    //cblas_saxpy(ModelDim, -LearningRate, @Gamma2.Grad[0], 1, @Gamma2.Value[0], 1);
+    // cblas_saxpy(ModelDim, -LearningRate, @Gamma2.Grad[0], 1, @Gamma2.Value[0], 1);
     UpdateParam(ModelDim, LearningRate, @Beta1.Grad[0], @Beta1.Value[0]);
-    //cblas_saxpy(ModelDim, -LearningRate, @Beta1.Grad[0], 1, @Beta1.Value[0], 1);
+    // cblas_saxpy(ModelDim, -LearningRate, @Beta1.Grad[0], 1, @Beta1.Value[0], 1);
     UpdateParam(ModelDim, LearningRate, @Beta2.Grad[0], @Beta2.Value[0]);
-    //cblas_saxpy(ModelDim, -LearningRate, @Beta2.Grad[0], 1, @Beta2.Value[0], 1);
+    // cblas_saxpy(ModelDim, -LearningRate, @Beta2.Grad[0], 1, @Beta2.Value[0], 1);
+  end;
+end;
 
-    // Embeddings.
+// Update Embeddings.
+{procedure UpdateEmbeddings(var WModelParams: TWModelParams; var WModelState: TWModelState; const Start: Integer);
+begin
+  with WModelParams do with WModelState do begin
+    UpdateParam(nVocab * ModelDim, LearningRate, @Embeddings.Grad[0,0], @Embeddings.Value[0,0]);
+
     // Add input-side embedding gradients into Embeddings.Grad.
     for i := 0 to SeqLen - 1 do
-      AddScaled(ModelDim, 1.0, @WModelState.StateBlock[Blk].X.Grad[i,0], @WModelParams.Embeddings.Grad[TokenID[i], 0]);
-      //cblas_saxpy(ModelDim, 1.0, @WModelState.X.Grad[i,0], 1, @Embeddings.Grad[v,0], 1);
-
-    // Apply the total embedding gradient (output-side + input-side).
-    UpdateParam(nVocab * ModelDim, LearningRate, @WModelParams.Embeddings.Grad[0,0], @WModelParams.Embeddings.Value[0,0]);
-    //cblas_saxpy(nVocab * ModelDim, -LearningRate, @Embeddings.Grad[0,0], 1, @Embeddings.Value[0,0], 1);
-    {for i := 0 to SeqLen - 1 do begin
-      v := TokenID[i];    // Same as TokenizedCorpus;
-      cblas_saxpy(ModelDim, -LearningRate, @X.Grad[i,0], 1, @Embeddings.Value[v, 0], 1);
-    end;}
+      AddScaled(ModelDim, 1.0, @WModelState.StateBlock[0].X.Grad[i,0], @WModelParams.Embeddings.Grad[TokenID[Start + i], 0]);
+      // cblas_saxpy(ModelDim, 1.0, @WModelState.X.Grad[i,0], 1, @Embeddings.Grad[v,0], 1);
   end;
+end;}
+
+procedure UpdateEmbeddings(
+  var WModelParams: TWModelParams;
+  var WModelState: TWModelState;
+  const InputTokens: TIDimVector);
+var
+  i, tok: Integer;
+begin
+  // Add input-side embedding gradients.
+  for i := 0 to SeqLen - 1 do begin
+    tok := InputTokens[i];
+
+    AddScaled(
+      ModelDim,
+      1.0,
+      @WModelState.StateBlock[0].X.Grad[i,0],
+      @WModelParams.Embeddings.Grad[tok,0]
+    );
+  end;
+
+  // Apply total embedding gradient:
+  // output-side tied gradient + input-side gathered gradient.
+  UpdateParam(
+    nVocab * ModelDim,
+    LearningRate,
+    @WModelParams.Embeddings.Grad[0,0],
+    @WModelParams.Embeddings.Value[0,0]
+  );
+
+
 end;
 
 // Rotary positional encoding.

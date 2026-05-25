@@ -10,6 +10,7 @@ uses
   Display,
   Global,
   Matrix,
+  SysUtils,
   Util;
 
 const
@@ -26,7 +27,11 @@ procedure RunTransformForward(var WModelParams: TWModelParams; var WModelState: 
 // Run the transformer forward.
 var
   h, i, j, HeadOffset: Integer;
+  Seed: UInt64;
 begin
+  // Seed RNG.
+  Seed := GetTickCount64;
+
   // Display entry to transform.
   writeln('Entering Forward Transformer');
 
@@ -44,14 +49,11 @@ begin
     // Equation: X1 = LayerNorm(X). X, X1 in R^{L × D}. Gamma1, Beta1 in R^{D}.
     // cblas.
     // LayerNormForward(X.Value, X1.Value, SeqLen, Gamma1.Value, Beta1.Value, LNXhat1, LNInvStd1);
-    // cuda kernel.
+    // cuda kernel. No need to copy X1.dValue, or dLNXHat1 or dLNInvStd1; they ar outputs.
     cudaMemcpy(X.dValue, @X.Value[0, 0], XSize, cudaMemcpyHostToDevice);
-    cudaMemcpy(X1.dValue, @X1.Value[0, 0], XSize, cudaMemcpyHostToDevice);
     cudaMemcpy(Gamma1.dValue, @Gamma1.Value[0], ModelSize, cudaMemcpyHostToDevice);
     cudaMemcpy(Beta1.dValue, @Beta1.Value[0], ModelSize, cudaMemcpyHostToDevice);
-    cudaMemcpy(dLNXHat1, @LNXHat1[0, 0], SeqSize, cudaMemcpyHostToDevice);
-    cudaMemcpy(dLNInvStd1, @LNInvStd1[0], SeqSize, cudaMemcpyHostToDevice);
-    LaunchLayerNormForward(X.dValue, X1.dValue, Gamma1.dValue, Beta1.dValue, @dLNXhat1, @dLNInvStd1, SeqLen, ModelDim);
+    LaunchLayerNormForward(X.dValue, X1.dValue, Gamma1.dValue, Beta1.dValue, dLNXhat1, dLNInvStd1, SeqLen, ModelDim);
 
     // Display X1.Value matrix.
     cudaMemcpy(@X1.Value[0, 0], X1.dValue, XSize, cudaMemcpyDeviceToHost);
@@ -133,7 +135,7 @@ begin
         SeqLen, SeqLen, HeadDim, ModelDim, ModelDim, SeqLen, InvSqrtHeadDim, 0.0);
     end;
 
-    // Display ScoresHead[0].Value matrix.
+    // Display ScoresHead[0].Value matrix. Copy all [h] to cuda even tho displaying [1].
     for h := 0 to nHead - 1 do
       cudaMemcpy(@ScoresHead1[h].Value[0, 0], ScoresHead1[h].dValue, ScoresSize, cudaMemcpyDeviceToHost);
     VTPDisplayX('Display ScoresHead1[1] before standardizing.', ScoresHead1[1].Value, B);
@@ -148,28 +150,37 @@ begin
     // ApplyAutoRegressiveMask(ScoresHead1[h].Value, SeqLen);
     // cuda kernel.
     for h := 0 to nHead - 1 do
+      // Non-cuda kernel.
+      // LaunchAutoRegressiveMask(ScoresHead1[h].dValue, SeqLen);
+      // cuda kernel.
       LaunchAutoRegressiveMask(ScoresHead1[h].dValue, SeqLen);
 
     // Softmax: Input ScoresHead1. Output ScoresHead2.
     // Equation: ScoresHead2 = Softmax(ScoresHead1). ScoresHead in R^{L x L}.
-    // Do not use SoftmaxForwardN here.
     for h := 0 to nHead - 1 do
-      for i := 0 to SeqLen - 1 do
-        SoftmaxForwardN(@ScoresHead1[h].Value[i, 0], @ScoresHead2[h].Value[i, 0], SeqLen);
+      // Non-cuda kernel.
+      // for i := 0 to SeqLen - 1 do
+      //   SoftmaxForwardN(@ScoresHead1[h].Value[i, 0], @ScoresHead2[h].Value[i, 0], SeqLen);
+      // cuda kernel.
+      LaunchSoftmaxForwardN(ScoresHead1[h].dValue, ScoresHead2[h].dValue, SeqLen, SeqLen, Temperature);
 
-    // Display Scores1Head2[1].Value matrix.
+    // Display Scores1Head2[1].Value matrix. Copy all [h] to cuda even tho displaying [1].
+    for h := 0 to nHead - 1 do
+      cudaMemcpy(@ScoresHead2[h].Value[0, 0], ScoresHead2[h].dValue, ScoresSize, cudaMemcpyDeviceToHost);
     VTPDisplayX('Display ScoresHead2[1] after softmax, in transform, before any action.', ScoresHead2[1].Value, G);
 
     // Do attention dropout.
     // Equation: ScoresHead2 = Dropout(ScoresHead2). ScoresHead in R^{L x L}.
     if Training then
       for h := 0 to nHead - 1 do
-        for i := 0 to SeqLen - 1 do
-          for j := 0 to SeqLen - 1 do
-            if Random < ADropOut then
-              ScoresHead2[h].Value[i, j] := 0.0
-            else
-              ScoresHead2[h].Value[i, j] := ScoresHead2[h].Value[i, j] / (1.0 - ADropOut);
+        // Non-cuda kernel.
+        // for i := 0 to SeqLen - 1 do for j := 0 to SeqLen - 1 do
+        //    if Random < ADropOut then
+        //      ScoresHead2[h].Value[i, j] := 0.0
+        //    else
+        //      ScoresHead2[h].Value[i, j] := ScoresHead2[h].Value[i, j] / (1.0 - ADropOut);
+        // cuda kernel.
+        LaunchDropout(ScoresHead2[h].dValue, SeqLen * SeqLen, ADropOut, UInt64(Seed) + h);
 
     // 1G. Multiplication/Overwrite. Obtain X2Head from ScoresHead2.
     Writeln('          Transform Forward Stage 1G');
@@ -224,7 +235,10 @@ begin
 
     // Layer Norm: Input X4. Output X5.
     // Equation: X5 = LayerNorm(X4). X4 in R^{L × D}. X5 in R^{L × D}. Gamma2, Beta2 in R^{D}.
-    LayerNormForward(X4.Value, X5.Value, SeqLen, Gamma2.Value, Beta2.Value, LNXhat2, LNInvStd2);
+    // non-cuda kernel.
+    // LayerNormForward(X4.Value, X5.Value, SeqLen, Gamma2.Value, Beta2.Value, LNXhat2, LNInvStd2);
+    // cuda kernel.
+    LaunchLayerNormForward(X4.dValue, X5.dValue, Gamma1.dValue, Beta1.dValue, dLNXhat1, dLNInvStd1, SeqLen, ModelDim);
 
     // Display X5.Value matrix.
     VTPDisplayX('Display X5.Value, in transform, before FFN.', X5.Value, G);
@@ -267,16 +281,21 @@ begin
 
       // Activation: Input Hidden1. Output Hidden2.
       // Equation: Hidden2 = ReLU(Hidden1).
-      ReLUMaskForward(Hidden1.Value, Hidden2.Value);
+      if not WesChatKernelPresent then
+        ReLUMaskForward(Hidden1.Value, Hidden2.Value);
+      else
+        LaunchReLUForward(Hidden1.dValue, Hidden2.dValue, SeqLen, ModelDimProj);
 
       // Do MLP dropout.
       if Training then
-        for i := 0 to SeqLen - 1 do
-          for j := 0 to ModelDimProj - 1 do
-            if Random < MLPDropout then
-              Hidden2.Value[i, j] := 0.0
-            else
-              Hidden2.Value[i, j] := Hidden2.Value[i, j] / (1.0 - MLPDropOut);
+        // Non-cuda kernel.
+        // for i := 0 to SeqLen - 1 do for j := 0 to ModelDimProj - 1 do
+        //    if Random < MLPDropout then
+        //      Hidden2.Value[i, j] := 0.0
+        //    else
+        //      Hidden2.Value[i, j] := Hidden2.Value[i, j] / (1.0 - MLPDropOut);
+        // cuda kernel.
+        LaunchDropout(Hidden2.dValue, SeqLen * ModelDimProj, RDropOut, UInt64(GetTickCount64));
 
       // 2D. Multiplication/Overwrite. Obtain X6 from Hidden2.
       Writeln('            Transform Forward Stage 2D');
@@ -312,12 +331,14 @@ begin
 
       // Do residual dropout.
       if Training then
-        for i := 0 to SeqLen - 1 do
-          for j := 0 to ModelDim - 1 do
-            if Random < RDropout then
-              X6.Value[i, j] := 0.0
-            else
-              X6.Value[i, j] := Hidden2.Value[i, j] / (1.0 - RDropOut);
+        // Non-cuda kernel.
+        // for i := 0 to SeqLen - 1 do for j := 0 to ModelDim - 1 do
+        //    if Random < RDropout then
+        //      X6.Value[i, j] := 0.0
+        //    else
+        //      X6.Value[i, j] := Hidden2.Value[i, j] / (1.0 - RDropOut);
+        // cuda kernel.
+        LaunchDropout(X3.dValue, SeqLen * ModelDim, RDropout, UInt64(GetTickCount64));
 
       // Backprop Merge Addition: Input Residual X6, X5. Output X7.
       // Equation: X7 = X5 + X6. X7 in R^{L · D}. X5 in R^{L · D}. X6 in R^{L x D}.

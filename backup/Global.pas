@@ -34,6 +34,7 @@ const
   HeadDim = ModelDim div nHead;   // Length of one head.
   nBlock = 4;                     // Number of blocks in transformer.
   ADropOut = 0.1;                 // Probability of attention dropout.
+  MLPDropOut = 0.1;               // Probability of MLP dropout.
   RDropout = 0.1;                 // Probability of residual dropout.
   DimVocab = 1000;                // Need maximum of vocab symbols to dimension array. Needed for Embeddings.
 
@@ -157,6 +158,11 @@ var
   CuHandle: TcublasHandle;
   One: Single = 1.0;
   Zero: Single = 0.0;
+  // DLL accessibility vars.
+  CublasPresent: Boolean;
+  CudartPresent: Boolean;
+  WesChatKernel12Present: Boolean;
+  CblasPresent: Boolean;
   // Corpus vars.
   CorpusFileNames: TSVector;                     // Name of corpus file.
   SymbolTable: TSymbolTable;                     // Symbol table.
@@ -165,7 +171,9 @@ var
   MultipleFileName: string;                      // Using multiple corpuses and outputting single file name.
   nTokenizedCorpus: Integer;                     // Length of tokenized corpus.
   // Target and Query vars.
-  TargetTokens: TIDimVector;                     // Input and target tokenns. Input lags by one.
+  InputTokens: TIDimVector;                      // Input tokens.
+  TargetTokens: TIDimVector;                     // Target tokens. Shited by  +1.
+  dTargetTokens: PInteger;
   QueryOutput: TIVector;                         // Eventually make this a passed param to RunEmbed.
   // Utility vars.
   Mt0, Mt1, t0, t1, StopTime: TDateTime;         // For timing.

@@ -32,15 +32,13 @@ begin
   // Display entry to transform.
   writeln('Entering Backprop Transformer');
 
-  // Display X6.Value matrix. X6.Value is in cublas.
-  with WModelState.StateBlock[0] do begin
-    cudaMemcpy(@X6.Value[0, 0], X6.dValue, XSize, cudaMemcpyDeviceToHost);
-    VTPDisplayX('Display X6.Value in transform, before any action.', WModelState.StateBlock[0].X6.Value, G);
-  end;
-
   with WModelParams.ParamBlock[Blk] do with WModelState.StateBlock[Blk] do begin
 
-      // BACK PROPAGATION. FEED BACKWARD NETWORK.
+    // Display X6.Value matrix. X6.Value is in cublas.
+    cudaMemcpy(@X6.Value[0, 0], X6.dValue, XSize, cudaMemcpyDeviceToHost);
+    VTPDisplayX('Display X6.Value in transform, before any action.', WModelState.StateBlock[0].X6.Value, G);
+
+    // BACK PROPAGATION. FEED BACKWARD NETWORK.
 
       // 2E. Backprop Addition/Accumulation. Obtain b2 from X6.
       Writeln('            Transform Backprop Stage 2E');

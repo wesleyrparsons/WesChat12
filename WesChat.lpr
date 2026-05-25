@@ -3,7 +3,7 @@ program WesChat;
 {$mode ObjFPC}{$H+}{$I proprietary.txt}
 
 { WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wespar.com }
-{ Note: Edited 5/20/2026 4 pm -- working from WesChat12 on OneDrive }
+{ Note: Edited 5/25/2026 8 pm -- working from WesChat12 on OneDrive }
 { Notes: TokCorpus comes from WesTokenize or ChatGPTTokenize; WModelParams (with Embeddings) and WModelState are from here }
 { Notes: Corpus, QueryCorpus (TBVector) are here; QueryOutput (TIVector) is in Global }
 {        Input Train        Input Query        Output
@@ -29,8 +29,8 @@ var
   // Corpus vars.
   Corpus, QueryCorpus: TBVector;            // Vector of byte.
   // Model vars.
-  WModelParams: TWModelParams;
-  WModelState: TWModelState;
+  WModelParams: TWModelParams;              // Parameters.
+  WModelState: TWModelState;                // State.
   // Saving and loading vars.
   CorpusFileName, SymbolFileName,           // File names.
     TokenFileName, ModelFileName, ListFile: string;
@@ -39,7 +39,6 @@ var
   MinCorpus: Integer = 50;                  // Minimum for loading.
   // Utility vars.
   Ch: string;                               // For option menu.
-  // Success: Boolean;                         // For loading and saving files.
   CombinedSymbolTable: TSymbolTable;        // For combining two symbol tables.
 
 // Create and name directory and file for saving.
@@ -48,7 +47,7 @@ var
   SaveOut: Text;                            // Save Output mode.
 begin
   WorkingDir := ChangeFileExt(Eponym, '') + FormatDateTime('yyyy-mm-dd_hhnnss', Now);
-  WorkingName := WorkingDir;
+  WorkingName := WorkingDir;                // Working directory.
   CreateDir(WorkingDir);                    // Create folder of files.
   ChDir(WorkingDir);                        // And go there.
 
@@ -207,17 +206,17 @@ begin
   Writeln('     to create a concatenated token list.');
   Writeln('  9: Create symbol table from input corpus.');
   Writeln('  10: Save a model.');
-  Writeln('  11: Load a model and run it forward using this WesChat''s tokenization.');
+  Writeln('  11: Load a model and run it forward using WesChat''s tokenization routine.');
   Writeln('  H: Help.');
   Writeln('  X: Exit.');
   Writeln;
   Writeln('The symbol table and other information, including if desired the token list, will be written to disk.');
   Writeln('Ater tokenization, WesChat prompts for training the transformer, which consists');
-  Writeln('of 4 to 8 s. The attention stage has 8 heads. There are a weight stage wih a bias');
+  Writeln('of 4 to 8 blocks. The attention stage has 8 heads. There are a weight stage wih a bias');
   Writeln('and a weight stage without a bias. The activation function is softmax with temperature.');
-  Writeln('Model dimensions are 160 or 256. The activation stage expands dimensionality fourfold.');
+  Writeln('Model dimensions are 256. The activation stage expands dimensionality fourfold.');
   Writeln('Precision is single. Sequence length is 128 or 256 bytes. Pre-layer normalization');
-  Writeln('standardizes for means and standard deviations. Attention and residual dropouts are 0.1.');
+  Writeln('standardizes for means and standard deviations. Attention, MLP, and residual dropouts are 0.1.');
   Writeln('The softmax function normalizes exponentially with a temperature of 1.0. The learning rate is 0.01.');
   Writeln('All output files will be contained in a folder or file named with the input file name,');
   Writeln('appended with a timestamp.');
@@ -528,30 +527,23 @@ begin
         DisplayByteSymbolTable(SymbolTable);
       end;
       '10': begin
-        // Add code to force model train.
-        // ChDir(WorkingDir);   // Save model.
         Write('Enter filename: ');
         Readln(ModelFileName);
-        //SaveModel(ModelFileName, WModelParams, Success);
-        // ChDir('..');
-        { if Success then
+        if SaveModel(ModelFileName, WModelParams) then
            Writeln('File ', ModelFileName, ' successfully saved.')
         else
-          Writeln('File not saved.');}
+          Writeln('File not saved.');
         Pause;
       end;
       '11': begin
-        // ChDir(WorkingDir);   // Load model.
         Write('Enter filename: ');
         Readln(ModelFileName);
-        //LoadModel(ModelFileName, WModelParams, Success);
-        // ChDir('..');
-        {if Success then begin
+        if LoadModel(ModelFileName, WModelParams) then begin
           Writeln('File ', ModelFileName, ' loaded.');
           ForwardQuery;
         end
         else
-          Writeln('File not loaded.');}
+          Writeln('File not loaded.');
         Pause;
       end;
       'X':     Exit;

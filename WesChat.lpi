@@ -118,6 +118,11 @@
         <IsPartOfProject Value="True"/>
         <UnitName Value="TransformBackprop"/>
       </Unit>
+      <Unit>
+        <Filename Value="flowchart.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="FlowChart"/>
+      </Unit>
     </Units>
   </ProjectOptions>
   <CompilerOptions>

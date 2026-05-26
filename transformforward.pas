@@ -26,7 +26,7 @@ implementation
 procedure RunTransformForward(var WModelParams: TWModelParams; var WModelState: TWModelState; var QueryOutput: TIVector; const Blk: Integer);
 // Run the transformer forward.
 var
-  h, i, j, HeadOffset: Integer;
+  h, i, HeadOffset: Integer;
   Seed: UInt64;
 begin
   // Seed RNG.
@@ -37,6 +37,7 @@ begin
 
   with WModelParams.ParamBlock[Blk] do with WModelState.StateBlock[Blk] do begin
   // Display X.Value matrix.
+  cudaMemcpy(@X.Value[0, 0], X.dValue, XSize, cudaMemcpyDeviceToHost);
   VTPDisplayX('Display X.Value in transform, before any action.', X.Value, G);
 
   // 1. FORWARD STAGE: ATTENTION.
@@ -50,9 +51,6 @@ begin
     // cblas.
     // LayerNormForward(X.Value, X1.Value, SeqLen, Gamma1.Value, Beta1.Value, LNXhat1, LNInvStd1);
     // cuda kernel. No need to copy X1.dValue, or dLNXHat1 or dLNInvStd1; they ar outputs.
-    cudaMemcpy(X.dValue, @X.Value[0, 0], XSize, cudaMemcpyHostToDevice);
-    cudaMemcpy(Gamma1.dValue, @Gamma1.Value[0], ModelSize, cudaMemcpyHostToDevice);
-    cudaMemcpy(Beta1.dValue, @Beta1.Value[0], ModelSize, cudaMemcpyHostToDevice);
     LaunchLayerNormForward(X.dValue, X1.dValue, Gamma1.dValue, Beta1.dValue, dLNXhat1, dLNInvStd1, SeqLen, ModelDim);
 
     // Display X1.Value matrix.
@@ -70,8 +68,6 @@ begin
     // cblas.
     // MatMulNN(@X1.Value[0, 0], @Wq.Value[0, 0], @Q.Value[0, 0], SeqLen, ModelDim, ModelDim);
     // cublas.
-    cudaMemcpy(Q.dValue, @Q.Value[0, 0], XSize, cudaMemcpyHostToDevice);
-    cudaMemcpy(Wq.dValue, @Wq.Value[0, 0], WeightSize, cudaMemcpyHostToDevice);
     CuMatMulNN(cuHandle, X1.dValue, Wq.dValue, Q.dValue, SeqLen, ModelDim, ModelDim);
 
     // Display Q.Value matrix.
@@ -83,8 +79,6 @@ begin
     // cblas.
     // MatMulNN(@X1.Value[0, 0], @Wk.Value[0, 0], @K.Value[0, 0], SeqLen, ModelDim, ModelDim);
     // cublas.
-    cudaMemcpy(K.dValue, @K.Value[0, 0], XSize, cudaMemcpyHostToDevice);
-    cudaMemcpy(Wk.dValue, @Wk.Value[0, 0], WeightSize, cudaMemcpyHostToDevice);
     CuMatMulNN(cuHandle, X1.dValue, Wk.dValue, K.dValue, SeqLen, ModelDim, ModelDim);
 
     // Display K.Value matrix.
@@ -96,8 +90,6 @@ begin
     // cblas.
     // MatMulNN(@X1.Value[0, 0], @Wv.Value[0, 0], @V.Value[0, 0], SeqLen, ModelDim, ModelDim);
     // cublas.
-    cudaMemcpy(V.dValue, @V.Value[0, 0], XSize, cudaMemcpyHostToDevice);
-    cudaMemcpy(Wv.dValue, @Wv.Value[0, 0], WeightSize, cudaMemcpyHostToDevice);     // No need to copy V.
     CuMatMulNN(cuHandle, X1.dValue, Wv.dValue, V.dValue, SeqLen, ModelDim, ModelDim);
 
     // 1D. RoPE.
@@ -135,10 +127,9 @@ begin
         SeqLen, SeqLen, HeadDim, ModelDim, ModelDim, SeqLen, InvSqrtHeadDim, 0.0);
     end;
 
-    // Display ScoresHead[0].Value matrix. Copy all [h] to cuda even tho displaying [1].
-    for h := 0 to nHead - 1 do
-      cudaMemcpy(@ScoresHead1[h].Value[0, 0], ScoresHead1[h].dValue, ScoresSize, cudaMemcpyDeviceToHost);
-    VTPDisplayX('Display ScoresHead1[1] before standardizing.', ScoresHead1[1].Value, B);
+    // Display ScoresHead[0].Value matrix. Copy only SC1[0] to cuda.
+    cudaMemcpy(@ScoresHead1[0].Value[0, 0], ScoresHead1[0].dValue, ScoresSize, cudaMemcpyDeviceToHost);
+    VTPDisplayX('Display ScoresHead1[1] before standardizing.', ScoresHead1[0].Value, B);
 
     // 1F. Mask & Softmax & Dropout. Obtain Scores2. All not done in cublas.
     Writeln('          Transform Forward Stage 1F');
@@ -164,10 +155,9 @@ begin
       // cuda kernel.
       LaunchSoftmaxForwardN(ScoresHead1[h].dValue, ScoresHead2[h].dValue, SeqLen, SeqLen, Temperature);
 
-    // Display Scores1Head2[1].Value matrix. Copy all [h] to cuda even tho displaying [1].
-    for h := 0 to nHead - 1 do
-      cudaMemcpy(@ScoresHead2[h].Value[0, 0], ScoresHead2[h].dValue, ScoresSize, cudaMemcpyDeviceToHost);
-    VTPDisplayX('Display ScoresHead2[1] after softmax, in transform, before any action.', ScoresHead2[1].Value, G);
+    // Display Scores1Head2[1].Value matrix. Copy only SC1[0] to cuda.
+    cudaMemcpy(@ScoresHead2[0].Value[0, 0], ScoresHead2[0].dValue, ScoresSize, cudaMemcpyDeviceToHost);
+    VTPDisplayX('Display ScoresHead2[1] after softmax, in transform, before any action.', ScoresHead2[0].Value, G);
 
     // Do attention dropout.
     // Equation: ScoresHead2 = Dropout(ScoresHead2). ScoresHead in R^{L x L}.
@@ -192,7 +182,6 @@ begin
       // cblas.
       // MatMulFullNN(@ScoresHead2[h].Value[0,0], @V.Value[0, HeadOffset], @X2.Value[0, HeadOffset], SeqLen, HeadDim, SeqLen, SeqLen, ModelDim, ModelDim);
       // cublas.
-      cudaMemcpy(ScoresHead2[h].dValue, @ScoresHead2[h].Value[0, 0], ScoresSize, cudaMemcpyHostToDevice);
       CuMatMulFullNN(CuHandle, ScoresHead2[h].dValue, PSingle(V.dValue) + HeadOffset, PSingle(X2.dValue) + HeadOffset,
         SeqLen, HeadDim, SeqLen, SeqLen, ModelDim, ModelDim);
     end;
@@ -209,7 +198,6 @@ begin
     // cblas.
     // MatMulNN(@X2.Value[0, 0], @W0.Value[0, 0], @X3.Value[0, 0], SeqLen, ModelDim, ModelDim);
     // cublas.
-    cudaMemcpy(W0.dValue, @W0.Value[0, 0], WeightSize, cudaMemcpyHostToDevice);
     CuMatMulNN(CuHandle, X2.dValue, W0.dValue, X3.dValue, SeqLen, ModelDim, ModelDim);
 
     // Display X3.Value matrix.
@@ -241,6 +229,7 @@ begin
     LaunchLayerNormForward(X4.dValue, X5.dValue, Gamma1.dValue, Beta1.dValue, dLNXhat1, dLNInvStd1, SeqLen, ModelDim);
 
     // Display X5.Value matrix.
+    cudaMemcpy(@X5.Value[0, 0], X5.dValue, XSize, cudaMemcpyDeviceToHost);
     VTPDisplayX('Display X5.Value, in transform, before FFN.', X5.Value, G);
 
       // 2. STAGE FORWARD FFN.
@@ -253,8 +242,6 @@ begin
       // cblas
       // MatMulNN(@X5.Value[0, 0], @W1.Value[0, 0], @Hidden1.Value[0, 0], SeqLen, ModelDimProj, ModelDim);
       // cublas.
-      cudaMemcpy(W1.dValue, @W1.Value[0, 0], WeightProjSize, cudaMemcpyHostToDevice);
-      cudaMemcpy(X5.dValue, @X5.Value[0, 0], XSize, cudaMemcpyHostToDevice);         // No need to copy Hidden1.
       CuMatMulNN(CuHandle, X5.dValue, W1.dValue, Hidden1.dValue, SeqLen, ModelDimProj, ModelDim);
 
       // 2B. Addition/Accumulate. Obtain Hidden1 from Hidden1 and b1.
@@ -265,7 +252,6 @@ begin
       // cblas.
       // AddMatVec(@Hidden1.Value, b1.Value, SeqLen, ModelDimProj);
       //cublas.
-      cudaMemcpy(b1.dValue, @b1.Value[0], bProjSize, cudaMemcpyHostToDevice);
       for i := 0 to SeqLen - 1 do
         // cblas.
         // AddScaled(ModelDimProj, 1.0, @b1.Value[0], @Hidden1.Value[i,0]);
@@ -281,10 +267,10 @@ begin
 
       // Activation: Input Hidden1. Output Hidden2.
       // Equation: Hidden2 = ReLU(Hidden1).
-      if not WesChatKernelPresent then
-        ReLUMaskForward(Hidden1.Value, Hidden2.Value)
-      else
-        LaunchReLUForward(Hidden1.dValue, Hidden2.dValue, SeqLen, ModelDimProj);
+      // Non-cuda kernel.
+      // ReLUMaskForward(Hidden1.Value, Hidden2.Value)
+      // cuda kernel.
+      LaunchReLUForward(Hidden1.dValue, Hidden2.dValue, SeqLen, ModelDimProj);
 
       // Do MLP dropout.
       if Training then
@@ -305,8 +291,6 @@ begin
       // cblas
       // MatMulNN(@Hidden2.Value[0, 0], @W2.Value[0, 0], @X6.Value[0, 0], SeqLen, ModelDim, ModelDimProj);
       // cublas.
-      cudaMemcpy(Hidden2.dValue, @Hidden2.Value[0, 0], HiddenSize, cudaMemcpyHostToDevice);
-      cudaMemcpy(W2.dValue, @W2.Value[0, 0], WeightProjSize, cudaMemcpyHostToDevice);   // No need to memcpy X6.
       CuMatMulNN(CuHandle, Hidden2.dValue, W2.dValue, X6.dValue, SeqLen, ModelDim, ModelDimProj);
 
       // 2E. Addition/Accumulation. Obtain X6 from X6 and b2.
@@ -315,7 +299,6 @@ begin
       // Addition: Input X6, b2. Output X6.
       // Equation: X6 = X6 + b2. X6 in R^{L x D}. b2 in R^{D}.
       // AddMatVec(@X6.Value, @b2.Value, SeqLen, ModelDim);
-      cudaMemcpy(b2.dValue, @b2.Value[0], bSize, cudaMemcpyHostToDevice);
       for i := 0 to SeqLen - 1 do
         // cblas.
         // AddScaled(ModelDim, 1.0, @b2.Value[0], @X6.Value[i,0]);
@@ -345,11 +328,9 @@ begin
       // cblas.
       // MatAdd(X5.Value, X6.Value, X7.Value, SeqLen, ModelDim);
       // cublas. Already have X5 in cublas.
-      cudaMemcpy(X6.dValue, @X6.Value[0, 0], XSize, cudaMemcpyHostToDevice);
       CuMatAdd(CuHandle, X5.dValue, X6.dValue, X7.dValue, SeqLen, ModelDim);   // No need to memcpy X7.
 
       // Display X7.Value matrix.
-      cudaMemcpy(@X7.Value[0, 0], X7.dValue, XSize, cudaMemcpyDeviceToHost);
       VTPDisplayX('Display X7.Value, in transform, after residual added to X6.', X7.Value, B);
 
   end;   // End with WModel.

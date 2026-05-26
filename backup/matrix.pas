@@ -29,7 +29,7 @@ function cublasCreate_v2(out handle: TcublasHandle): Integer; cdecl; external cu
 function cublasDestroy_v2(handle: TcublasHandle): Integer; cdecl; external cublasDLL;
 function cudaMalloc(devPtr: PPointer; size: NativeUInt): Integer; cdecl; external cudartDLL;
 function cudaMemcpy(dst: Pointer; src: Pointer; count: NativeUInt; kind: LongInt): LongInt; cdecl; external cudartDLL;
-function cudaFree(devPtr: PPointer): Integer; cdecl; external cudartDLL;
+function cudaFree(devPtr: Pointer): Integer; cdecl; external cudartDLL;
 
 // Multiply and add procedures.
 procedure MatMulFullNN(const A, B: PSingle; C: PSingle; M, N, K, lda, ldb, ldc: Integer);
@@ -71,6 +71,7 @@ procedure CuMatMulAccNN(handle: TcublasHandle; const A, B: PSingle; C: PSingle; 
 
 // ReLU procedure.
 procedure ReLUMaskForward(const A: THiddenMatrix; var B: THiddenMatrix);
+procedure LaunchReLUForward(A: PSingle; B: PSingle; Rows: Integer; Cols: Integer); cdecl; external 'WesChatKernel12.dll';
 
 // Copy matrix procedure.
 procedure CopyXTensor(const A: TSeqTensor; var B: TSeqTensor);
@@ -130,7 +131,7 @@ procedure cblas_sscal(N: LongInt;
   incX: LongInt); cdecl; external copenblasDLL;
 
 // cublas.
-function cublasSscal(handle: TcublasHandle;
+function cublasSscal_v2(handle: TcublasHandle;
   n: LongInt;
   const alpha: PSingle;
   x: PSingle;
@@ -537,7 +538,7 @@ end;
 procedure CuScale(handle: TcublasHandle; N: Integer; Alpha: Single; X: PSingle);
 begin
   // Performs: X[i] := Alpha * X[i]
-  cublasSscal(handle, N, @Alpha, X, 1);
+  cublasSscal_v2(handle, N, @Alpha, X, 1);
 end;
 
 // Matrix addition, overwrite.

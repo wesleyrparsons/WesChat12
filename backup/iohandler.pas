@@ -206,6 +206,7 @@ begin
   Writeln;
 end;
 
+// Clear pointers read from Model.ParamBlock.
 procedure ClearDevicePointers(var Model: TWModelParams);
 var
   b: Integer;
@@ -231,6 +232,7 @@ begin
   end;
 end;
 
+// Save a model.
 function SaveModel(const FileName: string; var Model: TWModelParams): Boolean;
 var
   F: file of TWModelParams;
@@ -243,6 +245,7 @@ begin
   try
     Rewrite(F, 1);
     BlockWrite(F, 'WES1', 4);
+    BlockWrite(F, Version, 16);
     BlockWrite(F, IOModelDim, SizeOf(Integer));
     BlockWrite(F, nVocab, SizeOf(Integer));
     Write(F, Model);
@@ -256,6 +259,7 @@ begin
   end;
 end;
 
+// Load a model.
 function LoadModel(const FileName: string; var Model: TWModelParams): Boolean;
 var
   F: file of TWModelParams;
@@ -268,6 +272,7 @@ begin
   try
     Reset(F, 1);
     BlockRead(F, Magic, 4);
+    BlockWrite(F, Version, 16);
     BlockRead(F, IOModelDim, SizeOf(Integer));
     BlockRead(F, nVocabRead, SizeOf(Integer));
     Close(F);
@@ -276,6 +281,7 @@ begin
     Close(F);
   end;
   ClearDevicePointers(Model);
+  ModelDim := IOModelDim;
 end;
 
 end.

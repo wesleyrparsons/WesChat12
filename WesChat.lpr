@@ -40,6 +40,7 @@ var
   // Utility vars.
   Ch: string;                               // For option menu.
   CombinedSymbolTable: TSymbolTable;        // For combining two symbol tables.
+  i: Integer;
 
 // Create and name directory and file for saving.
 Procedure LogFile(const Eponym: string);

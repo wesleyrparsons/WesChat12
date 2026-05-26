@@ -161,7 +161,7 @@ var
   // DLL accessibility vars.
   CublasPresent: Boolean;
   CudartPresent: Boolean;
-  WesChatKernel12Present: Boolean;
+  WesChatKernelPresent: Boolean;
   CblasPresent: Boolean;
   // Corpus vars.
   CorpusFileNames: TSVector;                     // Name of corpus file.
@@ -172,6 +172,7 @@ var
   nTokenizedCorpus: Integer;                     // Length of tokenized corpus.
   // Target and Query vars.
   InputTokens: TIDimVector;                      // Input tokens.
+  dInputTokens: PInteger;                        // Input tokens.
   TargetTokens: TIDimVector;                     // Target tokens. Shited by  +1.
   dTargetTokens: PInteger;
   QueryOutput: TIVector;                         // Eventually make this a passed param to RunEmbed.

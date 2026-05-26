@@ -20,7 +20,7 @@ const
   XSize: Integer = SeqLen * ModelDim * SizeOf(Single);
   HiddenSize: Integer = SeqLen * ModelDimProj * SizeOf(Single);
   ScoresSize: Integer = SeqLen * SeqLen * SizeOf(Single);
-  EmbeddingsSize: Integer = DimVocab * ModelDim;
+  EmbeddingsSize: Integer = DimVocab * ModelDim * SizeOf(Single);
   InvFreqSize: Integer = (ModelDim div 2) * SizeOf(Single);
   ProbsSize: Integer = SeqLen * DimVocab * SizeOf(Single);
 
@@ -36,8 +36,9 @@ procedure MDeallocateCublas(var WModelParams: TWModelParams; var WModelState: TW
 procedure ZeroGradients(var WModelParams: TWModelParams; var WModelState: TWModelState; const Blk: Integer);
 procedure UpdateParam(const N: Integer; const LearningRate: Single; const Grad: PSingle; Param: PSingle);
 procedure Optimization(var WModelParams: TWModelParams; const Blk: Integer);
+procedure LaunchEmbeddingLookup(Embeddings: PSingle; InputTokens: PInteger; X: PSingle; SeqLen: Integer; ModelDim: Integer);
+  cdecl; external 'WesChatKernel12.dll';
 procedure UpdateEmbeddings(var WModelParams: TWModelParams; var WModelState: TWModelState; const InputTokens: TIDimVector);
-//procedure UpdateEmbeddings(var WModelParams: TWModelParams);
 procedure ApplyRoPE(var H: TSeqMatrix;  const InvFreq: TFVector; SeqLen, ModelDim: Integer);
 procedure ApplyAutoRegressiveMask(var ScoresHead: TScoresMatrix; const L: Integer);
 procedure LaunchAutoRegressiveMask(Scores: PSingle; SeqLen: Integer); cdecl; external 'WesChatKernel12.dll';
@@ -50,12 +51,12 @@ procedure LayerNormForward(const InX: TSeqMatrix; var OutX: TSeqMatrix; SeqLen: 
   const Gamma, Beta: TSeqVector; var LNXhat: TSeqMatrix; var LNInvStd: TFSVector);
 procedure LaunchLayerNormForward(InX, OutX, Gamma, Beta, LNXhat, LNInvStd: PSingle; SeqLen, ModelDim: Integer);
   cdecl; external 'WesChatKernel12.dll';
-procedure LaunchRoPEForward(H: PSingle; InvFreq: PSingle; SeqLen: Integer; ModelDim: Integer);
-  cdecl; external 'WesChatKernel12.dll';
 procedure LayerNormBackward(const dY: TSeqMatrix; var dX: TSeqMatrix; var dGamma, dBeta: TSeqVector;
   SeqLen: Integer; const Gamma: TSeqVector; var LNXhat: TSeqMatrix; var LNInvStd: TFSVector);
+procedure LaunchRoPEForward(H: PSingle; InvFreq: PSingle; SeqLen: Integer; ModelDim: Integer);
+  cdecl; external 'WesChatKernel12.dll';
 procedure GradientFromCEProbabilities(var WModelState: TWModelState);
-procedure LaunchGradientFromCEProbabilities(Probs: PSingle; TopGradient: PSingle; TargetTokens: PInteger; SeqLen: Integer; nVocab: Integer);
+procedure LaunchCEGradient(Probs: PSingle; TopGradient: PSingle; TargetTokens: PInteger; SeqLen: Integer; nVocab: Integer);
   cdecl; external 'WesChatKernel12.dll';
 procedure GradientFromKLDivergence(var WModelState: TWModelState);
 procedure BackpropAdd(const dOut: TSeqMatrix; var dA, dB: TSeqMatrix; const L, D: Integer);
@@ -136,6 +137,10 @@ procedure MAllocCublas(var WModelParams: TWModelParams; var WModelState: TWModel
 var
   h, k: Integer;
 begin
+  // Input and target tokens.
+  cudaMalloc(@dInputTokens, SeqLen * SizeOf(Integer));
+  cudaMalloc(@dTargetTokens, SeqLen * SizeOf(Integer));
+
   // Global/shared parameters.
   with WModelParams do begin
     cudaMalloc(@Embeddings.dValue, EmbeddingsSize);
@@ -146,6 +151,7 @@ begin
     cudaMalloc(@dProbs, ProbsSize);
     cudaMalloc(@dTopGradient, ProbsSize);
   end;
+
   // Per block parameters.
   for k := 0 to nBlock - 1 do begin
     with WModelParams.ParamBlock[k] do begin
@@ -226,6 +232,9 @@ procedure MDeallocateCublas(var WModelParams: TWModelParams; var WModelState: TW
 var
   h, k: Integer;
 begin
+  cudaFree(@dInputTokens);
+  cudaFree(@dTargetTokens);
+
   with WModelParams do begin
     cudaFree(@Embeddings.dValue);
     cudaFree(@Embeddings.dGrad);
@@ -235,6 +244,7 @@ begin
     cudaFree(@Probs);
     cudaFree(@TopGradient);
   end;
+
   for k := 0 to nBlock - 1 do begin
     with WModelParams.ParamBlock[k] do begin
       cudaFree(@Wq.dValue);
@@ -317,6 +327,7 @@ begin
   // Embeddings (global).
   cudaMemcpy(WModelParams.Embeddings.dValue, @WModelParams.Embeddings.Value[0,0], EmbeddingsSize, cudaMemcpyHostToDevice);
 
+  // Other.
   for k := 0 to nBlock - 1 do
     with WModelParams.ParamBlock[k] do begin
 
@@ -441,8 +452,6 @@ end;
 { Optimization }
 // Update the weights and biases.
 procedure Optimization(var WModelParams: TWModelParams; const Blk: Integer);
-var
-  i: Integer;
 begin
   with WModelParams.ParamBlock[Blk] do begin
     // W0 weights: main attention output.
@@ -493,10 +502,7 @@ begin
   end;
 end;}
 
-procedure UpdateEmbeddings(
-  var WModelParams: TWModelParams;
-  var WModelState: TWModelState;
-  const InputTokens: TIDimVector);
+procedure UpdateEmbeddings(var WModelParams: TWModelParams; var WModelState: TWModelState; const InputTokens: TIDimVector);
 var
   i, tok: Integer;
 begin

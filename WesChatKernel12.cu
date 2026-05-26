@@ -228,6 +228,47 @@ void LaunchReLUForward(
     ReLUForwardKernel<<<blocks, threads>>>(A, B, N);
 }
 
+// ReLUBackward.
+#include <cuda_runtime.h>
+
+extern "C" __global__
+void ReLUBackwardKernel(
+    const float* Hidden1,     // forward input
+    const float* GradOut,     // Hidden2.Grad
+    float* GradIn,            // Hidden1.Grad
+    int N)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (idx < N) {
+        float x = Hidden1[idx];
+        GradIn[idx] = (x > 0.0f) ? GradOut[idx] : 0.0f;
+    }
+}
+
+extern "C" __declspec(dllexport)
+void LaunchReLUBackward(
+    const float* Hidden1,
+    const float* GradOut,
+    float* GradIn,
+    int Rows,
+    int Cols)
+{
+    int N = Rows * Cols;
+
+    int threads = 256;
+    int blocks = (N + threads - 1) / threads;
+
+    ReLUBackwardKernel<<<blocks, threads>>>(
+        Hidden1,
+        GradOut,
+        GradIn,
+        N
+    );
+
+    cudaDeviceSynchronize();  // good for debugging
+}
+
 // Dropout.
 extern "C" __declspec(dllexport)
 void LaunchDropout(
@@ -367,5 +408,45 @@ void LaunchCEGradient(
         TargetTokens,
         SeqLen,
         nVocab
+    );
+}
+
+extern "C" __global__
+void EmbeddingLookupKernel(
+    const float* Embeddings,
+    const int* InputTokens,
+    float* X,
+    int SeqLen,
+    int ModelDim)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    int total = SeqLen * ModelDim;
+
+    if (idx < total) {
+        int row = idx / ModelDim;
+        int col = idx % ModelDim;
+        int tok = InputTokens[row];
+
+        X[idx] = Embeddings[tok * ModelDim + col];
+    }
+}
+
+extern "C" __declspec(dllexport)
+void LaunchEmbeddingLookup(
+    const float* Embeddings,
+    const int* InputTokens,
+    float* X,
+    int SeqLen,
+    int ModelDim)
+{
+    int threads = 256;
+    int blocks = (SeqLen * ModelDim + threads - 1) / threads;
+
+    EmbeddingLookupKernel<<<blocks, threads>>>(
+        Embeddings,
+        InputTokens,
+        X,
+        SeqLen,
+        ModelDim
     );
 }

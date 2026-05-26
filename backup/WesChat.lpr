@@ -29,8 +29,8 @@ var
   // Corpus vars.
   Corpus, QueryCorpus: TBVector;            // Vector of byte.
   // Model vars.
-  WModelParams: TWModelParams;
-  WModelState: TWModelState;
+  WModelParams: TWModelParams;              // Parameters.
+  WModelState: TWModelState;                // State.
   // Saving and loading vars.
   CorpusFileName, SymbolFileName,           // File names.
     TokenFileName, ModelFileName, ListFile: string;
@@ -40,6 +40,7 @@ var
   // Utility vars.
   Ch: string;                               // For option menu.
   CombinedSymbolTable: TSymbolTable;        // For combining two symbol tables.
+  i: Integer;
 
 // Create and name directory and file for saving.
 Procedure LogFile(const Eponym: string);
@@ -47,7 +48,7 @@ var
   SaveOut: Text;                            // Save Output mode.
 begin
   WorkingDir := ChangeFileExt(Eponym, '') + FormatDateTime('yyyy-mm-dd_hhnnss', Now);
-  WorkingName := WorkingDir;
+  WorkingName := WorkingDir;                // Working directory.
   CreateDir(WorkingDir);                    // Create folder of files.
   ChDir(WorkingDir);                        // And go there.
 
@@ -181,6 +182,10 @@ end;
 
 // Start of main program.
 begin
+
+  Writeln('Program started');
+Readln;
+
   { Necessary because JSON will throw dupe errors otherwise }
   SetMultiByteConversionCodePage(CP_UTF8);
   SetMultiByteRTLFileSystemCodePage(CP_UTF8);

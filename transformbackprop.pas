@@ -49,7 +49,7 @@ begin
         // cblas.
         // AddScaled(ModelDim, 1.0, @X6.Grad[i,0], @b2.Grad[0]);
         // cublas. X6.Grad is in cublas. b2?
-        cublasSscal(CuHandle, ModelDim, @Zero, b2.dGrad, 1);    // Note different function used.
+        cublasSscal_v2(CuHandle, ModelDim, @Zero, b2.dGrad, 1);    // Note different function used.
 
       // 2D. Backprop Multiplication/Overwrite. Obtain W2 from Hidden2 and X6.
       Writeln('            Transform Backprop Stage 2D');
@@ -57,30 +57,30 @@ begin
       // Backprop X6 Grad creates W2 Grad: Input Hidden2ᵀ.Value, X6.Grad. Output W2.Grad.
       // Equation: W2.Grad = Hidden2ᵀ.Value · X6.Grad. W2.Grad is R^{DB x D}. Hidden2ᵀ.Value is R^{DB x L}. X6.Grad in R^{L x D}.
       // cblas.
-      MatMulTN(@Hidden2.Value, @X6.Grad, @W2.Grad, ModelDimProj, ModelDim, SeqLen);
+      // MatMulTN(@Hidden2.Value, @X6.Grad, @W2.Grad, ModelDimProj, ModelDim, SeqLen);
       // cublas. X6.Grad and Hidden2.Value are in cublas. No need to copy W2.Grad.
-      cudaMemcpy(W2.dValue, @W2.Value[0, 0], WeightSize, cudaMemcpyHostToDevice);
       cuMatMulTN(CuHandle, Hidden2.dValue, X6.dGrad, W2.dGrad, ModelDimProj, ModelDim, SeqLen);
 
       // Backprop X6 Grad creates Hidden2 Grad: Input
       // Equation: Hidden2.Grad = X6.Grad * W2ᵀ.Value. X6.Grad in R^{L x D}. W2ᵀ.Value is R^{D x DB}. Hidden2.Grad is R^{L x DB}.
       // cblas.
-      MatMulNT(@X6.Grad, @W2.Value, @Hidden2.Grad, SeqLen, ModelDimProj, ModelDim);
+      // MatMulNT(@X6.Grad, @W2.Value, @Hidden2.Grad, SeqLen, ModelDimProj, ModelDim);
       // cublas. X6.Grad is in cublas. No need to copy Hidden2.Grad.
-      MatMulNT(@X6.Grad, @W2.Value, @Hidden2.Grad, SeqLen, ModelDimProj, ModelDim);
+      CuMatMulNT(CuHandle, X6.dGrad, W2.dValue, Hidden2.dGrad, SeqLen, ModelDimProj, ModelDim);
 
       // 2C. Backprop ReLU. Obtain Hidden1 from Hidden2.
       Writeln('            Transform Backprop Stage 2C');
 
       // Backprop BackReLU activation on Hidden: Input Hidden2.Grad. Output Hidden1.Grad.
       // Equation: Hidden1.Grad = ReLUMaskBackward(Hidden2.Grad). Hidden1.Grad is R^{L x DB}. Hidden2.Value is R^{L x DB}.
-      for i := 0 to SeqLen - 1 do
-        for j := 0 to ModelDimProj - 1 do
-          if Hidden1.Value[i, j] > 0.0 then
-            Hidden1.Grad[i, j] := Hidden2.Grad[i, j]
-          else
-            Hidden1.Grad[i, j] := 0.0;
-
+      // cblas.
+      // for i := 0 to SeqLen - 1 do for j := 0 to ModelDimProj - 1 do
+      //  if Hidden1.Value[i, j] > 0.0 then
+      //    Hidden1.Grad[i, j] := Hidden2.Grad[i, j]
+      //  else
+      //    Hidden1.Grad[i, j] := 0.0;
+      // cuda kernel.
+      LaunchReLUBackward(Hidden1.dValue, Hidden2.dGrad, Hidden1.dGrad, SeqLen, ModelDimProj);
       // 2B. Backprop Addition/Accumulate. Obtain b1 from Hidden1.
       Writeln('            Transform Backprop Stage 2B');
 
@@ -101,7 +101,6 @@ begin
       // cblas.
       // MatMulTN(@X5.Value, @Hidden1.Grad, @W1.Grad, SeqLen, ModelDimProj, ModelDim);
       // cublas. No need to copy W1.Grad. X5.Value already in cublas.
-      cudaMemcpy(Hidden1.dGrad, @Hidden1.Grad[0, 0], HiddenSize, cudaMemcpyHostToDevice);
       CuMatMulTN(CuHandle, X5.dValue, Hidden1.dGrad, W1.dGrad, SeqLen, ModelDimProj, ModelDim);
 
       // Backprop Hidden1 Grad accumulates into X5 Grad. Input: Hidden1.Grad, W1ᵀ.Value. Output: X5.Grad.
@@ -123,7 +122,7 @@ begin
     // Equation: X4.Grad, Gamma2.Grad, Beta2.Grad = LayerNorm(X5.Grad, Gamma2.Value, Beta2.Value).
     // X4.Grad, X5.Grad, LNXHat2 in R^{L x D}. Gamma2.Grad, Beta2.Grad in R^{D}.
     // cblas.
-    LayerNormBackward(X5.Grad, X4.Grad, Gamma2.Grad, Beta2.Grad, SeqLen, Gamma2.Value, LNXHat2, LNInvStd2);
+stop    LayerNormBackward(X5.Grad, X4.Grad, Gamma2.Grad, Beta2.Grad, SeqLen, Gamma2.Value, LNXHat2, LNInvStd2);
 
     // Display X4.Grad matrix.
     cudaMemcpy(@X4.Grad[0, 0], X4.dGrad, XSize, cudaMemcpyDeviceToHost);
@@ -136,8 +135,6 @@ begin
     // cblas.
     // GradSplit(X4.Grad, X1.Grad, X3.Grad, SeqLen, ModelDim);
     // cublas. NeedX1 and X3 in cublas.
-    cudaMemcpy(X1.dGrad, @X1.Grad[0, 0], XSize, cudaMemcpyHostToDevice);
-    cudaMemcpy(X3.dGrad, @X3.Grad[0, 0], XSize, cudaMemcpyHostToDevice);
     cuGradSplit(cuHandle, X4.dGrad, X1.dGrad, X3.dGrad, SeqLen, ModelDim);
 
     // Guide: To find the change for the weights: dW0 = X6ᵀ ·  dX7.
@@ -151,8 +148,6 @@ begin
     // cblas. X3.Grad already in cublas.
     // MatMulTN(@X2.Value, @X3.Grad, @W0.Grad, ModelDim, SeqLen, ModelDim);
     // cublas. X3.Grad already in cublas.
-    cudaMemcpy(X2.dGrad, @X2.Grad[0, 0], XSize, cudaMemcpyHostToDevice);
-    cudaMemcpy(W0.dGrad, @W0.Grad[0, 0], WeightSize, cudaMemcpyHostToDevice);
     CuMatMulTN(CuHandle, X2.dValue, X3.dGrad, W0.dGrad, ModelDim, SeqLen, ModelDim);
 
     // Backprop Create X2.Grad from X3.Grad: Input: X3.Grad, W0ᵀ.Value. Output: X2.Grad.
@@ -160,7 +155,6 @@ begin
     // cblas.
     // MatMulNT(@X3.Grad, @W0.Value, @X2.Grad, SeqLen, ModelDim, ModelDim);
     // cublas. No need to copy X2.Grad. X3.Grad already in cublas.
-    cudaMemcpy(W0.dValue, @W0.Value[0, 0], WeightSize, cudaMemcpyHostToDevice);
     CuMatMulNT(CuHandle, X3.dGrad, W0.dValue, X2.dGrad, SeqLen, ModelDim, ModelDim);
 
     // Display X3.Grad matrix. X3.Grad already in cblas.
@@ -177,8 +171,6 @@ begin
       // MatMulFullNT(@X2.Grad[0, HeadOffset], @V.Value[0, HeadOffset],
       //   @ScoresHead2[h].Grad[0,0], SeqLen, SeqLen, HeadDim, ModelDim, ModelDim, SeqLen);
       // cublas. X2.dGrad already in cublas.
-      cudaMemcpy(V.dValue, @V.Value[0, 0], XSize, cudaMemcpyHostToDevice);
-      cudaMemcpy(ScoresHead2[h].dGrad, @ScoresHead2[h].Grad[0, 0], ScoresSize, cudaMemcpyHostToDevice);
       CuMatMulFullNT(CuHandle, PSingle(X2.dGrad) + HeadOffset, PSingle(V.dValue) + HeadOffset,
         ScoresHead2[h].dGrad, SeqLen, SeqLen, HeadDim, ModelDim, ModelDim, SeqLen);
     end;
@@ -191,7 +183,6 @@ begin
       // MatMulFullTN(@ScoresHead2[h].Value[0,0], @X2.Grad[0, HeadOffset],
       //   @V.Grad[0, HeadOffset], SeqLen, HeadDim, SeqLen, SeqLen, ModelDim, ModelDim);
       // cublas. No need to copy VHead.Grad. X2.Grad already in cublas.
-      cudaMemcpy(ScoresHead2[h].dGrad, @ScoresHead2[h].Grad[0, 0], ScoresSize, cudaMemcpyHostToDevice);
       CuMatMulFullTN(CuHandle, ScoresHead2[h].dValue, PSingle(X2.dGrad) + HeadOffset,
         PSingle(V.dGrad) + HeadOffset, SeqLen, HeadDim, SeqLen, SeqLen, ModelDim, ModelDim);
     end;
@@ -209,7 +200,7 @@ begin
 
     for h := 0 to nHead - 1 do
       for i := 0 to SeqLen - 1 do
-        SoftmaxBackward(ScoresHead2[h].Value[i], ScoresHead2[h].Grad[i], ScoresHead1[h].Grad[i]);
+stop        SoftmaxBackward(ScoresHead2[h].Value[i], ScoresHead2[h].Grad[i], ScoresHead1[h].Grad[i]);
 
     // Scaling after Softmax.
     for h := 0 to nHead - 1 do begin
@@ -217,13 +208,12 @@ begin
       // Scale(SeqLen * SeqLen, InvSqrtHeadDim, @ScoresHead1[h].Grad[0,0]);
       // cblas_sscal(SeqLen * SeqLen, InvSqrtHeadDim, @ScoresHead1[h].Grad[0,0], 1); Old.
       // cublas.
-      cudaMemcpy(ScoresHead1[h].dGrad, @ScoresHead1[h].Grad[0, 0], ScoresSize, cudaMemcpyHostToDevice);
       CuScale(CuHandle, SeqLen * SeqLen, InvSqrtHeadDim, ScoresHead1[h].dGrad);
     end;
 
     // Backprop AutoRegression.
     // Equation: ScoresHead1.Grad = Unmask(ScoresHead1.Grad).
-    for h := 0 to nHead - 1 do
+stop    for h := 0 to nHead - 1 do
       for i := 0 to SeqLen - 1 do
         for j := i + 1 to SeqLen - 1 do
           ScoresHead1[h].Grad[i, j] := 0.0;
@@ -245,7 +235,6 @@ begin
       // cblas.
       // MatMulFullNN(@ScoresHead1[h].Grad[0,0], @K.Value[0, HeadOffset], @Q.Grad[0, HeadOffset], SeqLen, HeadDim, SeqLen, SeqLen, ModelDim, ModelDim);
       // cublas. No need to copy QHead.Grad. ScoresHead1.Grad already in cublas.
-      cudaMemcpy(K.dValue, @K.Value[0, 0], XSize, cudaMemcpyHostToDevice);
       CuMatMulFullNN(CuHandle, ScoresHead1[h].dGrad, PSingle(K.dValue) + HeadOffset,
         PSingle(Q.dGrad) + HeadOffset, SeqLen, HeadDim, SeqLen, SeqLen, ModelDim, ModelDim);
     end;
@@ -255,9 +244,8 @@ begin
     for h := 0 to nHead - 1 do begin
       HeadOffset := h * HeadDim;
       // cblas.
-      MatMulFullTN(@ScoresHead1[h].Grad[0,0], @Q.Value[0, HeadOffset], @K.Grad[0, HeadOffset], SeqLen, HeadDim, SeqLen, SeqLen, ModelDim, ModelDim);
+      // MatMulFullTN(@ScoresHead1[h].Grad[0,0], @Q.Value[0, HeadOffset], @K.Grad[0, HeadOffset], SeqLen, HeadDim, SeqLen, SeqLen, ModelDim, ModelDim);
       // cublas. No need to copy K.Grad. ScoresHead1.Grad already in cublas.
-      cudaMemcpy(Q.dValue, @Q.Value[0, 0], XSize, cudaMemcpyHostToDevice);
       CuMatMulFullTN(CuHandle, ScoresHead1[h].dGrad, PSingle(Q.dValue) + HeadOffset,
         PSingle(K.dGrad) + HeadOffset, SeqLen, HeadDim, SeqLen, SeqLen, ModelDim, ModelDim);
     end;
@@ -276,9 +264,23 @@ begin
     // cblas.
     // MatMulTN(@X1.Value[0, 0], @Q.Grad[0, 0], @Wq.Grad[0, 0], ModelDim, ModelDim, SeqLen);
     // cublas. No need to copy Xq.Grad. Q.dGrad already in cublas.
-    cudaMemcpy(X1.dValue, @X1.Value[0, 0], XSize, cudaMemcpyHostToDevice);
     CuMatMulFullTN(CuHandle, X1.dValue, Q.dGrad, Wq.dGrad, ModelDim, ModelDim, SeqLen, ModelDim, ModelDim, ModelDim);
 
+    // Backprop Create X1q from Q.Grad: Input Q.Grad, Wqᵀ.Value. Output X1q.Grad.
+    // Equation: X1q.Grad = Q.Grad · Wqᵀ. X1q.Grad in R^{L x D}. Q.Grad in R^{L x D}. Wqᵀ.Value in R^{D · D}.
+    // cblas.
+    // MatMulNT(@Q.Grad[0, 0], @Wq.Value[0, 0], @X1q.Grad[0, 0], SeqLen, ModelDim, ModelDim);
+    // cublas. No need to copy X1q.Grad. Q.dGrad already in cublas.
+    CuMatMulNT(CuHandle, Q.dGrad, Wq.dValue, X1q.dGrad, SeqLen, ModelDim, ModelDim);
+
+   {Wq.Grad = X1ᵀ.Value · Q.Grad
+    X1q.Grad = Q.Grad · Wqᵀ.Value}
+    // Backprop Create Wq.Grad from Q.Grad: Input X1ᵀ.Value · Q.Grad. Output Wq.Grad.
+    // Equation: Wq.Grad = X1ᵀ · Q.Grad. Wq.Grad in R^{D x D}. X1ᵀ in R^{D x L}. Q.Grad in R^{L x D}.
+    // cblas.
+    // MatMulTN(@X1.Value[0, 0], @Q.Grad[0, 0], @Wq.Grad[0, 0], ModelDim, ModelDim, SeqLen);
+    // cublas. No need to copy Xq.Grad. Q.dGrad already in cublas.
+    CuMatMulFullTN(CuHandle, X1.dValue, Q.dGrad, Wq.dGrad, ModelDim, ModelDim, SeqLen, ModelDim, ModelDim, ModelDim);
 
     // Backprop Create X1q from Q.Grad: Input Q.Grad, Wqᵀ.Value. Output X1q.Grad.
     // Equation: X1q.Grad = Q.Grad · Wqᵀ. X1q.Grad in R^{L x D}. Q.Grad in R^{L x D}. Wqᵀ.Value in R^{D · D}.
@@ -287,24 +289,6 @@ begin
     // cublas. No need to copy X1q.Grad. Q.dGrad already in cublas.
     cudaMemcpy(Wq.dValue, @Wq.Value[0, 0], XSize, cudaMemcpyHostToDevice);
     CuMatMulNT(CuHandle, Q.dGrad, Wq.dValue, X1q.dGrad, SeqLen, ModelDim, ModelDim);
-
-     {Wq.Grad = X1ᵀ.Value · Q.Grad
-      X1q.Grad = Q.Grad · Wqᵀ.Value}
-      // Backprop Create Wq.Grad from Q.Grad: Input X1ᵀ.Value · Q.Grad. Output Wq.Grad.
-      // Equation: Wq.Grad = X1ᵀ · Q.Grad. Wq.Grad in R^{D x D}. X1ᵀ in R^{D x L}. Q.Grad in R^{L x D}.
-      // cblas.
-      // MatMulTN(@X1.Value[0, 0], @Q.Grad[0, 0], @Wq.Grad[0, 0], ModelDim, ModelDim, SeqLen);
-      // cublas. No need to copy Xq.Grad. Q.dGrad already in cublas.
-      cudaMemcpy(X1.dValue, @X1.Value[0, 0], XSize, cudaMemcpyHostToDevice);
-      CuMatMulFullTN(CuHandle, X1.dValue, Q.dGrad, Wq.dGrad, ModelDim, ModelDim, SeqLen, ModelDim, ModelDim, ModelDim);
-
-      // Backprop Create X1q from Q.Grad: Input Q.Grad, Wqᵀ.Value. Output X1q.Grad.
-      // Equation: X1q.Grad = Q.Grad · Wqᵀ. X1q.Grad in R^{L x D}. Q.Grad in R^{L x D}. Wqᵀ.Value in R^{D · D}.
-      // cblas.
-      // MatMulNT(@Q.Grad[0, 0], @Wq.Value[0, 0], @X1q.Grad[0, 0], SeqLen, ModelDim, ModelDim);
-      // cublas. No need to copy X1q.Grad. Q.dGrad already in cublas.
-      cudaMemcpy(Wq.dValue, @Wq.Value[0, 0], XSize, cudaMemcpyHostToDevice);
-      CuMatMulNT(CuHandle, Q.dGrad, Wq.dValue, X1q.dGrad, SeqLen, ModelDim, ModelDim);
 
     {Wk.Grad = X1ᵀ.Value · K.Grad
      X1k.Grad = K.Grad · Wkᵀ.Value}
@@ -320,7 +304,6 @@ begin
     // cblas.
     // MatMulNT(@K.Grad[0, 0], @Wk.Value[0, 0], @X1k.Grad[0, 0], SeqLen, ModelDim, ModelDim);
     // cublas.
-    cudaMemcpy(Wk.dValue, @Wk.Value[0, 0], XSize, cudaMemcpyHostToDevice);
     CuMatMulNT(CuHandle, K.dGrad, Wk.dValue, X1k.dGrad, SeqLen, ModelDim, ModelDim);
 
     {Wv.Grad = X1ᵀ · V.Grad
@@ -337,7 +320,6 @@ begin
     // cblas.
     // MatMulNT(@V.Grad, @Wv.Value, @X1v.Grad, SeqLen, ModelDim, ModelDim);
     // cublas.
-    cudaMemcpy(Wv.dValue, @Wv.Value[0, 0], XSize, cudaMemcpyHostToDevice);
     CuMatMulNT(CuHandle, V.dGrad, Wv.dValue, X1v.dGrad, SeqLen, ModelDim, ModelDim);
 
     // 1B. Backprop Merge: Obtain X1 Grad as sum of Grads. Input X1q.Grad, X1k.Grad, and X1v.Grad. Output X1.Grad.
@@ -348,16 +330,15 @@ begin
     cudaMemcpy(@X1q.Grad[0, 0], X1q.dGrad, XSize, cudaMemcpyDeviceToHost);
     cudaMemcpy(@X1k.Grad[0, 0], X1k.dGrad, XSize, cudaMemcpyDeviceToHost);
     cudaMemcpy(@X1v.Grad[0, 0], X1v.dGrad, XSize, cudaMemcpyDeviceToHost);
-    for i := 0 to SeqLen - 1 do
+stop check    for i := 0 to SeqLen - 1 do
       for j := 0 to ModelDim - 1 do
         X1.Grad[i, j] := X1q.Grad[i, j] + X1k.Grad[i, j] + X1v.Grad[i, j];
 
     // Backprop Accumulate: Input X1.Grad, X4.Grad. Output X1.Grad.
     // Equation: X1.Grad = X1.Grad + X4.Grad. All R^{L x D}.
     // cblas.
-    AccumulateGrad(X4.Grad, X1.Grad, SeqLen, ModelDim);
+    // AccumulateGrad(X4.Grad, X1.Grad, SeqLen, ModelDim);
     // cublas.   X4.dGrad already in cublas.
-    cudaMemcpy(X1.dGrad, @X1.Grad[0, 0], XSize, cudaMemcpyHostToDevice);
     CuAccumulateGrad(CuHandle, X4.dGrad, X1.dGrad, SeqLen, ModelDim);
 
     // Display X1.Grad matrix.
@@ -369,10 +350,9 @@ begin
 
     // Equation: X.Grad, Gamma1.Grad, Beta1.Grad = LayerNorm(X1.Value, X1.Grad, Gamma1.Value, Beta1.Value). X.Grad, X1.Grad in R^{L x D}. Gamma1.Grad, Beta1.Grad in R^{D}.
     // cblas.
-    LayerNormBackward(X1.Grad, X.Grad, Gamma1.Grad, Beta1.Grad, SeqLen, Gamma1.Value, LNXhat1, LNInvStd1);
+stop    LayerNormBackward(X1.Grad, X.Grad, Gamma1.Grad, Beta1.Grad, SeqLen, Gamma1.Value, LNXhat1, LNInvStd1);
 
     // Display X.Grad matrix.
-    cudaMemcpy(@X.Grad[0, 0], X.dGrad, XSize, cudaMemcpyDeviceToHost);
     VTPDisplayX('Display X.Grad, in transform, at end.', X.Grad, G);
 
   end;   // End with WModel.

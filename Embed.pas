@@ -23,8 +23,6 @@ uses
 
 procedure RunEmbed(var WModelParams: TWModelParams; var WModelState: TWModelState;
   const TokenizedCorpus: TIVector);
-procedure RunInfer(var WModelParams: TWModelParams; var WModelState: TWModelState;
-  const TokenizedCorpus: TIVector; var QueryOutput: TIVector);
 
 implementation
 
@@ -44,6 +42,24 @@ begin
   // Clean up if it was successfully loaded.
   if Result then
     FreeLibrary(DLLHandle);
+end;
+
+// Check DLL accessibility.
+procedure CheckAllDLLs;
+begin
+  If CheckDLL('cublas64_13.dll') then CublasPresent := True else CublasPresent := False;
+  If CheckDLL('cudart64_13.dll') then CudartPresent := True else CudartPresent := False;
+  If CheckDLL('WesChatKernel12.dll') then WesChatKernelPresent := True else WesChatKernelPresent := False;
+  if not CublasPresent or not CudartPresent or not WesChatkernelPresent then begin
+      Writeln('One of the following DLLs is required but not present: cublas64_13.dll, cudart64_13.dll, WesChatKernel12.dll.');
+      Pause;
+      Halt;
+  end;
+  if CublasPresent and (cublasCreate_v2(CuHandle) <> 0) then begin
+    Writeln('cuBLAS initialization required but failed.');
+    Pause;
+    Halt;
+  end;
 end;
 
 // Create the target vector for use in head output.
@@ -92,8 +108,6 @@ procedure RunEmbed(var WModelParams: TWModelParams; var WModelState: TWModelStat
 var
   i, j, k, Blk, LastBlk: Integer;
   Start, EmbedLoop: Integer;
-  BestTok: Integer;
-  BestProb: Single;
   Stride: Integer = 64;      // Stride 64 tokens every sequence.
 
   procedure ReadEmbedIfKeyPressed;
@@ -145,18 +159,7 @@ var
   end;
 
 begin
-  // Check DLL accessibility.
-  If CheckDLL('cublas64_13.dll') then CublasPresent := True else CublasPresent := False;
-  If CheckDLL('cudart64_13.dll') then CudartPresent := True else CudartPresent := False;
-  If CheckDLL('WesChatKernel12.dll') then WesChatKernelPresent := True else WesChatKernelPresent := False;
-  if not CublasPresent or not CudartPresent or not WesChatkernelPresent then begin
-      Writeln('One of the following DLLs is required but not present: cublas64_13.dll, cudart64_13.dll, WesChatKernel12.dll.');
-      Pause;
-      Halt;
-    end;
-
- if CublasPresent and (cublasCreate_v2(CuHandle) <> 0) then
-    writeln('cuBLAS initialization failed.');
+  CheckAllDLLs;
 
   nVocab := nSymbols;    // Need nVocab (second name for variable) for Transform.
 
@@ -239,7 +242,7 @@ begin
       Writeln('     $$$ Forward Block loop: start ', Blk, '  Sequence Start ', Start, ' $$$');
       if VerboseTransform then Pause;
 
-      RunTransformForward(WModelParams, WModelState, QueryOutput, Blk);
+      RunTransformForward(WModelParams, WModelState, Blk);
 
       if Blk < nBlock - 1 then
         // cblas.
@@ -290,24 +293,7 @@ begin
       cudaMemcpy(@Probs[0, 0], dProbs, ProbsSize, cudaMemcpyDeviceToHost);
       VTPDisplayX('Display Probs, in transform, after softmax.', Probs, B);
 
-      // 3C. If QueryForward, and last nBlock, then pick the largest probs, and save them. Move to end of nBlock loop.
-      Writeln('            Transform Forward Stage 3C');
-      if not Training and (Blk = nBlock - 1) then begin
-        SetLength(QueryOutput, SeqLen);
-        for i := 0 to SeqLen - 1 do begin
-          BestProb := Probs[i, 0];
-          BestTok  := 0;
-          for j := 1 to nVocab - 1 do
-            if Probs[i, j] > BestProb then begin
-              BestProb := Probs[i, j];
-              BestTok := j;
-            end;
-          QueryOutput[i] := BestTok;
-        end;
-        Exit;
-      end;
-
-      // 3D. Cross-Entropy Loss. Obtain TopGradient from Probs.
+      // 3C. Cross-Entropy Loss. Obtain TopGradient from Probs.
       Writeln('            Transform Forward Stage 3D');
       // Gradient: Input Probs. Output TopGradient. Also option of CalculateGradient from KLDivergence.
       // Equation: TopGradient in R^{L x nVocab}. Probs in R^{L x nVocab}.
@@ -321,7 +307,8 @@ begin
       // Display TopGradient matrix.
       cudaMemcpy(@TopGradient[0, 0], dTopGradient, ProbsSize, cudaMemcpyDeviceToHost);
       VTPDisplayX('Display TopGradient, in transform, after Logit calculation.', TopGradient, B);
-      // 3E. Backprop TopGradient creates X7 Grad: Input TopGradient, WVocabᵀ. Output X7.Grad.
+
+      // 3D. Backprop TopGradient creates X7 Grad: Input TopGradient, WVocabᵀ. Output X7.Grad.
       Writeln('              Transform Backprop Stage 3E');
 
       with StateBlock[LastBlk] do begin
@@ -365,8 +352,10 @@ begin
       RunTransformBackprop(WModelParams, WModelState, Blk);
 
       if Blk > 0 then
-        // Keep cblas; cublas difficult.
-        CopyXTensor(WModelState.StateBlock[Blk].X1, WModelState.StateBlock[Blk - 1].X7);
+        // cblas.
+        // CopyXTensor(WModelState.StateBlock[Blk].X1, WModelState.StateBlock[Blk - 1].X7);
+        // cuda kernel.
+        cudaMemcpy(WModelState.StateBlock[Blk].X1.dValue, WModelState.StateBlock[Blk - 1].X7.dValue, XSize, cudaMemcpyDeviceToDevice);
 
       if PauseIfKeyPressed then
         ReadEmbedIfKeyPressed;
@@ -382,80 +371,6 @@ begin
     Start := Start + Stride;
   end; // End sequence loop.
 
-  Writeln('End of training. Press <CR> to continue.');
-  Readln;
-end;
-
-// Run inference forward without additional training.
-// NEED TO UPDATE.
-procedure RunInfer(var WModelParams: TWModelParams; var WModelState: TWModelState;
-  const TokenizedCorpus: TIVector; var QueryOutput: TIVector);
-var
-  k, Blk: Integer;
-  Start, EmbedLoop: Integer;
-  Stride: Integer = 64;      // Stride 64 tokens every sequence.
-
-begin
-  nVocab := nSymbols;    // Need nVocab (second name for variable) for Transform.
-
-  Writeln('First quarter of two rows of embeddings.');
-  for k := 0 to ModelDim div 4 - 1 do
-    Write(WModelParams.Embeddings.Value[1, k]: 8: 6, ' ');
-  Writeln;
-  for k := 0 to ModelDim div 4 - 1 do
-    Write(WModelParams.Embeddings.Value[2, k]: 8: 6, ' ');
-  Writeln;
-  Pause;
-
-  with WModelParams do begin
-    cudaMemcpy(@Embeddings.Value[0, 0], Embeddings.dValue, EmbeddingsSize, cudaMemcpyDeviceToHost);
-    VTPDisplayX('Display Embeddings.Value prior to Transform.', Embeddings.Value, B);
-  end;
-
-  // Initialize.
-  // SetLength(TokenID, Length(TokenizedCorpus));
-  // TokenID := TokenizedCorpus;
-
-  // Stride loop thru Sequence.
-  Start := 0;
-  EmbedLoop := 0;
-  while (Start + SeqLen) < Length(TokenizedCorpus) do begin
-
-    // Display number of loops thru embed loop.
-    Inc(EmbedLoop);
-    Writeln('&&& Loop thru Embed: start ', Start, ' and loop number ', EmbedLoop, ' &&&');
-    Writeln(DateTimeToStr(Now), '  X = Exit program. B = Break out of merge loop. V = toggle Verbose mode.');
-    Writeln('  P = Program information. E = Embedding information. Embedding & transforming...');
-
-    if VerboseTransform then Pause;
-
-    // Build X only for block 0.
-    BuildInputMatrix(WModelState.StateBlock[0].X.Value, InputTokens, TokenizedCorpus, WModelParams, Start, SeqLen);
-
-    // Scale only block 0 input.
-    // Optional transformer-style embedding scaling by sqrt(d_model).
-    cudaMemcpy(WModelState.StateBlock[0].X.dValue, @WModelState.StateBlock[0].X.Value[0,0], XSize, cudaMemcpyHostToDevice);
-    CuScale(CuHandle, SeqLen * ModelDim, Scale, WModelState.StateBlock[0].X.dValue);
-
-    // Forward pass through stacked transformer blocks.
-    for Blk := 0 to nBlock - 1 do begin
-      Writeln('$$$ Starting Block ', Blk, '  Sequence Start ', Start, ' $$$');
-
-      VTPDisplayX('Display X.Value before transform.', WModelState.StateBlock[Blk].X.Value, G);
-
-      RunTransformForward(WModelParams, WModelState, QueryOutput, Blk);
-
-      // Feed this block's output into the next block's input.
-      if Blk < nBlock - 1 then
-        CopyXTensor(WModelState.StateBlock[Blk].X7, WModelState.StateBlock[Blk + 1].X);
-    end;
-
-    Start := Start + Stride;
-  end;
-
-  // De-initialize cublas.
-  MDeallocateCublas(WModelParams, WModelState);
-  cublasDestroy_v2(CuHandle);
   Writeln('End of training. Press <CR> to continue.');
   Readln;
 end;

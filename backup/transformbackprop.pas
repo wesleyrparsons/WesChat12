@@ -80,7 +80,7 @@ begin
       //  else
       //    Hidden1.Grad[i, j] := 0.0;
       // cuda kernel.
-      LaunchReLUBackward(StateBlock[Blk].Hidden1.dValue, StateBlock[Blk].Hidden2.dGrad, StateBlock[Blk].Hidden1.dGrad, SeqLen, ModelDimProj);
+      LaunchReLUBackward(Hidden1.dValue, Hidden2.dGrad, Hidden1.dGrad, SeqLen, ModelDimProj);
       // 2B. Backprop Addition/Accumulate. Obtain b1 from Hidden1.
       Writeln('            Transform Backprop Stage 2B');
 
@@ -122,7 +122,9 @@ begin
     // Equation: X4.Grad, Gamma2.Grad, Beta2.Grad = LayerNorm(X5.Grad, Gamma2.Value, Beta2.Value).
     // X4.Grad, X5.Grad, LNXHat2 in R^{L x D}. Gamma2.Grad, Beta2.Grad in R^{D}.
     // cblas.
-stop    LayerNormBackward(X5.Grad, X4.Grad, Gamma2.Grad, Beta2.Grad, SeqLen, Gamma2.Value, LNXHat2, LNInvStd2);
+    // LayerNormBackward(X5.Grad, X4.Grad, Gamma2.Grad, Beta2.Grad, SeqLen, Gamma2.Value, LNXHat2, LNInvStd2);
+    // cuda kernel.
+    LaunchLayerNormBackward(X5.dGrad, X4.dGrad, Gamma2.dValue, dLNXHat2, dLNInvStd2, Gamma2.dGrad, Beta2.dGrad, SeqLen, ModelDim);
 
     // Display X4.Grad matrix.
     cudaMemcpy(@X4.Grad[0, 0], X4.dGrad, XSize, cudaMemcpyDeviceToHost);
@@ -199,8 +201,11 @@ stop    LayerNormBackward(X5.Grad, X4.Grad, Gamma2.Grad, Beta2.Grad, SeqLen, Gam
     // No need to copy ScoresHead1.Grad. ScoresHead2.Value and ScoresHead2.Grad already in cblas.
 
     for h := 0 to nHead - 1 do
-      for i := 0 to SeqLen - 1 do
-stop        SoftmaxBackward(ScoresHead2[h].Value[i], ScoresHead2[h].Grad[i], ScoresHead1[h].Grad[i]);
+      // cblas.
+      // for i := 0 to SeqLen - 1 do
+      // SoftmaxBackward(ScoresHead2[h].Value[i], ScoresHead2[h].Grad[i], ScoresHead1[h].Grad[i]);
+      // cuda kernel.
+      LaunchSoftmaxBackward(ScoresHead2[h].dValue, ScoresHead2[h].dGrad, ScoresHead1[h].dGrad, SeqLen, SeqLen);
 
     // Scaling after Softmax.
     for h := 0 to nHead - 1 do begin
@@ -213,10 +218,12 @@ stop        SoftmaxBackward(ScoresHead2[h].Value[i], ScoresHead2[h].Grad[i], Sco
 
     // Backprop AutoRegression.
     // Equation: ScoresHead1.Grad = Unmask(ScoresHead1.Grad).
-stop    for h := 0 to nHead - 1 do
-      for i := 0 to SeqLen - 1 do
-        for j := i + 1 to SeqLen - 1 do
-          ScoresHead1[h].Grad[i, j] := 0.0;
+    // cblas.
+    for h := 0 to nHead - 1 do
+      // for i := 0 to SeqLen - 1 do for j := i + 1 to SeqLen - 1 do
+      //   ScoresHead1[h].Grad[i, j] := 0.0;
+      // cuda kernel.
+      LaunchAutoRegressiveMaskBackward(ScoresHead1[h].dGrad, SeqLen);
 
     // Backprop standardization. Input: ScoresHead1.Grad. Output: ScoresHead1.Grad.
     // Equation: ScoresHead1.Grad = Sqrt(1 / ModelDim). ScoresHead1.Grad in R^{L x L}. Done above.
@@ -326,13 +333,16 @@ stop    for h := 0 to nHead - 1 do
     Writeln('          Transform Backprop Stage 1B');
 
     // Equation:  X1.Grad = X1q.Grad + X1k.Grad + X1v.Grad. All in R^{L x D}.
-    // No need to copy X1.Grad.
-    cudaMemcpy(@X1q.Grad[0, 0], X1q.dGrad, XSize, cudaMemcpyDeviceToHost);
-    cudaMemcpy(@X1k.Grad[0, 0], X1k.dGrad, XSize, cudaMemcpyDeviceToHost);
-    cudaMemcpy(@X1v.Grad[0, 0], X1v.dGrad, XSize, cudaMemcpyDeviceToHost);
-stop check    for i := 0 to SeqLen - 1 do
-      for j := 0 to ModelDim - 1 do
-        X1.Grad[i, j] := X1q.Grad[i, j] + X1k.Grad[i, j] + X1v.Grad[i, j];
+    // cblas.
+    // for i := 0 to SeqLen - 1 do for j := 0 to ModelDim - 1 do
+    //   X1.Grad[i, j] := X1q.Grad[i, j] + X1k.Grad[i, j] + X1v.Grad[i, j];
+    // cublas.
+    // X1.dGrad := X1q.dGrad.
+    cublasScopy_v2(CuHandle, SeqLen * ModelDim, X1q.dGrad, 1, X1.dGrad, 1);
+    // X1.dGrad += X1k.dGrad.
+    CuAddScaled(CuHandle, SeqLen * ModelDim, 1.0, X1k.dGrad, X1.dGrad);
+    // X1.dGrad += X1v.dGrad.
+    CuAddScaled(CuHandle, SeqLen * ModelDim, 1.0, X1v.dGrad, X1.dGrad);
 
     // Backprop Accumulate: Input X1.Grad, X4.Grad. Output X1.Grad.
     // Equation: X1.Grad = X1.Grad + X4.Grad. All R^{L x D}.
@@ -350,9 +360,13 @@ stop check    for i := 0 to SeqLen - 1 do
 
     // Equation: X.Grad, Gamma1.Grad, Beta1.Grad = LayerNorm(X1.Value, X1.Grad, Gamma1.Value, Beta1.Value). X.Grad, X1.Grad in R^{L x D}. Gamma1.Grad, Beta1.Grad in R^{D}.
     // cblas.
-stop    LayerNormBackward(X1.Grad, X.Grad, Gamma1.Grad, Beta1.Grad, SeqLen, Gamma1.Value, LNXhat1, LNInvStd1);
+    LayerNormBackward(X1.Grad, X.Grad, Gamma1.Grad, Beta1.Grad, SeqLen, Gamma1.Value, LNXhat1, LNInvStd1);
+    // cuda kernel.
+    LaunchLayerNormBackward(X1.dGrad, X.dGrad, Gamma1.dValue, dLNXHat1, dLNInvStd1,
+      Gamma1.dGrad, Beta1.dGrad, SeqLen, ModelDim);
 
     // Display X.Grad matrix.
+    cudaMemcpy(@X.Grad[0, 0], X.dGrad, XSize, cudaMemcpyDeviceToHost);
     VTPDisplayX('Display X.Grad, in transform, at end.', X.Grad, G);
 
   end;   // End with WModel.

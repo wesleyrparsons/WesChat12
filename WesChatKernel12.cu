@@ -89,6 +89,100 @@ void LaunchLayerNormForward(
     );
 }
 
+// LayerNormBackward.
+#include <cuda_runtime.h>
+
+extern "C" __global__
+void LayerNormBackwardKernel(
+    const float* dY,
+    float* dX,
+    const float* Gamma,
+    const float* LNXhat,
+    const float* LNInvStd,
+    float* dGamma,
+    float* dBeta,
+    int SeqLen,
+    int ModelDim)
+{
+    int row = blockIdx.x;
+    int tid = threadIdx.x;
+
+    extern __shared__ float shared[];
+    float* s_sum1 = shared;
+    float* s_sum2 = shared + blockDim.x;
+
+    float dy = 0.0f;
+    float gamma = 0.0f;
+    float xhat = 0.0f;
+    float dhat = 0.0f;
+
+    int idx = row * ModelDim + tid;
+
+    if (row < SeqLen && tid < ModelDim) {
+        dy = dY[idx];
+        gamma = Gamma[tid];
+        xhat = LNXhat[idx];
+        dhat = dy * gamma;
+
+        atomicAdd(&dGamma[tid], dy * xhat);
+        atomicAdd(&dBeta[tid], dy);
+    }
+
+    s_sum1[tid] = (tid < ModelDim) ? dhat : 0.0f;
+    s_sum2[tid] = (tid < ModelDim) ? dhat * xhat : 0.0f;
+    __syncthreads();
+
+    for (int stride = blockDim.x / 2; stride > 0; stride >>= 1) {
+        if (tid < stride) {
+            s_sum1[tid] += s_sum1[tid + stride];
+            s_sum2[tid] += s_sum2[tid + stride];
+        }
+        __syncthreads();
+    }
+
+    if (row < SeqLen && tid < ModelDim) {
+        float sum1 = s_sum1[0];
+        float sum2 = s_sum2[0];
+        float scale = LNInvStd[row] / ModelDim;
+
+        dX[idx] = scale * (ModelDim * dhat - sum1 - xhat * sum2);
+    }
+}
+
+extern "C" __declspec(dllexport)
+void LaunchLayerNormBackward(
+    const float* dY,
+    float* dX,
+    const float* Gamma,
+    const float* LNXhat,
+    const float* LNInvStd,
+    float* dGamma,
+    float* dBeta,
+    int SeqLen,
+    int ModelDim)
+{
+    cudaMemset(dGamma, 0, ModelDim * sizeof(float));
+    cudaMemset(dBeta,  0, ModelDim * sizeof(float));
+
+    int threads = 256;
+    int blocks = SeqLen;
+    int sharedBytes = 2 * threads * sizeof(float);
+
+    LayerNormBackwardKernel<<<blocks, threads, sharedBytes>>>(
+        dY,
+        dX,
+        Gamma,
+        LNXhat,
+        LNInvStd,
+        dGamma,
+        dBeta,
+        SeqLen,
+        ModelDim
+    );
+
+    cudaDeviceSynchronize();
+}
+
 // AutoRegressiveMask.
 
 #include <cuda_runtime.h>
@@ -114,6 +208,41 @@ void LaunchAutoRegressiveMask(float* Scores, int SeqLen)
     );
 
     AutoRegressiveMaskKernel<<<blocks, threads>>>(Scores, SeqLen);
+}
+
+// AutoRegressiveMackBackward.
+#include <cuda_runtime.h>
+
+extern "C" __global__
+void AutoRegressiveMaskBackwardKernel(
+    float* ScoresGrad,
+    int SeqLen)
+{
+    int i = blockIdx.y * blockDim.y + threadIdx.y;
+    int j = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (i < SeqLen && j < SeqLen && j > i) {
+        ScoresGrad[i * SeqLen + j] = 0.0f;
+    }
+}
+
+extern "C" __declspec(dllexport)
+void LaunchAutoRegressiveMaskBackward(
+    float* ScoresGrad,
+    int SeqLen)
+{
+    dim3 threads(16, 16);
+    dim3 blocks(
+        (SeqLen + threads.x - 1) / threads.x,
+        (SeqLen + threads.y - 1) / threads.y
+    );
+
+    AutoRegressiveMaskBackwardKernel<<<blocks, threads>>>(
+        ScoresGrad,
+        SeqLen
+    );
+
+    cudaDeviceSynchronize();
 }
 
 // RoPEForward.
@@ -171,6 +300,8 @@ void LaunchRoPEForward(
     );
 }
 
+// DropOut.
+
 #include <cuda_runtime.h>
 #include <curand_kernel.h>
 
@@ -194,6 +325,19 @@ void DropoutKernel(
         else
             X[idx] = X[idx] / (1.0f - DropProb);
     }
+}
+
+extern "C" __declspec(dllexport)
+void LaunchDropout(
+    float* X,
+    int N,
+    float DropProb,
+    unsigned long long Seed)
+{
+    int threads = 256;
+    int blocks = (N + threads - 1) / threads;
+
+    DropoutKernel<<<blocks, threads>>>(X, N, DropProb, Seed);
 }
 
 // ReLUForward.
@@ -269,25 +413,13 @@ void LaunchReLUBackward(
     cudaDeviceSynchronize();  // good for debugging
 }
 
-// Dropout.
-extern "C" __declspec(dllexport)
-void LaunchDropout(
-    float* X,
-    int N,
-    float DropProb,
-    unsigned long long Seed)
-{
-    int threads = 256;
-    int blocks = (N + threads - 1) / threads;
-
-    DropoutKernel<<<blocks, threads>>>(X, N, DropProb, Seed);
-}
-
+// SoftmaxForward, strided.
 #include <cuda_runtime.h>
 #include <math.h>
+#include <float.h>
 
 extern "C" __global__
-void SoftmaxForwardNKernel(
+void SoftmaxForwardStridedKernel(
     const float* X,
     float* Y,
     int Rows,
@@ -301,15 +433,19 @@ void SoftmaxForwardNKernel(
 
     float invT = 1.0f / Temperature;
 
-    // 1. Find row max
-    float val = -1.0e30f;
+    // 1. local max over this thread's columns
+    float localMax = -FLT_MAX;
 
-    if (row < Rows && tid < N)
-        val = X[row * N + tid] * invT;
+    for (int col = tid; col < N; col += blockDim.x) {
+        float v = X[row * N + col] * invT;
+        if (v > localMax)
+            localMax = v;
+    }
 
-    shared[tid] = val;
+    shared[tid] = localMax;
     __syncthreads();
 
+    // reduce max
     for (int stride = blockDim.x / 2; stride > 0; stride >>= 1) {
         if (tid < stride) {
             if (shared[tid + stride] > shared[tid])
@@ -320,15 +456,19 @@ void SoftmaxForwardNKernel(
 
     float maxVal = shared[0];
 
-    // 2. Exp and sum
-    float e = 0.0f;
+    // 2. local exp sum
+    float localSum = 0.0f;
 
-    if (row < Rows && tid < N)
-        e = expf((X[row * N + tid] * invT) - maxVal);
+    for (int col = tid; col < N; col += blockDim.x) {
+        float e = expf((X[row * N + col] * invT) - maxVal);
+        Y[row * N + col] = e;
+        localSum += e;
+    }
 
-    shared[tid] = e;
+    shared[tid] = localSum;
     __syncthreads();
 
+    // reduce sum
     for (int stride = blockDim.x / 2; stride > 0; stride >>= 1) {
         if (tid < stride)
             shared[tid] += shared[tid + stride];
@@ -337,12 +477,12 @@ void SoftmaxForwardNKernel(
 
     float invSum = 1.0f / shared[0];
 
-    // 3. Normalize
-    if (row < Rows && tid < N)
-        Y[row * N + tid] = e * invSum;
+    // 3. normalize
+    for (int col = tid; col < N; col += blockDim.x) {
+        Y[row * N + col] *= invSum;
+    }
 }
 
-// SoftmaxForward.
 extern "C" __declspec(dllexport)
 void LaunchSoftmaxForwardN(
     const float* X,
@@ -352,17 +492,74 @@ void LaunchSoftmaxForwardN(
     float Temperature)
 {
     int threads = 256;
-
-    // For now, require N <= 256.
     int sharedBytes = threads * sizeof(float);
 
-    SoftmaxForwardNKernel<<<Rows, threads, sharedBytes>>>(
-        X,
-        Y,
-        Rows,
-        N,
-        Temperature
+    SoftmaxForwardStridedKernel<<<Rows, threads, sharedBytes>>>(
+        X, Y, Rows, N, Temperature
     );
+
+    cudaDeviceSynchronize();
+}
+
+// SoftmaxBackward, strided.
+#include <cuda_runtime.h>
+
+extern "C" __global__
+void SoftmaxBackwardStridedKernel(
+    const float* Y,
+    const float* dY,
+    float* dX,
+    int Rows,
+    int D)
+{
+    int row = blockIdx.x;
+    int tid = threadIdx.x;
+
+    extern __shared__ float shared[];
+
+    // 1. local dot = sum(dY * Y)
+    float localDot = 0.0f;
+
+    for (int col = tid; col < D; col += blockDim.x) {
+        int idx = row * D + col;
+        localDot += dY[idx] * Y[idx];
+    }
+
+    shared[tid] = localDot;
+    __syncthreads();
+
+    // reduce dot
+    for (int stride = blockDim.x / 2; stride > 0; stride >>= 1) {
+        if (tid < stride)
+            shared[tid] += shared[tid + stride];
+        __syncthreads();
+    }
+
+    float dot = shared[0];
+
+    // 2. dx = y * (dy - dot)
+    for (int col = tid; col < D; col += blockDim.x) {
+        int idx = row * D + col;
+        dX[idx] = Y[idx] * (dY[idx] - dot);
+    }
+}
+
+extern "C" __declspec(dllexport)
+void LaunchSoftmaxBackward(
+    const float* Y,
+    const float* dY,
+    float* dX,
+    int Rows,
+    int D)
+{
+    int threads = 256;
+    int sharedBytes = threads * sizeof(float);
+
+    SoftmaxBackwardStridedKernel<<<Rows, threads, sharedBytes>>>(
+        Y, dY, dX, Rows, D
+    );
+
+    cudaDeviceSynchronize();
 }
 
 // CEGradientFromProbabilities.

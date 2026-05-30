@@ -11,18 +11,20 @@ var
   DoNotPause: Boolean = False;         // Pause disabled.
   PauseIfKeyPressed: Boolean = True;   // Pause if a key is pressed.
   DisplayCorpus: Boolean = True;       // One set for real tokenizing and one set for debug.
+  Verbose: Boolean = True;             // Verbose.
   VeryVerbose: Boolean = False;        // More verbose.
-  VerboseTokenize: Boolean = True;     // Verbose in Tokenize units.
-  VerboseTransform: Boolean = True;    // Verbose in Transform units.
+  VVVerbose: Boolean = False;          // Maximum verbose.
+  VerboseTokenize: Boolean = False;    // Verbose in Tokenize units.
+  VerboseTransform: Boolean = True;    // Verbose in Transform units.  Do I need this?
   ShowTokenWork: Boolean = True;       // Show token work in Tokenize units.
   ShowMergeWork: Boolean = True;       // Show merge work in Tokenize units.
   ShowVerification: Boolean = True;    // Do verification by rebyulding corpus in Tokenize units.
   ShowEachByteRead: Boolean = False;   // Verify reading of bytes.
   SaveFiles: Boolean = False;          // Save various files, otherwise not saved.
-  SavePartialSymbolTable: Boolean = False;   // Save intermediate symbol tables.
-  PartialSymbolTableTrigger: Integer = 5000;// Trigger to save symbol tables.
   MaxMerges: Integer = 20000;          // Maximum number of merges.
   MaxPairCount: Integer = 400000;      // Maximum number of pair in BPE.
+  SavePartialSymbolTable: Boolean = False;       // Save intermediate symbol tables.
+  PartialSymbolTableTrigger: Integer = 5000;     // Trigger to save symbol tables.
 
 const
   // Model constants.
@@ -174,7 +176,6 @@ var
   dInputTokens: PInteger;                        // Input tokens.
   TargetTokens: TIDimVector;                     // Target tokens. Shited by  +1.
   dTargetTokens: PInteger;
-  QueryOutput: TIVector;                         // Eventually make this a passed param to RunEmbed.
   // Utility vars.
   Mt0, Mt1, t0, t1, StopTime: TDateTime;         // For timing.
   Version: shortstring = '1.2';                  // Version 1.2.
@@ -189,7 +190,7 @@ var
   Temperature: Single = 1.0;                     // Temperature for softmax.
   Training: Boolean = True;                      // In training as opposed to inference mode.
   // Other.
-  TestVector: TFSVector;          // Vector for testing. [0..SeqLen] of Single.
+  TestVector: TFSVector;                         // Vector for testing. [0..SeqLen] of Single.
 
 implementation
 

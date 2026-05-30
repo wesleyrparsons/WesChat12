@@ -1,4 +1,4 @@
-unit Embed;
+unit Train;
 
 {$mode ObjFPC}{$H+}{$I proprietary.txt}
 
@@ -23,8 +23,6 @@ uses
 
 procedure RunEmbed(var WModelParams: TWModelParams; var WModelState: TWModelState;
   const TokenizedCorpus: TIVector);
-procedure RunInfer(var WModelParams: TWModelParams; var WModelState: TWModelState;
-  const TokenizedCorpus: TIVector; var QueryToken: Integer);
 
 implementation
 
@@ -82,7 +80,7 @@ begin
     Input[i] := TokenizedCorpus[StartIndex + i];
 end;
 
-// Create the input matrix and remember which token created each row.
+// Create the input matrix and remember which token created each row. No longer needed.
 procedure BuildInputMatrix(var X: TSeqMatrix; var InputTokens: TIDimVector; const TokenizedCorpus: TIVector;
   var WModelParams: TWModelParams; const Start, L: Integer);
 var
@@ -151,7 +149,7 @@ var
         Write('Enter filename: ');
         Readln(ModelFileName);
         if SaveModel(ModelFileName, WModelParams) then
-          Writeln('File ', f, ' successfully saved.')
+          Writeln('File ', ModelFileName, ' successfully saved.')
         else
           Writeln('File not saved.');
         Pause;
@@ -180,7 +178,8 @@ begin
   Writeln;
   Pause;
 
-  VTPDisplayX('Display Embeddings.Value prior to Transform.', WModelParams.Embeddings.Value, B);
+  if VerboseTransform then
+    VTPDisplayX('Display Embeddings.Value prior to Transform.', WModelParams.Embeddings.Value, B);
 
   // Initialize.
   InitializeTransformer(WModelParams, WModelState);
@@ -194,7 +193,7 @@ begin
   // Stride loop thru Sequence.
   Start := 0;
   EmbedLoop := 0;
-  while (Start + SeqLen) < Length(TokenizedCorpus) do begin      // add with WModelState do
+  while (Start + SeqLen + 1) <= Length(TokenizedCorpus) do      // add with WModelState do
 
     // Display number of loops thru embed loop.
     Inc(EmbedLoop);
@@ -227,9 +226,11 @@ begin
     LaunchEmbeddingLookup(WModelParams.Embeddings.dValue, dInputTokens, WModelState.StateBlock[0].X.dValue, SeqLen, ModelDim);
 
     // Display X.Value matrix.
-    cudaMemcpy(@WModelState.StateBlock[0].X.Value[0,0], WModelState.StateBlock[0].X.dValue, XSize, cudaMemcpyDeviceToHost);
-    VTPDisplayX('Display X.Value before transform.', WModelState.StateBlock[0].X.Value, G);
-    VTPDisplayX('Display X.Value before transform.', WModelState.StateBlock[0].X.Value, B);
+    if VerboseTransform then begin
+      cudaMemcpy(@WModelState.StateBlock[0].X.Value[0,0], WModelState.StateBlock[0].X.dValue, XSize, cudaMemcpyDeviceToHost);
+      VTPDisplayX('Display X.Value before transform.', WModelState.StateBlock[0].X.Value, G);
+      VTPDisplayX('Display X.Value before transform.', WModelState.StateBlock[0].X.Value, B);
+    end;
 
     // Optional transformer-style embedding scaling by sqrt(d_model).
     // cudaMemcpy(WModelState.StateBlock[0].X.dValue, @WModelState.StateBlock[0].X.Value[0,0], XSize, cudaMemcpyHostToDevice);
@@ -272,12 +273,16 @@ begin
       CuMatMulFullNT(CuHandle, StateBlock[LastBlk].X7.dValue, Embeddings.dValue, dProbs, SeqLen, nVocab, ModelDim, ModelDim, ModelDim, DimVocab);
 
       // Display Probs matrix.
-      cudaMemcpy(@Probs[0, 0], dProbs, ProbsSize, cudaMemcpyDeviceToHost);
-      VTPDisplayX('Display Probs, in transform, before softmax.', Probs, B);
+      if VerboseTransform then begin
+        cudaMemcpy(@Probs[0, 0], dProbs, ProbsSize, cudaMemcpyDeviceToHost);
+        VTPDisplayX('Display Probs, in transform, before softmax.', Probs, B);
+       end;
 
       // Display Embeddings.Value matrix.
-      cudaMemcpy(@Embeddings.Value[0, 0], Embeddings.dValue, EmbeddingsSize, cudaMemcpyDeviceToHost);
-      VTPDisplayX('Display Embeddings.Value in transform, before computing Logit.', Embeddings.Value, B);
+      if VerboseTransform then begin
+        cudaMemcpy(@Embeddings.Value[0, 0], Embeddings.dValue, EmbeddingsSize, cudaMemcpyDeviceToHost);
+        VTPDisplayX('Display Embeddings.Value in transform, before computing Logit.', Embeddings.Value, B);
+      end;
 
       // 3B. Softmax. Obtain Probs from Probs.
       Writeln('            Transform Forward Stage 3B');
@@ -292,8 +297,10 @@ begin
         LaunchSoftmaxForwardN(dProbs, dProbs, SeqLen, nVocab, Temperature);
 
       // Display Probs matrix.
-      cudaMemcpy(@Probs[0, 0], dProbs, ProbsSize, cudaMemcpyDeviceToHost);
-      VTPDisplayX('Display Probs, in transform, after softmax.', Probs, B);
+      if VerboseTransform then begin
+        cudaMemcpy(@Probs[0, 0], dProbs, ProbsSize, cudaMemcpyDeviceToHost);
+        VTPDisplayX('Display Probs, in transform, after softmax.', Probs, B);
+      end;
 
       // 3C. Cross-Entropy Loss. Obtain TopGradient from Probs.
       Writeln('            Transform Forward Stage 3D');
@@ -303,12 +310,13 @@ begin
       // GradientFromCEProbabilities(WModelState);  // Using CE.
       // GradientFromKLDivergence(WModelState);   // Not using KL.
       // cuda kernel.
-      cudaMemcpy(dTargetTokens, @TargetTokens[0], SeqLen * SizeOf(Integer), cudaMemcpyHostToDevice);
       LaunchCEGradient(WModelState.dProbs, WModelState.dTopGradient, dTargetTokens, SeqLen, nVocab);
 
       // Display TopGradient matrix.
-      cudaMemcpy(@TopGradient[0, 0], dTopGradient, ProbsSize, cudaMemcpyDeviceToHost);
-      VTPDisplayX('Display TopGradient, in transform, after Logit calculation.', TopGradient, B);
+      if VerboseTransform then begin
+        cudaMemcpy(@TopGradient[0, 0], dTopGradient, ProbsSize, cudaMemcpyDeviceToHost);
+        VTPDisplayX('Display TopGradient, in transform, after Logit calculation.', TopGradient, B);
+      end;
 
       // 3D. Backprop TopGradient creates X7 Grad: Input TopGradient, WVocabᵀ. Output X7.Grad.
       Writeln('              Transform Backprop Stage 3E');
@@ -338,11 +346,13 @@ begin
         // cblas.
         // GradSplit(X7.Grad, X5.Grad, X6.Grad, SeqLen, ModelDim);
         // cublas.
-        CuGradSplit(CuHandle, X7.dGrad, WModelState.StateBlock[LastBlk].X5.dGrad, WModelState.StateBlock[LastBlk].X6.dGrad, SeqLen, ModelDim);
+        CuGradSplit(CuHandle, X7.dGrad, X5.dGrad, X6.dGrad, SeqLen, ModelDim);
 
         // Display X7.Grad matrix.
-        cudaMemcpy(@X7.Grad[0, 0], X7.dGrad, XSize, cudaMemcpyDeviceToHost);
-        VTPDisplayX('Display X7.Grad, in transform, after stage 2D.', X7.Grad, G);
+        if VerboseTransform then begin
+          cudaMemcpy(@X7.Grad[0, 0], X7.dGrad, XSize, cudaMemcpyDeviceToHost);
+          VTPDisplayX('Display X7.Grad, in transform, after stage 2D.', X7.Grad, G);
+        end;
       end;
     end; // End gradient stage.
 
@@ -354,10 +364,8 @@ begin
       RunTransformBackprop(WModelParams, WModelState, Blk);
 
       if Blk > 0 then
-        // cblas.
-        // CopyXTensor(WModelState.StateBlock[Blk].X1, WModelState.StateBlock[Blk - 1].X7);
         // cuda kernel.
-        cudaMemcpy(WModelState.StateBlock[Blk].X1.dValue, WModelState.StateBlock[Blk - 1].X7.dValue, XSize, cudaMemcpyDeviceToDevice);
+        cudaMemcpy(WModelState.StateBlock[Blk - 1].X7.dGrad, WModelState.StateBlock[Blk].X.dGrad, XSize, cudaMemcpyDeviceToDevice);
 
       if PauseIfKeyPressed then
         ReadEmbedIfKeyPressed;
@@ -373,123 +381,11 @@ begin
     Start := Start + Stride;
   end; // End sequence loop.
 
-  Writeln('End of training. Press <CR> to continue.');
-  Readln;
-end;
-
-// Run inference forward without additional training.
-// NEED TO CHECK.
-procedure RunInfer(var WModelParams: TWModelParams; var WModelState: TWModelState;
-  const TokenizedCorpus: TIVector; var QueryToken: Integer);
-var
-  i, j, k, Blk, LastBlk, PromptLen, LastPos: Integer;
-  Start, EmbedLoop: Integer;
-  BestTok: Integer;
-  BestProb: Single;
-  Stride: Integer = 64;      // Stride 64 tokens every sequence.
-
-begin
-  // nVocab := nSymbols;    // Need nVocab (second name for variable) for Transform.
-
-  CheckAllDLLs;
-
-  Writeln('First quarter of one row of embeddings.');
-  for k := 0 to ModelDim div 4 - 1 do
-    Write(WModelParams.Embeddings.Value[1, k]: 8: 6, ' ');
-  Writeln;
-  Pause;
-
-  with WModelParams do begin
-    cudaMemcpy(@Embeddings.Value[0, 0], Embeddings.dValue, EmbeddingsSize, cudaMemcpyDeviceToHost);
-    VTPDisplayX('Display Embeddings.Value prior to Transform.', Embeddings.Value, B);
-  end;
-
-  // Initialize.
-  PromptLen := Length(TokenizedCorpus);
-  InitializeTransformer(WModelParams, WModelState);
-  MAllocCublas(WModelParams, WModelState);
-  CopyParamsToDevice(WModelParams);
-  CopyInvFreqToDevice(WModelState);
-
-  // Stride loop thru Sequence.
-  Start := 0;
-  EmbedLoop := 0;
-  while (Start + SeqLen) < Length(TokenizedCorpus) do with WModelState do begin
-
-    // Display number of loops thru embed loop.
-    Inc(EmbedLoop);
-    Writeln('&&& Loop thru Embed: start ', Start, ' and loop number ', EmbedLoop, ' &&&');
-    Writeln(DateTimeToStr(Now), '  X = Exit program. B = Break out of merge loop. V = toggle Verbose mode.');
-    Writeln('  P = Program information. E = Embedding information. Embedding & transforming...');
-
-    if VerboseTransform then Pause;
-
-    // Build the input vector.
-    BuildInputVector(InputTokens, TokenizedCorpus, Start, SeqLen);
-    cudaMemcpy(dInputTokens, @InputTokens[0], SeqLen * SizeOf(Integer), cudaMemcpyHostToDevice);
-
-    // Build X only for block 0.
-    // cblas.
-    // BuildInputMatrix(WModelState.StateBlock[0].X.Value, InputTokens, TokenizedCorpus, WModelParams, Start, SeqLen);
-    // cublas.
-    LaunchEmbeddingLookup(WModelParams.Embeddings.dValue, dInputTokens, StateBlock[0].X.dValue, SeqLen, ModelDim);
-
-    // Scale only block 0 input.
-    // Optional transformer-style embedding scaling by sqrt(d_model).
-    CuScale(CuHandle, SeqLen * ModelDim, Scale, WModelState.StateBlock[0].X.dValue);
-
-    // Forward pass through stacked transformer blocks.
-    for Blk := 0 to nBlock - 1 do begin
-      Writeln('$$$ Starting Block ', Blk, '  Sequence Start ', Start, ' $$$');
-
-      cudaMemcpy(@StateBlock[Blk].X.Value[0, 0], StateBlock[Blk].X.dValue, XSize, cudaMemcpyDeviceToHost);
-      VTPDisplayX('Display X.Value before transform.', StateBlock[Blk].X.Value, G);
-
-      RunTransformForward(WModelParams, WModelState, Blk);
-
-      // Feed this block's output into the next block's input.
-      if Blk < nBlock - 1 then
-        // cblas.
-        // CopyXTensor(WModelState.StateBlock[Blk].X7, WModelState.StateBlock[Blk + 1].X);
-        // cuda kernel.
-        cudaMemcpy(WModelState.StateBlock[Blk + 1].X.dValue, WModelState.StateBlock[Blk].X7.dValue, XSize, cudaMemcpyDeviceToDevice);
-    end;
-
-    // Compute logit and probits.
-    // cublas.
-    LastBlk := nBlock - 1;
-    CuMatMulFullNT(CuHandle, StateBlock[LastBlk].X7.dValue, WModelParams.Embeddings.dValue, dProbs, SeqLen, nVocab, ModelDim, ModelDim, ModelDim, DimVocab);
-
-    // Softmax Forward.
-    // cuda kernel.
-    LaunchSoftmaxForwardN(dProbs, dProbs, SeqLen, nVocab, Temperature);
-
-    // If nBlock, then pick the largest probs, and save them.
-    cudaMemcpy(@Probs[0, 0], dProbs, ProbsSize, cudaMemcpyDeviceToHost);
-    Writeln('            Inference Stage');
-    LastPos := SeqLen - 1;
-    for i := 0 to SeqLen - 1 do begin
-      BestProb := Probs[LastPos, 0];
-      BestTok := 0;
-
-      for j := 1 to nVocab - 1 do
-        if Probs[LastPos, j] > BestProb then begin
-          BestProb := Probs[LastPos, j];
-          BestTok := j;
-        end;
-    end;
-
-    // BestTok is the next predicted token.
-    Start := Start + Stride;
-  end;
-
-  QueryToken := BestTok;
-
-  // De-initialize cublas.
-  MDeallocateCublas(WModelParams, WModelState);
+  // Clean up cublas.
   cublasDestroy_v2(CuHandle);
+  MDeallocateCublas(WModelParams, WModelState);
 
-  Writeln('End of query response. Press <CR> to continue.');
+  Writeln('End of training. Press <CR> to continue.');
   Readln;
 end;
 

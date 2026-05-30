@@ -70,8 +70,6 @@ a. Is InvFreq dimmed as ModelDim or HeadDim?
 
 0. ApplyRope inside each rather than across all model.
 
-b. Cuda Softmax only works if SeqLen <= 256.
-
 1. Many models reuse the embedding matrix for output projection.
 This is called weight tying. WVocab not needed. I am doing it.
 

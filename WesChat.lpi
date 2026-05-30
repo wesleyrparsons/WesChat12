@@ -53,8 +53,9 @@
         <IsPartOfProject Value="True"/>
       </Unit>
       <Unit>
-        <Filename Value="Embed.pas"/>
+        <Filename Value="train.pas"/>
         <IsPartOfProject Value="True"/>
+        <UnitName Value="Train"/>
       </Unit>
       <Unit>
         <Filename Value="notes.pas"/>
@@ -122,6 +123,11 @@
         <Filename Value="flowchart.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="FlowChart"/>
+      </Unit>
+      <Unit>
+        <Filename Value="infer.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="Infer"/>
       </Unit>
     </Units>
   </ProjectOptions>

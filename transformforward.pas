@@ -19,11 +19,11 @@ const
   NoTrans  = 111;       // No transposition.
   Trans    = 112;       // Transposition.
 
-procedure RunTransformForward(var WModelParams: TWModelParams; var WModelState: TWModelState; var QueryOutput: TIVector; const Blk: Integer);
+procedure RunTransformForward(var WModelParams: TWModelParams; var WModelState: TWModelState; const Blk: Integer);
 
 implementation
 
-procedure RunTransformForward(var WModelParams: TWModelParams; var WModelState: TWModelState; var QueryOutput: TIVector; const Blk: Integer);
+procedure RunTransformForward(var WModelParams: TWModelParams; var WModelState: TWModelState; const Blk: Integer);
 // Run the transformer forward.
 var
   h, i, HeadOffset: Integer;
@@ -328,9 +328,10 @@ begin
       // cblas.
       // MatAdd(X5.Value, X6.Value, X7.Value, SeqLen, ModelDim);
       // cublas. Already have X5 in cublas.
-      CuMatAdd(CuHandle, X5.dValue, X6.dValue, X7.dValue, SeqLen, ModelDim);   // No need to memcpy X7.
+      CuMatAdd(CuHandle, X5.dValue, X6.dValue, X7.dValue, SeqLen, ModelDim);
 
       // Display X7.Value matrix.
+      cudaMemcpy(@X7.Value[0, 0], X7.dValue, XSize, cudaMemcpyDeviceToHost);
       VTPDisplayX('Display X7.Value, in transform, after residual added to X6.', X7.Value, B);
 
   end;   // End with WModel.

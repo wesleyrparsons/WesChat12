@@ -19,11 +19,11 @@ const
   NoTrans  = 111;       // No transposition.
   Trans    = 112;       // Transposition.
 
-procedure RunTransformForward(var WModelParams: TWModelParams; var WModelState: TWModelState; var QueryOutput: TIVector; const Blk: Integer);
+procedure RunTransformForward(var WModelParams: TWModelParams; var WModelState: TWModelState; const Blk: Integer);
 
 implementation
 
-procedure RunTransformForward(var WModelParams: TWModelParams; var WModelState: TWModelState; var QueryOutput: TIVector; const Blk: Integer);
+procedure RunTransformForward(var WModelParams: TWModelParams; var WModelState: TWModelState; const Blk: Integer);
 // Run the transformer forward.
 var
   h, i, HeadOffset: Integer;

@@ -25,8 +25,7 @@ implementation
 // Run the transformer backprop.
 procedure RunTransformBackprop(var WModelParams: TWModelParams; var WModelState: TWModelState; const Blk: Integer);
 var
-  h, i, HeadOffset, BestTok: Integer;
-  BestProb: Single;
+  h, i, HeadOffset: Integer;
 
 begin
   // Display entry to transform.
@@ -35,8 +34,10 @@ begin
   with WModelParams.ParamBlock[Blk] do with WModelState.StateBlock[Blk] do begin
 
     // Display X6.Value matrix. X6.Value is in cublas.
-    cudaMemcpy(@X6.Value[0, 0], X6.dValue, XSize, cudaMemcpyDeviceToHost);
-    VTPDisplayX('Display X6.Value in transform, before any action.', WModelState.StateBlock[0].X6.Value, G);
+    if VerboseTransform then begin
+      cudaMemcpy(@X6.Value[0, 0], X6.dValue, XSize, cudaMemcpyDeviceToHost);
+      VTPDisplayX('Display X6.Value in transform, before any action.', WModelState.StateBlock[0].X6.Value, G);
+    end;
 
     // BACK PROPAGATION. FEED BACKWARD NETWORK.
 
@@ -127,8 +128,10 @@ begin
     LaunchLayerNormBackward(X5.dGrad, X4.dGrad, Gamma2.dValue, dLNXHat2, dLNInvStd2, Gamma2.dGrad, Beta2.dGrad, SeqLen, ModelDim);
 
     // Display X4.Grad matrix.
-    cudaMemcpy(@X4.Grad[0, 0], X4.dGrad, XSize, cudaMemcpyDeviceToHost);
-    VTPDisplayX('Display X4.Grad, in transform, after stage 1J, layer-norm.', X4.Grad, G);
+    if VerboseTransform then begin
+      cudaMemcpy(@X4.Grad[0, 0], X4.dGrad, XSize, cudaMemcpyDeviceToHost);
+      VTPDisplayX('Display X4.Grad, in transform, after stage 1J, layer-norm.', X4.Grad, G);
+    end;
 
     // 1I. Backprop Split. Input: X1.Grad. Output: X3.Grad. Output X4.Grad,
     Writeln('          Transform Bacprop Stage 1I');
@@ -160,8 +163,10 @@ begin
     CuMatMulNT(CuHandle, X3.dGrad, W0.dValue, X2.dGrad, SeqLen, ModelDim, ModelDim);
 
     // Display X3.Grad matrix. X3.Grad already in cblas.
-    cudaMemcpy(@X3.Grad[0, 0], X3.dGrad, XSize, cudaMemcpyDeviceToHost);
-    VTPDisplayX('Display X3.Grad, in transform, before stage 1G.', X3.Grad, G);
+    if VerboseTransform then begin
+      cudaMemcpy(@X3.Grad[0, 0], X3.dGrad, XSize, cudaMemcpyDeviceToHost);
+      VTPDisplayX('Display X3.Grad, in transform, before stage 1G.', X3.Grad, G);
+    end;
 
     // 1G. Backprop Multiplication/Overwrite. Obtain Scores2.Grad from X2.Grad: Input X2.Grad, Vᵀ.Value. Output: Scores2.Grad.
     Writeln('          Transform Backprop Stage 1G');
@@ -229,8 +234,10 @@ begin
     // Equation: ScoresHead1.Grad = Sqrt(1 / ModelDim). ScoresHead1.Grad in R^{L x L}. Done above.
 
     // Display ScoresHead.Grad matrix.
-    cudaMemcpy(@ScoresHead1[0].Grad[0, 0], ScoresHead1[0].dGrad, ScoresSize, cudaMemcpyDeviceToHost);
-    VTPDisplayX('ScoresHead1[0].Grad, transform, before stage 1E, Q and K-transform.', ScoresHead1[0].Grad, G);
+    if VerboseTransform then begin
+      cudaMemcpy(@ScoresHead1[0].Grad[0, 0], ScoresHead1[0].dGrad, ScoresSize, cudaMemcpyDeviceToHost);
+      VTPDisplayX('ScoresHead1[0].Grad, transform, before stage 1E, Q and K-transform.', ScoresHead1[0].Grad, G);
+    end;
 
     // 1E. Backprop multiplication. Obtain QHead.Grad and KHead.Grad.
     Writeln('          Transform Backprop Stage 1E');
@@ -352,8 +359,10 @@ begin
     CuAccumulateGrad(CuHandle, X4.dGrad, X1.dGrad, SeqLen, ModelDim);
 
     // Display X1.Grad matrix.
-    cudaMemcpy(@X1.Grad[0, 0], X1.dGrad, XSize, cudaMemcpyDeviceToHost);
-    VTPDisplayX('Display X1.Grad, in transform, after concatenation.', X1.Grad, G);
+    if VerboseTransform then begin
+      cudaMemcpy(@X1.Grad[0, 0], X1.dGrad, XSize, cudaMemcpyDeviceToHost);
+      VTPDisplayX('Display X1.Grad, in transform, after concatenation.', X1.Grad, G);
+    end;
 
     // 1A. Backprop Layer-Norm: Input X1.Value, X1.Grad. Output X.Grad, Gamma1.Grad, Beta1.Grad.
     Writeln('          Transform Backprop Stage 1A');
@@ -366,8 +375,10 @@ begin
       Gamma1.dGrad, Beta1.dGrad, SeqLen, ModelDim);
 
     // Display X.Grad matrix.
-    cudaMemcpy(@X.Grad[0, 0], X.dGrad, XSize, cudaMemcpyDeviceToHost);
-    VTPDisplayX('Display X.Grad, in transform, at end.', X.Grad, G);
+    if VerboseTransform then begin
+      cudaMemcpy(@X.Grad[0, 0], X.dGrad, XSize, cudaMemcpyDeviceToHost);
+      VTPDisplayX('Display X.Grad, in transform, at end.', X.Grad, G);
+    end;
 
   end;   // End with WModel.
 end;     // End RunTransform.

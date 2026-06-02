@@ -43,6 +43,8 @@ const
 type                                                                           // SeqLen = L, ModelDim = D, ModelDim/nHead = H, DB is Proj*D, DV is DimVocab.
   // cublas type.
   TcublasHandle = Pointer;
+  // Tokenizer type.
+  TTokenizer = (WesTokenizer, GPT2Tokenizer);
   // Seq, Model, Vocab, Head, Proj types.
   TSeqVector = array [0..ModelDim - 1] of Single;                              // D
   TSeqVectorProj = array[0..ModelDimProj - 1] of Single;                       // DB (DB is like D)
@@ -156,9 +158,6 @@ type                                                                           /
   end;
 
 var
-  // Query vars.
-  QueryOutput: TIVector;
-  QueryTokenized: TIVector;
   // cublas vars.
   CuHandle: TcublasHandle;
   One: Single = 1.0;
@@ -179,6 +178,11 @@ var
   dInputTokens: PInteger;                        // Input tokens.
   TargetTokens: TIDimVector;                     // Target tokens. Shited by  +1.
   dTargetTokens: PInteger;
+  // Extra char vars.
+  BOS: Integer = 256;
+  EOS: Integer = 257;
+  PAD: Integer = 258;
+  UNK: Integer = 259;
   // Utility vars.
   Mt0, Mt1, t0, t1, StopTime: TDateTime;         // For timing.
   Version: shortstring = '1.2';                  // Version 1.2.
@@ -192,6 +196,7 @@ var
   LearningRate: Single = 0.01;                   // LearningRate for Gradient.
   Temperature: Single = 1.0;                     // Temperature for softmax.
   Training: Boolean = True;                      // In training as opposed to inference mode.
+  Tokenizer: TTokenizer;                         // Either Wes or GPT2.
   // Other.
   TestVector: TFSVector;                         // Vector for testing. [0..SeqLen] of Single.
 

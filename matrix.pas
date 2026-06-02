@@ -29,6 +29,7 @@ function cublasCreate_v2(out handle: TcublasHandle): Integer; cdecl; external cu
 function cublasDestroy_v2(handle: TcublasHandle): Integer; cdecl; external cublasDLL;
 function cudaMalloc(devPtr: PPointer; size: NativeUInt): Integer; cdecl; external cudartDLL;
 function cudaMemcpy(dst: Pointer; src: Pointer; count: NativeUInt; kind: LongInt): LongInt; cdecl; external cudartDLL;
+function cudaMemset(devPtr: Pointer; value: Integer; count: NativeUInt): Integer; cdecl; external cudartDLL;
 function cudaFree(devPtr: Pointer): Integer; cdecl; external cudartDLL;
 
 // Multiply and add procedures.
@@ -75,6 +76,7 @@ procedure LaunchReLUForward(A: PSingle; B: PSingle; Rows: Integer; Cols: Integer
   cdecl; external 'WesChatKernel12.dll';
 procedure LaunchReLUBackward(Hidden1: PSingle; GradOut: PSingle; GradIn: PSingle; Rows: Integer; Cols: Integer);
   cdecl; external 'WesChatKernel12.dll';
+
 // Copy matrix procedure.
 procedure CopyXTensor(const A: TSeqTensor; var B: TSeqTensor);
 procedure CuCopyXTensor(handle: TcublasHandle; const A_Value, A_Grad: PSingle; B_Value, B_Grad: PSingle; SeqLen, ModelDim: Integer);

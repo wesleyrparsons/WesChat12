@@ -12,9 +12,9 @@ uses
 
 const
   WeightSize: Integer = ModelDim * ModelDim * SizeOf(Single);
-  WeightProjSize: Integer = ModelDim * ModelDimProj * SizeOf(Single);
-  bProjSize: Integer = ModelDimProj * SizeOf(Single);
-  bSize: Integer = ModelDim * SizeOf(Single);
+  WeightProjectedSize: Integer = ModelDim * ModelDimProj * SizeOf(Single);
+  ProjectedSize: Integer = ModelDimProj * SizeOf(Single);
+  // bSize: Integer = ModelDim * SizeOf(Single);         // bSize
   SeqSize: Integer = SeqLen * SizeOf(Single);
   ModelSize: Integer = ModelDim * SizeOf(Single);
   XSize: Integer = SeqLen * ModelDim * SizeOf(Single);
@@ -31,17 +31,21 @@ procedure XGUniformW2(var W: TWeightProjMatrixT; FanIn, FanOut: Integer);
 procedure InitializeTransformer(var WModelParams: TWModelParams; var WModelState: TWModelState);
 procedure MAllocCublas(var WModelParams: TWModelParams; var WModelState: TWModelState);
 procedure CopyParamsToDevice(var WModelParams: TWModelParams);
+procedure CopyParamsToHost(var WModelParams: TWModelParams);
 procedure CopyInvFreqToDevice(var WModelState: TWModelState);
 procedure MDeallocateCublas(var WModelParams: TWModelParams; var WModelState: TWModelState);
 procedure ZeroGradients(var WModelParams: TWModelParams; var WModelState: TWModelState; const Blk: Integer);
 procedure UpdateParam(const N: Integer; const LearningRate: Single; const Grad: PSingle; Param: PSingle);
+procedure CuUpdateParam(Handle: TcublasHandle; const N: Integer; const LearningRate: Single; const Grad: PSingle; Param: PSingle);
 procedure Optimization(var WModelParams: TWModelParams; const Blk: Integer);
 procedure LaunchEmbeddingLookup(Embeddings: PSingle; InputTokens: PInteger; X: PSingle; SeqLen: Integer; ModelDim: Integer);
   cdecl; external 'WesChatKernel12.dll';
-procedure UpdateEmbeddings(var WModelParams: TWModelParams; var WModelState: TWModelState; const InputTokens: TIDimVector);
+// procedure UpdateEmbeddings(var WModelParams: TWModelParams; var WModelState: TWModelState; const InputTokens: TIDimVector);
 procedure ApplyRoPE(var H: TSeqMatrix;  const InvFreq: TFVector; SeqLen, ModelDim: Integer);
 procedure ApplyAutoRegressiveMask(var ScoresHead: TScoresMatrix; const L: Integer);
 procedure LaunchAutoRegressiveMask(Scores: PSingle; SeqLen: Integer); cdecl; external 'WesChatKernel12.dll';
+procedure LaunchAutoRegressiveMaskBackward(ScoresGrad: PSingle; SeqLen: Integer);
+  cdecl; external 'WesChatKernel12.dll';
 procedure LaunchDropout(X: PSingle; N: Integer; DropProb: Single; Seed: UInt64); cdecl; external 'WesChatKernel12.dll';
 procedure SoftmaxForwardN(const x: PSingle; y: PSingle; const N: Integer);
 procedure LaunchSoftmaxForwardN(X: PSingle; Y: PSingle; Rows: Integer; N: Integer; Temperature: Single);
@@ -65,6 +69,8 @@ procedure LaunchCEGradient(Probs: PSingle; TopGradient: PSingle; TargetTokens: P
   cdecl; external 'WesChatKernel12.dll';
 procedure GradientFromKLDivergence(var WModelState: TWModelState);
 procedure BackpropAdd(const dOut: TSeqMatrix; var dA, dB: TSeqMatrix; const L, D: Integer);
+procedure LaunchAddInputEmbeddingGrad(XGrad: PSingle; EmbGrad: PSingle; InputTokens: PInteger; SeqLen: Integer; ModelDim: Integer; nVocab: Integer);
+  cdecl; external 'WesChatKernel12.dll';
 
 implementation
 
@@ -168,14 +174,14 @@ begin
       cudaMalloc(@Wv.dGrad, WeightSize);
       cudaMalloc(@W0.dValue, WeightSize);
       cudaMalloc(@W0.dGrad, WeightSize);
-      cudaMalloc(@W1.dValue, WeightProjSize);
-      cudaMalloc(@W1.dGrad, WeightProjSize);
-      cudaMalloc(@W2.dValue, WeightProjSize);
-      cudaMalloc(@W2.dGrad, WeightProjSize);
-      cudaMalloc(@b1.dValue, bProjSize);
-      cudaMalloc(@b1.dGrad, bProjSize);
-      cudaMalloc(@b2.dValue, bSize);
-      cudaMalloc(@b2.dGrad, bSize);
+      cudaMalloc(@W1.dValue, WeightProjectedSize);
+      cudaMalloc(@W1.dGrad, WeightProjectedSize);
+      cudaMalloc(@W2.dValue, WeightProjectedSize);
+      cudaMalloc(@W2.dGrad, WeightProjectedSize);
+      cudaMalloc(@b1.dValue, ProjectedSize);
+      cudaMalloc(@b1.dGrad, ProjectedSize);
+      cudaMalloc(@b2.dValue, ModelSize);
+      cudaMalloc(@b2.dGrad, ModelSize);
       cudaMalloc(@Gamma1.dValue, ModelSize);
       cudaMalloc(@Gamma1.dGrad, ModelSize);
       cudaMalloc(@Beta1.dValue, ModelSize);
@@ -237,89 +243,89 @@ procedure MDeallocateCublas(var WModelParams: TWModelParams; var WModelState: TW
 var
   h, k: Integer;
 begin
-  cudaFree(@dInputTokens);
-  cudaFree(@dTargetTokens);
+  cudaFree(dInputTokens);
+  cudaFree(dTargetTokens);
 
   with WModelParams do begin
-    cudaFree(@Embeddings.dValue);
-    cudaFree(@Embeddings.dGrad);
+    cudaFree(Embeddings.dValue);
+    cudaFree(Embeddings.dGrad);
   end;
   with WModelState do begin
-    cudaFree(@dInvFreq);
-    cudaFree(@Probs);
-    cudaFree(@TopGradient);
+    cudaFree(dInvFreq);
+    cudaFree(dProbs);
+    cudaFree(dTopGradient);
   end;
 
   for k := 0 to nBlock - 1 do begin
     with WModelParams.ParamBlock[k] do begin
-      cudaFree(@Wq.dValue);
-      cudaFree(@Wq.dGrad);
-      cudaFree(@Wk.dValue);
-      cudaFree(@Wk.dGrad);
-      cudaFree(@Wv.dValue);
-      cudaFree(@Wv.dGrad);
-      cudaFree(@W0.dValue);
-      cudaFree(@W0.dGrad);
-      cudaFree(@W1.dValue);
-      cudaFree(@W1.dGrad);
-      cudaFree(@W2.dValue);
-      cudaFree(@W2.dGrad);
-      cudaFree(@b1.dValue);
-      cudaFree(@b1.dGrad);
-      cudaFree(@b2.dValue);
-      cudaFree(@b2.dGrad);
-      cudaFree(@Gamma1.dValue);
-      cudaFree(@Gamma1.dGrad);
-      cudaFree(@Beta1.dValue);
-      cudaFree(@Beta1.dGrad);
-      cudaFree(@Gamma2.dValue);
-      cudaFree(@Gamma2.dGrad);
-      cudaFree(@Beta2.dValue);
-      cudaFree(@Beta2.dGrad);
+      cudaFree(Wq.dValue);
+      cudaFree(Wq.dGrad);
+      cudaFree(Wk.dValue);
+      cudaFree(Wk.dGrad);
+      cudaFree(Wv.dValue);
+      cudaFree(Wv.dGrad);
+      cudaFree(W0.dValue);
+      cudaFree(W0.dGrad);
+      cudaFree(W1.dValue);
+      cudaFree(W1.dGrad);
+      cudaFree(W2.dValue);
+      cudaFree(W2.dGrad);
+      cudaFree(b1.dValue);
+      cudaFree(b1.dGrad);
+      cudaFree(b2.dValue);
+      cudaFree(b2.dGrad);
+      cudaFree(Gamma1.dValue);
+      cudaFree(Gamma1.dGrad);
+      cudaFree(Beta1.dValue);
+      cudaFree(Beta1.dGrad);
+      cudaFree(Gamma2.dValue);
+      cudaFree(Gamma2.dGrad);
+      cudaFree(Beta2.dValue);
+      cudaFree(Beta2.dGrad);
     end;
     with WModelState.StateBlock[k] do begin
-      cudaFree(@X.dValue);
-      cudaFree(@X.dGrad);
-      cudaFree(@X1.dValue);
-      cudaFree(@X1.dGrad);
-      cudaFree(@X2.dValue);
-      cudaFree(@X2.dGrad);
-      cudaFree(@X3.dValue);
-      cudaFree(@X3.dGrad);
-      cudaFree(@X4.dValue);
-      cudaFree(@X4.dGrad);
-      cudaFree(@X5.dValue);
-      cudaFree(@X5.dGrad);
-      cudaFree(@X6.dValue);
-      cudaFree(@X6.dGrad);
-      cudaFree(@X7.dValue);
-      cudaFree(@X7.dGrad);
-      cudaFree(@X1q.dValue);
-      cudaFree(@X1q.dGrad);
-      cudaFree(@X1k.dValue);
-      cudaFree(@X1k.dGrad);
-      cudaFree(@X1v.dValue);
-      cudaFree(@X1v.dGrad);
-      cudaFree(@Q.dValue);
-      cudaFree(@Q.dGrad);
-      cudaFree(@K.dValue);
-      cudaFree(@K.dGrad);
-      cudaFree(@V.dValue);
-      cudaFree(@V.dGrad);
+      cudaFree(X.dValue);
+      cudaFree(X.dGrad);
+      cudaFree(X1.dValue);
+      cudaFree(X1.dGrad);
+      cudaFree(X2.dValue);
+      cudaFree(X2.dGrad);
+      cudaFree(X3.dValue);
+      cudaFree(X3.dGrad);
+      cudaFree(X4.dValue);
+      cudaFree(X4.dGrad);
+      cudaFree(X5.dValue);
+      cudaFree(X5.dGrad);
+      cudaFree(X6.dValue);
+      cudaFree(X6.dGrad);
+      cudaFree(X7.dValue);
+      cudaFree(X7.dGrad);
+      cudaFree(X1q.dValue);
+      cudaFree(X1q.dGrad);
+      cudaFree(X1k.dValue);
+      cudaFree(X1k.dGrad);
+      cudaFree(X1v.dValue);
+      cudaFree(X1v.dGrad);
+      cudaFree(Q.dValue);
+      cudaFree(Q.dGrad);
+      cudaFree(K.dValue);
+      cudaFree(K.dGrad);
+      cudaFree(V.dValue);
+      cudaFree(V.dGrad);
       for h := 0 to nHead - 1 do begin
-        cudaFree(@ScoresHead1[h].dValue);
-        cudaFree(@ScoresHead1[h].dGrad);
-        cudaFree(@ScoresHead2[h].dValue);
-        cudaFree(@ScoresHead2[h].dGrad);
+        cudaFree(ScoresHead1[h].dValue);
+        cudaFree(ScoresHead1[h].dGrad);
+        cudaFree(ScoresHead2[h].dValue);
+        cudaFree(ScoresHead2[h].dGrad);
       end;
-      cudaFree(@Hidden1.dValue);
-      cudaFree(@Hidden1.dGrad);
-      cudaFree(@Hidden2.dValue);
-      cudaFree(@Hidden2.dGrad);
-      cudaFree(@dLNInvStd1);
-      cudaFree(@dLNXHat1);
-      cudaFree(@dLNInvStd2);
-      cudaFree(@dLNXHat2);
+      cudaFree(Hidden1.dValue);
+      cudaFree(Hidden1.dGrad);
+      cudaFree(Hidden2.dValue);
+      cudaFree(Hidden2.dGrad);
+      cudaFree(dLNInvStd1);
+      cudaFree(dLNXHat1);
+      cudaFree(dLNInvStd2);
+      cudaFree(dLNXHat2);
     end;
   end;
 end;
@@ -335,7 +341,6 @@ begin
   // Other.
   for k := 0 to nBlock - 1 do
     with WModelParams.ParamBlock[k] do begin
-
       // Attention weights.
       cudaMemcpy(Wq.dValue, @Wq.Value[0,0], WeightSize, cudaMemcpyHostToDevice);
       cudaMemcpy(Wk.dValue, @Wk.Value[0,0], WeightSize, cudaMemcpyHostToDevice);
@@ -343,18 +348,51 @@ begin
       cudaMemcpy(W0.dValue, @W0.Value[0,0], WeightSize, cudaMemcpyHostToDevice);
 
       // MLP.
-      cudaMemcpy(W1.dValue, @W1.Value[0,0], WeightProjSize, cudaMemcpyHostToDevice);
-      cudaMemcpy(W2.dValue, @W2.Value[0,0], WeightProjSize, cudaMemcpyHostToDevice);
+      cudaMemcpy(W1.dValue, @W1.Value[0,0], WeightProjectedSize, cudaMemcpyHostToDevice);
+      cudaMemcpy(W2.dValue, @W2.Value[0,0], WeightProjectedSize, cudaMemcpyHostToDevice);
 
       // Biases.
-      cudaMemcpy(b1.dValue, @b1.Value[0], bProjSize, cudaMemcpyHostToDevice);
-      cudaMemcpy(b2.dValue, @b2.Value[0], bSize, cudaMemcpyHostToDevice);
+      cudaMemcpy(b1.dValue, @b1.Value[0], ProjectedSize, cudaMemcpyHostToDevice);
+      cudaMemcpy(b2.dValue, @b2.Value[0], ModelSize, cudaMemcpyHostToDevice);
 
       // LayerNorm.
       cudaMemcpy(Gamma1.dValue, @Gamma1.Value[0], ModelSize, cudaMemcpyHostToDevice);
       cudaMemcpy(Beta1.dValue,  @Beta1.Value[0],  ModelSize, cudaMemcpyHostToDevice);
       cudaMemcpy(Gamma2.dValue, @Gamma2.Value[0], ModelSize, cudaMemcpyHostToDevice);
       cudaMemcpy(Beta2.dValue,  @Beta2.Value[0],  ModelSize, cudaMemcpyHostToDevice);
+  end;
+end;
+
+// Copy parameters from device to host (for saving model).
+procedure CopyParamsToHost(var WModelParams: TWModelParams);
+var
+  k: Integer;
+begin
+  // Embeddings (global).
+  cudaMemcpy(WModelParams.Embeddings.dValue, @WModelParams.Embeddings.Value[0,0], EmbeddingsSize, cudaMemcpyHostToDevice);
+
+  // Other.
+  for k := 0 to nBlock - 1 do
+    with WModelParams.ParamBlock[k] do begin
+      // Attention weights.
+      cudaMemcpy(@Wq.Value[0,0], Wq.dValue, WeightSize, cudaMemcpyDeviceToHost);
+      cudaMemcpy(@Wk.Value[0,0], Wk.dValue, WeightSize, cudaMemcpyDeviceToHost);
+      cudaMemcpy(@Wv.Value[0,0], Wv.dValue, WeightSize, cudaMemcpyDeviceToHost);
+      cudaMemcpy(@W0.Value[0,0], W0.dValue, WeightSize, cudaMemcpyDeviceToHost);
+
+      // MLP.
+      cudaMemcpy(@W1.Value[0,0], W1.dValue, WeightProjectedSize, cudaMemcpyDeviceToHost);
+      cudaMemcpy(@W2.Value[0,0], W2.dValue, WeightProjectedSize, cudaMemcpyDeviceToHost);
+
+      // Biases.
+      cudaMemcpy(@b1.Value[0], b1.dValue, ProjectedSize, cudaMemcpyDeviceToHost);
+      cudaMemcpy(@b2.Value[0], b2.dValue, ModelSize, cudaMemcpyDeviceToHost);
+
+      // LayerNorm.
+      cudaMemcpy(@Gamma1.Value[0], Gamma1.dValue, ModelSize, cudaMemcpyDeviceToHost);
+      cudaMemcpy(@Beta1.Value[0],  Beta1.dValue,  ModelSize, cudaMemcpyDeviceToHost);
+      cudaMemcpy(@Gamma2.Value[0], Gamma2.dValue, ModelSize, cudaMemcpyDeviceToHost);
+      cudaMemcpy(@Beta2.Value[0],  Beta2.dValue,  ModelSize, cudaMemcpyDeviceToHost);
   end;
 end;
 
@@ -398,12 +436,12 @@ begin
       XGUniformW2(W2.Value, ModelDimProj, ModelDim);
 
       // Initialize b1 and b2.
-      FillChar(b1.Value, SizeOf(b1.Value), 0);
-      FillChar(b2.Value, SizeOf(b2.Value), 0);
+      FillChar(b1.Value, ProjectedSize, 0);
+      FillChar(b2.Value, ModelSize, 0);
 
       // Initialize Beta and Gamma, LN 1 and 2, with SD and mean.
-      FillChar(Beta1.Value, SizeOf(Beta1.Value), 0);
-      FillChar(Beta2.Value, SizeOf(Beta2.Value), 0);
+      FillChar(Beta1.Value, ProjectedSize, 0);
+      FillChar(Beta2.Value, ModelSize, 0);
       for j := 0 to ModelDim - 1 do begin
         Gamma1.Value[j] := 1.0;
         Gamma2.Value[j] := 1.0;
@@ -415,36 +453,63 @@ end;
 procedure ZeroGradients(var WModelParams: TWModelParams; var WModelState: TWModelState; const Blk: Integer);
 begin
   with WModelState.StateBlock[Blk] do begin
-    FillChar(X.Grad, SizeOf(X.Grad), 0);
-    FillChar(X1.Grad, SizeOf(X1.Grad), 0);
-    FillChar(X2.Grad, SizeOf(X2.Grad), 0);
-    FillChar(X3.Grad, SizeOf(X3.Grad), 0);
-    FillChar(X4.Grad, SizeOf(X4.Grad), 0);
-    FillChar(X5.Grad, SizeOf(X5.Grad), 0);
-    FillChar(X6.Grad, SizeOf(X6.Grad), 0);
-    FillChar(X7.Grad, SizeOf(X7.Grad), 0);
-    FillChar(X1k.Grad, SizeOf(X1k.Grad), 0);
-    FillChar(X1q.Grad, SizeOf(X1q.Grad), 0);
-    FillChar(X1v.Grad, SizeOf(X1v.Grad), 0);
-    FillChar(K.Grad, SizeOf(K.Grad), 0);
-    FillChar(Q.Grad, SizeOf(Q.Grad), 0);
-    FillChar(V.Grad, SizeOf(V.Grad), 0);
-    FillChar(Hidden1.Grad, SizeOf(Hidden1.Grad), 0);
-    FillChar(Hidden2.Grad, SizeOf(Hidden2.Grad), 0);
+    FillChar(X.Grad, XSize, 0);
+    FillChar(X1.Grad, XSize, 0);
+    FillChar(X2.Grad, XSize, 0);
+    FillChar(X3.Grad, XSize, 0);
+    FillChar(X4.Grad, XSize, 0);
+    FillChar(X5.Grad, XSize, 0);
+    FillChar(X6.Grad, XSize, 0);
+    FillChar(X7.Grad, XSize, 0);
+    FillChar(X1k.Grad, XSize, 0);
+    FillChar(X1q.Grad, XSize, 0);
+    FillChar(X1v.Grad, XSize, 0);
+    FillChar(K.Grad, XSize, 0);
+    FillChar(Q.Grad, XSize, 0);
+    FillChar(V.Grad, XSize, 0);
+    FillChar(Hidden1.Grad, HiddenSize, 0);
+    FillChar(Hidden2.Grad, HiddenSize, 0);
+    cudaMemset(X.dGrad, 0, XSize);
+    cudaMemset(X1.dGrad, 0, XSize);
+    cudaMemset(X2.dGrad, 0, XSize);
+    cudaMemset(X3.dGrad, 0, XSize);
+    cudaMemset(X4.dGrad, 0, XSize);
+    cudaMemset(X5.dGrad, 0, XSize);
+    cudaMemset(X6.dGrad, 0, XSize);
+    cudaMemset(X7.dGrad, 0, XSize);
+    cudaMemset(X1k.dGrad, 0, XSize);
+    cudaMemset(X1q.dGrad, 0, XSize);
+    cudaMemset(X1v.dGrad, 0, XSize);
+    cudaMemset(K.dGrad, 0, XSize);
+    cudaMemset(Q.dGrad, 0, XSize);
+    cudaMemset(V.dGrad, 0, XSize);
+    cudaMemset(Hidden1.dGrad, 0, HiddenSize);
+    cudaMemset(Hidden2.dGrad, 0, HiddenSize);
   end;
   with WModelParams.ParamBlock[Blk] do begin
-    FillChar(Wk.Grad, SizeOf(Wk.Grad), 0);
-    FillChar(Wq.Grad, SizeOf(Wq.Grad), 0);
-    FillChar(Wv.Grad, SizeOf(Wv.Grad), 0);
-    FillChar(W0.Grad, SizeOf(W0.Grad), 0);
-    FillChar(W1.Grad, SizeOf(W1.Grad), 0);
-    FillChar(W2.Grad, SizeOf(W2.Grad), 0);
-    FillChar(b1.Grad, SizeOf(b1.Grad), 0);
-    FillChar(b2.Grad, SizeOf(b2.Grad), 0);
-    FillChar(Gamma1.Grad, SizeOf(Gamma1.Grad), 0);
-    FillChar(Gamma2.Grad, SizeOf(Gamma2.Grad), 0);
-    FillChar(Beta1.Grad, SizeOf(Beta1.Grad), 0);
-    FillChar(Beta2.Grad, SizeOf(Beta2.Grad), 0);
+    FillChar(Wk.Grad, WeightSize, 0);
+    FillChar(Wq.Grad, WeightSize, 0);
+    FillChar(Wv.Grad, WeightSize, 0);
+    FillChar(W0.Grad, WeightSize, 0);
+    FillChar(W1.Grad, WeightSize, 0);
+    FillChar(W2.Grad, WeightSize, 0);
+    FillChar(b1.Grad, ProjectedSize, 0);
+    FillChar(b2.Grad, ModelSize, 0);
+    FillChar(Gamma1.Grad, ModelSize, 0);
+    FillChar(Gamma2.Grad, ModelSize, 0);
+    FillChar(Beta1.Grad, ModelSize, 0);
+    FillChar(Beta2.Grad, ModelSize, 0);
+    cudaMemset(Wk.dGrad, 0, WeightSize);
+    cudaMemset(Wq.dGrad, 0, WeightSize);
+    cudaMemset(Wv.dGrad, 0, WeightSize);
+    cudaMemset(W0.dGrad, 0, WeightSize);
+    cudaMemset(W1.dGrad, 0, WeightSize);
+    cudaMemset(b1.dGrad, 0, ProjectedSize);
+    cudaMemset(b2.dGrad, 0, ModelSize);
+    cudaMemset(Gamma1.dGrad, 0, ModelSize);
+    cudaMemset(Gamma2.dGrad, 0, ModelSize);
+    cudaMemset(Beta1.dGrad, 0, ModelSize);
+    cudaMemset(Beta2.dGrad, 0, ModelSize);
   end;
 end;
 
@@ -454,6 +519,15 @@ begin
   AddScaled(N, -LearningRate, Grad, Param); // Not efficient to use cublas here.
 end;
 
+procedure CuUpdateParam(Handle: TcublasHandle; const N: Integer; const LearningRate: Single; const Grad: PSingle; Param: PSingle);
+var
+  Alpha: Single;
+begin
+  Alpha := -LearningRate;
+
+  cublasSaxpy_v2(Handle, N, @Alpha, Grad, 1, Param, 1);
+end;
+
 { Optimization }
 // Update the weights and biases.
 procedure Optimization(var WModelParams: TWModelParams; const Blk: Integer);
@@ -461,14 +535,17 @@ begin
   with WModelParams.ParamBlock[Blk] do begin
     // W0 weights: main attention output.
     UpdateParam(ModelDim * ModelDim, LearningRate, @W0.Grad[0,0], @W0.Value[0,0]);
+    CuUpdateParam(CuHandle, ModelDim * ModelDim, LearningRate, W0.dGrad, W0.dValue);
     // cblas_saxpy(ModelDim * ModelDim, -LearningRate, @W0.Grad[0, 0], 1, @W0.Value[0, 0], 1);
-
     // Wq, Wk, Wv weights: Q, K, V.
     UpdateParam(ModelDim * ModelDim, LearningRate, @Wq.Grad[0,0], @Wq.Value[0,0]);
+    CuUpdateParam(CuHandle, ModelDim * ModelDim, LearningRate, Wq.dGrad, Wq.dValue);
     // cblas_saxpy(ModelDim * ModelDim, -LearningRate, @Wq.Grad[0, 0], 1, @Wq.Value[0, 0], 1);
     UpdateParam(ModelDim * ModelDim, LearningRate, @Wk.Grad[0,0], @Wk.Value[0,0]);
+    CuUpdateParam(CuHandle, ModelDim * ModelDim, LearningRate, Wk.dGrad, Wk.dValue);
     // cblas_saxpy(ModelDim * ModelDim, -LearningRate, @Wk.Grad[0, 0], 1, @Wk.Value[0, 0], 1);
     UpdateParam(ModelDim * ModelDim, LearningRate, @Wv.Grad[0,0], @Wv.Value[0,0]);
+    CuUpdateParam(CuHandle, ModelDim * ModelDim, LearningRate, Wv.dGrad, Wv.dValue);
     // cblas_saxpy(ModelDim * ModelDim, -LearningRate, @Wv.Grad[0, 0], 1, @Wv.Value[0, 0], 1);
 
     // W1, W2: feed-forward and vocab projection.
@@ -478,61 +555,56 @@ begin
 
     // b1, b2: biases.
     UpdateParam(ModelDimProj, LearningRate, @b1.Grad[0], @b1.Value[0]);
+    CuUpdateParam(CuHandle, ModelDimProj, LearningRate, b1.dGrad, b1.dValue);
     // cblas_saxpy(ModelDimProj, -LearningRate, @b1.Grad[0], 1, @b1.Value[0], 1);
     UpdateParam(ModelDim, LearningRate, @b2.Grad[0], @b2.Value[0]);
+    CuUpdateParam(CuHandle, ModelDim,     LearningRate, b2.dGrad, b2.dValue);
     // cblas_saxpy(ModelDim, -LearningRate, @b2.Grad[0], 1, @b2.Value[0], 1);
 
     // Gamma1, Gamm2, Beta1, Beta2: Layer-Norm parameters.
     UpdateParam(ModelDim, LearningRate, @Gamma1.Grad[0], @Gamma1.Value[0]);
+    CuUpdateParam(CuHandle, ModelDim, LearningRate, Gamma1.dGrad, Gamma1.dValue);
     // cblas_saxpy(ModelDim, -LearningRate, @Gamma1.Grad[0], 1, @Gamma1.Value[0], 1);
     UpdateParam(ModelDim, LearningRate, @Gamma2.Grad[0], @Gamma2.Value[0]);
+    CuUpdateParam(CuHandle, ModelDim, LearningRate, Gamma2.dGrad, Gamma2.dValue);
     // cblas_saxpy(ModelDim, -LearningRate, @Gamma2.Grad[0], 1, @Gamma2.Value[0], 1);
     UpdateParam(ModelDim, LearningRate, @Beta1.Grad[0], @Beta1.Value[0]);
+    CuUpdateParam(CuHandle, ModelDim, LearningRate, Beta1.dGrad, Beta1.dValue);
     // cblas_saxpy(ModelDim, -LearningRate, @Beta1.Grad[0], 1, @Beta1.Value[0], 1);
     UpdateParam(ModelDim, LearningRate, @Beta2.Grad[0], @Beta2.Value[0]);
+    CuUpdateParam(CuHandle, ModelDim, LearningRate, Beta2.dGrad, Beta2.dValue);
     // cblas_saxpy(ModelDim, -LearningRate, @Beta2.Grad[0], 1, @Beta2.Value[0], 1);
+
   end;
 end;
 
 // Update Embeddings.
-{procedure UpdateEmbeddings(var WModelParams: TWModelParams; var WModelState: TWModelState; const Start: Integer);
-begin
-  with WModelParams do with WModelState do begin
-    UpdateParam(nVocab * ModelDim, LearningRate, @Embeddings.Grad[0,0], @Embeddings.Value[0,0]);
-
-    // Add input-side embedding gradients into Embeddings.Grad.
-    for i := 0 to SeqLen - 1 do
-      AddScaled(ModelDim, 1.0, @WModelState.StateBlock[0].X.Grad[i,0], @WModelParams.Embeddings.Grad[TokenID[Start + i], 0]);
-      // cblas_saxpy(ModelDim, 1.0, @WModelState.X.Grad[i,0], 1, @Embeddings.Grad[v,0], 1);
-  end;
-end;}
-
-procedure UpdateEmbeddings(var WModelParams: TWModelParams; var WModelState: TWModelState; const InputTokens: TIDimVector);
+{procedure UpdateEmbeddings(var WModelParams: TWModelParams; var WModelState: TWModelState; const InputTokens: TIDimVector);
 var
   i, tok: Integer;
 begin
   // Add input-side embedding gradients.
-  for i := 0 to SeqLen - 1 do begin
-    tok := InputTokens[i];
+  with WModelParams do begin
+    for i := 0 to SeqLen - 1 do begin
+      tok := InputTokens[i];
+      AddScaled(ModelDim, 1.0, @WModelState.StateBlock[0].X.Grad[i,0], @Embeddings.Grad[tok,0]);
+    end;
 
-    AddScaled(
-      ModelDim,
-      1.0,
-      @WModelState.StateBlock[0].X.Grad[i,0],
-      @WModelParams.Embeddings.Grad[tok,0]
-    );
+    // Apply total embedding gradient:
+    // Output-side tied gradient + input-side gathered gradient.
+    UpdateParam(nVocab * ModelDim, LearningRate, @Embeddings.Grad[0,0], @Embeddings.Value[0,0]);
+    CuUpdateParam(CuHandle, nVocab * ModelDim, LearningRate, Embeddings.dGrad, Embeddings.dValue);
   end;
+end;}
 
-  // Apply total embedding gradient:
-  // output-side tied gradient + input-side gathered gradient.
-  UpdateParam(
-    nVocab * ModelDim,
-    LearningRate,
-    @WModelParams.Embeddings.Grad[0,0],
-    @WModelParams.Embeddings.Value[0,0]
-  );
+procedure UpdateEmbeddings(var WModelParams: TWModelParams; var WModelState: TWModelState);
+begin
+  // Add input-side embedding grads into Embeddings.dGrad.
+  // Output-side tied gradient is already in Embeddings.dGrad.
+  LaunchAddInputEmbeddingGrad(WModelState.StateBlock[0].X.dGrad, WModelParams.Embeddings.dGrad, dInputTokens, SeqLen, ModelDim, nVocab);
 
-
+  // Apply total embedding gradient.
+  CuUpdateParam(CuHandle, nVocab * ModelDim, LearningRate, WModelParams.Embeddings.dGrad, WModelParams.Embeddings.dValue);
 end;
 
 // Rotary positional encoding.

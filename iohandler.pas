@@ -12,7 +12,8 @@ uses
   DateUtils,
   Display,
   FileUtil,
-  Global;
+  Global,
+  Util;
 
 procedure ReadFileBytes(const FileName: string; var OneCorpus: TBVector);
 procedure LoadSymbolTable(const FileName: string; var SymbolTable: TSymbolTable);
@@ -239,6 +240,9 @@ var
   IOModelDim: Integer;
 
 begin
+  // Copy all the weights in cublas to RAM.
+  CopyParamsToHost(Model);
+
   Assign(F, FileName);
   Result := False;
   IOModelDim := ModelDim;

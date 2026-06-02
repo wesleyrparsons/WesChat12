@@ -5,7 +5,7 @@ program WesChat;
 { WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wespar.com }
 { Note: Edited 5/26/2026 8 pm -- working from WesChat12 on OneDrive }
 { Notes: TokCorpus comes from WesTokenize or ChatGPTTokenize; WModelParams (with Embeddings) and WModelState are from here }
-{ Notes: Corpus, QueryCorpus (TBVector) are here; QueryOutput (TIVector) is in Global }
+{ Notes: Corpus is here }
 {        Input Train        Input Query        Output
  Raw                        QueryString
  Bytes   Corpus             QueryCorpus
@@ -26,14 +26,11 @@ uses
   WesTokenize,
   Windows;
 
-type
-  TTokRoutine = (WesRoutine, GPT2Routine);
+//type
+  //TTokRoutine = (WesRoutine, GPT2Routine);
 var
   // Corpus vars.
-  Corpus, QueryInput: TBVector;             // Vector of byte.
-  // Query vars.
-  QueryOutput: TIVector;
-  QueryTokenized: TIVector;
+  Corpus: TBVector;                         // Vector of byte.
   // Model vars.
   WModelParams: TWModelParams;              // Parameters.
   WModelState: TWModelState;                // State.
@@ -148,6 +145,8 @@ begin
   Writeln('  M: Maximum merges: ');
   Writeln('  PC: Maximum pair count: ');
   Writeln('  LR: Learning rate: ');
+  Writeln('  WT: Use WesTokenizer');
+  Writeln('  GT: Use GPT2Tokenizer');
   Writeln;
 end;
 
@@ -162,7 +161,7 @@ begin
     Result := True;
 end;
 
-// Pad token vector to multiple of 256.
+// Pad token vector to multiple of ModelDim.
 procedure PadToSeqMultiple(var TokenVectorToPad: TIVector; const Seq: Integer);
 var
   OldLen, NewLen, i: Integer;
@@ -177,9 +176,9 @@ begin
 end;
 
 // Run the model forward.                                    QueryInput is the query from the user, like Corpus.
-procedure ForwardQuery(const TokRoutine: TTokRoutine);    // QueryString is the string input from the user.
-var                                                       // QueryOutput is the output tokens from the model.
-  i: Integer;                                 // QueryTokenized is the tokenization of QueryInput, like TokenizedCorpus.
+{procedure ForwardQuery;                                   // QueryString is the string input from the user.
+var                                                        // QueryOutput is the output tokens from the model.
+  i: Integer;                                              // QueryTokenized is the tokenization of QueryInput, like TokenizedCorpus.
   QueryString: string;
 begin
   Training := False;
@@ -192,10 +191,6 @@ begin
       QueryInput[i] := Ord(QueryString[i + 1]);
     for i := 0 to Length(QueryOutput) - 1 do
       Writeln(QueryOutput[i]);
-    if TokRoutine = WesRoutine then
-      RunWesTokenize(QueryInput, QueryTokenized)
-    else
-      RunGPT2Tokenize(QueryString, QueryTokenized);
 
     RunInfer(WModelParams, WModelState, QueryTokenized, QueryOutput);
 
@@ -203,7 +198,7 @@ begin
     for i := 0 to High(QueryOutput) do
       Write(QueryOutput[i]);
   until QueryString = EmptyStr;
-end;
+end;}
 
 // Start of main program.
 begin
@@ -277,10 +272,18 @@ begin
         if SaveFiles then
           LogFile(CorpusFileName);
 
-        // Rum WesChat symbolizer.
+        // Run WesChat symbolizer.
         RunSymbolize(Corpus);
+
+        // Run tokenizer.
+        Tokenizer := WesTokenizer;
+        if Tokenizer = WesTokenizer then
+          RunWesTokenize(Corpus, TokenizedCorpus)
+        else
+          RunGPT2Tokenize(CorpusFileName, TokenizedCorpus);
+
         RunWesTokenize(Corpus, TokenizedCorpus);
-        PadToSeqMultiple(TokenizedCorpus, 256);
+        PadToSeqMultiple(TokenizedCorpus, SeqLen);
 
         // Check number of symbols.
         if nSymbols < MinSymbols then begin
@@ -288,10 +291,10 @@ begin
           Continue;
         end;
 
-        // Embed.
+        // Train.
         if QueryEmbed then begin
-          RunEmbed(WModelParams, WModelState, TokenizedCorpus);
-          ForwardQuery(WesRoutine);
+          RunTrain(WModelParams, WModelState, TokenizedCorpus);
+          RunInfer(WModelParams, WModelState);
         end;
       end;
       '2': begin
@@ -305,11 +308,14 @@ begin
         DisplayByteSymbolTable(SymbolTable);
 
         // Run WesChat tokenizer.
+        Tokenizer := WesTokenizer;
         RunWesTokenize(Corpus, TokenizedCorpus);
-        PadToSeqMultiple(TokenizedCorpus, 256);
+        PadToSeqMultiple(TokenizedCorpus, SeqLen);
+
+        // Train.
         If QueryEmbed then begin
-          RunEmbed(WModelParams, WModelState, TokenizedCorpus);
-          ForwardQuery(WesRoutine);
+          RunTrain(WModelParams, WModelState, TokenizedCorpus);
+          RunInfer(WModelParams, WModelState);
         end;
       end;
       '3': begin
@@ -331,13 +337,14 @@ begin
           LogFile('bela.txt');
 
         // Run WesChat tokenizer.
+        Tokenizer := WesTokenizer;
         RunWesTokenize(Corpus, TokenizedCorpus);
-        PadToSeqMultiple(TokenizedCorpus, 256);
+        PadToSeqMultiple(TokenizedCorpus, SeqLen);
 
-        // Run Embed.
+        // Run Train.
         if QueryEmbed then begin
-          RunEmbed(WModelParams, WModelState, TokenizedCorpus);
-          ForwardQuery(WesRoutine);
+          RunTrain(WModelParams, WModelState, TokenizedCorpus);
+          RunInfer(WModelParams, WModelState);
         end;
       end;
       '4': begin
@@ -388,13 +395,14 @@ begin
           LogFile(CorpusFileName);
 
         // Run WesChat tokenizer.
+        Tokenizer := WesTokenizer;
         RunWesTokenize(Corpus, TokenizedCorpus);
-        PadToSeqMultiple(TokenizedCorpus, 256);
+        PadToSeqMultiple(TokenizedCorpus, SeqLen);
 
-        // Run Embed.
+        // Run Train.
         if QueryEmbed then begin
-          RunEmbed(WModelParams, WModelState, TokenizedCorpus);
-          ForwardQuery(WesRoutine);
+          RunTrain(WModelParams, WModelState, TokenizedCorpus);
+          RunInfer(WModelParams, WModelState);
         end;
       end;
       '5': begin
@@ -424,19 +432,21 @@ begin
           LogFile(CorpusFileName);
 
         // Run ChatGPT tokenizer.
+        Tokenizer := GPT2Tokenizer;
         RunGPT2Tokenize(CorpusFileName, TokenizedCorpus);
+        PadToSeqMultiple(TokenizedCorpus, SeqLen);
 
         // Check tokenized corpus.
         Writeln('First 200 token of tokenized corpus: ');
-        for i := 0 to 199 do
+        for i := 0 to Min(199, High(TokenizedCorpus)) do
           Write(TokenizedCorpus[i], ' ');
         Writeln;
         Pause;
 
-        // Check number of symbols, and Embed.
+        // Check number of symbols, and Train.
         if nSymbols > 0 then begin
-          RunEmbed(WModelParams, WModelState, TokenizedCorpus);
-          ForwardQuery(GPT2Routine);
+          RunTrain(WModelParams, WModelState, TokenizedCorpus);
+          RunInfer(WModelParams, WModelState);
         end
         else
           Writeln('Symbols not found in table.');
@@ -459,12 +469,14 @@ begin
         if Length(TokenizedCorpus) < MinTokens then begin
           Writeln('Token list too small. Aborting...');
           Continue;
-        end;
+        end
+        else
+          PadToSeqMultiple(TokenizedCorpus, SeqLen);
 
-        // Run Embed.
+        // Run Train.
         If QueryEmbed then begin
-          RunEmbed(WModelParams, WModelState, TokenizedCorpus);
-          ForwardQuery(WesRoutine);
+          RunTrain(WModelParams, WModelState, TokenizedCorpus);
+          RunInfer(WModelParams, WModelState);
         end;
       end;
       '7': begin
@@ -512,11 +524,14 @@ begin
         DisplayByteSymbolTable(SymbolTable);
 
         // Run WesChat tokenizer.
+        Tokenizer := WesTokenizer;
         RunWesTokenize(Corpus, TokenizedCorpus);
-        PadToSeqMultiple(TokenizedCorpus, 256);
+        PadToSeqMultiple(TokenizedCorpus, SeqLen);
+
+        // RunTrain.
         If QueryEmbed then begin
-          RunEmbed(WModelParams, WModelState, TokenizedCorpus);
-          ForwardQuery(WesRoutine);
+          RunTrain(WModelParams, WModelState, TokenizedCorpus);
+          RunInfer(WModelParams, WModelState);
         end;
       end;
       '9': begin
@@ -548,14 +563,6 @@ begin
         // Run WesChat symbolizer.
         RunSymbolize(Corpus);
 
-        // Check number of symbols, and Embed.
-        if nSymbols > MinSymbols then begin
-          RunEmbed(WModelParams, WModelState, TokenizedCorpus);
-          ForwardQuery(WesRoutine);
-        end
-        else
-          Writeln('Symbols not found in table.');
-
         // Display symbol table.
         DisplayByteSymbolTable(SymbolTable);
       end;
@@ -573,7 +580,7 @@ begin
         Readln(ModelFileName);
         if LoadModel(ModelFileName, WModelParams) then begin
           Writeln('File ', ModelFileName, ' loaded.');
-          ForwardQuery(WesRoutine);
+          RunInfer(WModelParams, WModelState);
         end
         else
           Writeln('File not loaded.');
@@ -584,7 +591,7 @@ begin
         Readln(ModelFileName);
         if LoadModel(ModelFileName, WModelParams) then begin
           Writeln('File ', ModelFileName, ' loaded.');
-          ForwardQuery(GPT2Routine);
+          RunInfer(WModelParams, WModelState);
         end
         else
           Writeln('File not loaded.');
@@ -602,6 +609,8 @@ begin
       'DP':    DoNotPause := False;
       'SF':    SaveFiles := True;
       'NSF':   SaveFiles := False;
+      'WT':    Tokenizer := WesTokenizer;
+      'GT':    Tokenizer := GPT2Tokenizer;
       'M': begin
         Write('Maximum merges: ');
         Readln(MaxMerges);

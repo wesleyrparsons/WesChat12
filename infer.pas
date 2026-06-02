@@ -7,24 +7,22 @@ unit Infer;
 interface
 
 uses
+  GPT2Tokenize,
   Display,
   Global,
   Matrix,
   SysUtils,
   TransformForward,
+  WesTokenize,
   Util;
 
  {TokenizedCorpus is a vector of Integers, which become InputTokens and TargetTokens.
   Arrays are nSymbols x ModelDim of Single.
   nSymbols (nVocab) is vocabulary size. ModelDim is the dimension of the models, the loads.}
 
-procedure RunInfer(var WModelParams: TWModelParams; var WModelState: TWModelState;
-  const QueryTokenized: TIVector; var QueryOutput: TIVector);
+procedure RunInfer(var WModelParams: TWModelParams; var WModelState: TWModelState);
 
 implementation
-
-const
-  Scale = Sqrt(ModelDim);         // Optional transformer-style embedding scaling by sqrt(d_model).
 
 function CheckDLL(const LibName: string): Boolean;
 var
@@ -60,24 +58,55 @@ begin
 end;
 
 // Build the input vector .
-procedure BuildInputVector(var Input: TIDimVector; const TokenizedCorpus: TIVector; const StartIndex, L: Integer);
+{procedure BuildInputVector(var Input: TIDimVector; const TokenizedCorpus: TIVector; const StartIndex, L: Integer);
 var
   i: Integer;
 begin
   for i := 0 to L - 1 do
     Input[i] := TokenizedCorpus[StartIndex + i];
+end;}
+
+// Build padded tokenizedquery.
+procedure BuildInferenceInputTokens(var InputTokens: TIDimVector; const QueryTokenized: TIVector; const SeqLen: Integer; out LastPos: Integer);
+var
+  i, CopyLen, SrcStart: Integer;
+begin
+  // Fill everything with PAD.
+  for i := 0 to SeqLen - 1 do
+    InputTokens[i] := PAD;
+
+  if Length(QueryTokenized) >= SeqLen then begin
+    // Use most recent SeqLen tokens.
+    SrcStart := Length(QueryTokenized) - SeqLen;
+    CopyLen := SeqLen;
+    LastPos := SeqLen - 1;
+  end
+  else begin
+    SrcStart := 0;
+    CopyLen := Length(QueryTokenized);
+    LastPos := CopyLen - 1;
+  end;
+
+  for i := 0 to CopyLen - 1 do
+    InputTokens[i] := QueryTokenized[SrcStart + i];
 end;
 
+// Infer a single token.
 procedure InferOneToken(var WModelParams: TWModelParams; var WModelState: TWModelState;
   const QueryTokenized: TIVector; var QueryToken: Integer);
+const
+  Scale = Sqrt(ModelDim);         // Optional transformer-style embedding scaling by sqrt(d_model).
 var
-  i, j, Blk, LastBlk, LastPos: Integer;
-  Start, EmbedLoop: Integer;
+  j, Blk, LastBlk, LastPos: Integer;
   BestTok: Integer;
   BestProb: Single;
-  Stride: Integer = 64;      // Stride 64 tokens every sequence.
 
 begin
+  // Check for valid query.
+  if Length(QueryTokenized) = 0 then begin
+    QueryToken := EOS;
+    Exit;
+  end;
 
   with WModelParams do
     if VerboseTransform then begin
@@ -85,24 +114,9 @@ begin
       VTPDisplayX('Display Embeddings.Value prior to Transform.', Embeddings.Value, B);
     end;
 
-  // Initialize.
-  // PromptLen := Length(QueryTokenized);
-
-  // Stride loop thru Sequence.
-  Start := 0;
-  EmbedLoop := 0;
-  while (Start + SeqLen) < Length(QueryTokenized) do with WModelState do begin
-
-    // Display number of loops thru embed loop.
-    Inc(EmbedLoop);
-    Writeln('&&& Loop thru Embed: start ', Start, ' and loop number ', EmbedLoop, ' &&&');
-    Writeln(DateTimeToStr(Now), '  X = Exit program. B = Break out of merge loop. V = toggle Verbose mode.');
-    Writeln('  P = Program information. E = Embedding information. Embedding & transforming...');
-
-    if VerboseTransform then Pause;
-
+  with WModelState do begin
     // Build the input vector.
-    BuildInputVector(InputTokens, QueryTokenized, Start, SeqLen);
+    BuildInferenceInputTokens(InputTokens, QueryTokenized, SeqLen, LastPos);
     cudaMemcpy(dInputTokens, @InputTokens[0], SeqLen * SizeOf(Integer), cudaMemcpyHostToDevice);
 
     // Build X only for block 0.
@@ -115,7 +129,7 @@ begin
 
     // Forward pass through stacked transformer blocks.
     for Blk := 0 to nBlock - 1 do begin
-      Writeln('$$$ Starting Block ', Blk, '  Sequence Start ', Start, ' $$$');
+      Writeln('$$$ Inference Starting Block ', Blk, ' $$$');
 
       if VerboseTransform then begin
         cudaMemcpy(@StateBlock[Blk].X.Value[0, 0], StateBlock[Blk].X.dValue, XSize, cudaMemcpyDeviceToHost);
@@ -144,60 +158,97 @@ begin
     // If nBlock, then pick the largest probs, and save them.
     cudaMemcpy(@Probs[0, 0], dProbs, ProbsSize, cudaMemcpyDeviceToHost);
     Writeln('            Inference Stage');
-    LastPos := SeqLen - 1;
-    for i := 0 to SeqLen - 1 do begin
-      BestProb := Probs[LastPos, 0];
-      BestTok := 0;
-
-      for j := 1 to nVocab - 1 do
-        if Probs[LastPos, j] > BestProb then begin
-          BestProb := Probs[LastPos, j];
-          BestTok := j;
-        end;
-    end;
+    BestProb := Probs[LastPos, 0];
+    BestTok := 0;
+    for j := 1 to nVocab - 1 do
+      if Probs[LastPos, j] > BestProb then begin
+        BestProb := Probs[LastPos, j];
+        BestTok := j;
+      end;
 
     // BestTok is the next predicted token.
-    Start := Start + Stride;
   end;
 
   QueryToken := BestTok;
 end;
 
 // Run inference forward without additional training.
-procedure RunInfer(var WModelParams: TWModelParams; var WModelState: TWModelState;
-  const QueryTokenized: TIVector; var QueryOutput: TIVector);
+// QueryInput is the query from the user, like Corpus.
+// QueryString is the string input from the user.
+// QueryOutput is the output tokens from the model.
+// QueryTokenized is the tokenization of QueryInput, like TokenizedCorpus.
+// QueryToken is the single next token produced by the infer proc.
+procedure RunInfer(var WModelParams: TWModelParams; var WModelState: TWModelState);
 const
-  EOS = 257;
+  MaxNewTokens = 100;        // Limit on new tokens produced.
 var
-  k, QueryToken: Integer;
+  i, Step, QueryToken: Integer;
+  QueryTokenized, WorkTokens, QueryOutput: TIVector;
+  QueryInput: TBVector;
+  QueryString: string;
 begin
   CheckAllDLLs;
 
-  // Initialize.
+  nVocab := nSymbols;
+
   InitializeTransformer(WModelParams, WModelState);
   MAllocCublas(WModelParams, WModelState);
-  CopyParamsToDevice(WModelParams);
-  CopyInvFreqToDevice(WModelState);
 
-  Writeln('First quarter of one row of embeddings.');
-  for k := 0 to ModelDim div 4 - 1 do
-    Write(WModelParams.Embeddings.Value[1, k]: 8: 6, ' ');
-  Writeln;
-  Pause;
+  try
+    CopyParamsToDevice(WModelParams);
+    CopyInvFreqToDevice(WModelState);
 
-  with WModelParams do
-    if VerboseTransform then begin
-      cudaMemcpy(@Embeddings.Value[0, 0], Embeddings.dValue, EmbeddingsSize, cudaMemcpyDeviceToHost);
-      VTPDisplayX('Display Embeddings.Value prior to Transform.', Embeddings.Value, B);
-    end;
+    Training := False;
 
-  repeat
-    InferOneToken(WModelParams, WModelState, QueryTokenized, QueryToken);
-    SetLength(QueryOutput, Length(QueryOutput) + 1);
-    QueryOutput[Length(QueryOutput)] := QueryToken;
-    Writeln('Single Token Query Output: ', QueryToken);
-  until QueryToken = EOS;
+    repeat
+      Writeln('Enter query: ');
+      Readln(QueryString);
+
+      if QueryString = EmptyStr then Break;
+
+      if VerboseTransform then with WModelParams do begin
+        cudaMemcpy(@Embeddings.Value[0, 0], Embeddings.dValue, EmbeddingsSize, cudaMemcpyDeviceToHost);
+        VTPDisplayX('Display Embeddings.Value prior to Transform.', Embeddings.Value, B);
+      end;
+
+      SetLength(QueryInput, Length(QueryString));
+      for i := 0 to Length(QueryString) - 1 do
+        QueryInput[i] := Ord(QueryString[i + 1]);
+
+      if Tokenizer = WesTokenizer then
+        RunWesTokenize(QueryInput, QueryTokenized)
+      else
+        RunGPT2Tokenize(QueryString, QueryTokenized);
+
+      SetLength(QueryOutput, 0);
+      WorkTokens := Copy(QueryTokenized);
+
+      for Step := 1 to MaxNewTokens do begin
+        InferOneToken(WModelParams, WModelState, WorkTokens, QueryToken);
+
+        SetLength(QueryOutput, Length(QueryOutput) + 1);
+        QueryOutput[High(QueryOutput)] := QueryToken;
+
+        SetLength(WorkTokens, Length(WorkTokens) + 1);
+        WorkTokens[High(WorkTokens)] := QueryToken;
+
+        Writeln('Single Token Query Output: ', QueryToken);
+
+        if QueryToken = EOS then Break;
+      end;
+
+      Writeln('Query Full Token Output: ');
+      for i := 0 to High(QueryOutput) do
+        Write(QueryOutput[i], ' ');
+      Writeln;
+    until False;
+
+  finally
+    MDeallocateCublas(WModelParams, WModelState);
+    cublasDestroy_v2(CuHandle);
+  end;
 end;
+
 
 end.
 

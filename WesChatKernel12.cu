@@ -647,3 +647,45 @@ void LaunchEmbeddingLookup(
         ModelDim
     );
 }
+
+// Scatter Add.
+extern "C" __global__
+void AddInputEmbeddingGradKernel(
+    const float* XGrad,
+    float* EmbGrad,
+    const int* InputTokens,
+    int SeqLen,
+    int ModelDim,
+    int nVocab)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    int total = SeqLen * ModelDim;
+
+    if (idx < total) {
+        int row = idx / ModelDim;
+        int col = idx - row * ModelDim;
+        int tok = InputTokens[row];
+
+        if (tok >= 0 && tok < nVocab)
+            atomicAdd(&EmbGrad[tok * ModelDim + col], XGrad[idx]);
+    }
+}
+
+extern "C" __declspec(dllexport)
+void LaunchAddInputEmbeddingGrad(
+    const float* XGrad,
+    float* EmbGrad,
+    const int* InputTokens,
+    int SeqLen,
+    int ModelDim,
+    int nVocab)
+{
+    int threads = 256;
+    int blocks = (SeqLen * ModelDim + threads - 1) / threads;
+
+    AddInputEmbeddingGradKernel<<<blocks, threads>>>(
+        XGrad, EmbGrad, InputTokens, SeqLen, ModelDim, nVocab
+    );
+
+    cudaDeviceSynchronize();
+}

@@ -123,9 +123,8 @@ var
       end;
       'b', 'B': begin
         Writeln('Break requested. Exiting loop.');
-        Pause;
-        Blk := nBlock;     // Break out of the loop cleanly.
-      end;
+        Result := True;
+      end;                   // Break out of the loop cleanly.
       'v', 'V': begin
         VeryVerbose := not VeryVerbose;
         Writeln('Very verbose mode: ', VeryVerbose);
@@ -159,6 +158,7 @@ var
 
 begin
   StopTraining := False;
+  GlobalSeed := 123456789;
   CheckAllDLLs;
 
   nVocab := nSymbols;    // Need nVocab (second name for variable) for Transform.
@@ -194,8 +194,8 @@ begin
 
     // Stride loop thru Sequence.
     Start := 0;
-    EmbedLoop := 0;
-    while (Start + SeqLen + 1) <= Length(TokenizedCorpus) do begin     // add with WModelState do
+    EmbedLoop := 0;                                        // add with WModelState do
+    while ((Start + SeqLen + 1) <= Length(TokenizedCorpus)) and (not StopTraining) do begin
 
       // Display number of loops thru embed loop.
       Inc(EmbedLoop);
@@ -246,6 +246,8 @@ begin
 
       // Forward pass thru transformer.
       for Blk := 0 to nBlock - 1 do begin
+        if StopTraining then Break;
+
         Writeln('     $$$ Forward Block loop: start ', Blk, '  Sequence Start ', Start, ' $$$');
         if VerboseTransform then Pause;
 
@@ -262,6 +264,7 @@ begin
       end;
 
       LastBlk := nBlock - 1;
+      if StopTraining then Break;
 
       // 3. FORWARD HEAD OUTPUT STAGE.
 
@@ -362,6 +365,8 @@ begin
 
       // Backprop pass thru transformer.
       for Blk := nBlock - 1 downto 0 do begin
+        if StopTraining then Break;
+
         Writeln('     $$$ Backpropd Block loop: start ', Blk, '  Sequence Start ', Start, ' $$$');
         if VerboseTransform then Pause;
 

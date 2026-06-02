@@ -3,7 +3,7 @@ program WesChat;
 {$mode ObjFPC}{$H+}{$I proprietary.txt}
 
 { WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wespar.com }
-{ Note: Edited 5/26/2026 8 pm -- working from WesChat12 on OneDrive }
+{ Note: Edited 6/2/2026 5 pm -- working from WesChat12 on OneDrive }
 { Notes: TokCorpus comes from WesTokenize or ChatGPTTokenize; WModelParams (with Embeddings) and WModelState are from here }
 { Notes: Corpus is here }
 {        Input Train        Input Query        Output
@@ -145,8 +145,6 @@ begin
   Writeln('  M: Maximum merges: ');
   Writeln('  PC: Maximum pair count: ');
   Writeln('  LR: Learning rate: ');
-  Writeln('  WT: Use WesTokenizer');
-  Writeln('  GT: Use GPT2Tokenizer');
   Writeln;
 end;
 
@@ -161,7 +159,7 @@ begin
     Result := True;
 end;
 
-// Pad token vector to multiple of ModelDim.
+// Pad token vector to multiple of SeqLen.
 procedure PadToSeqMultiple(var TokenVectorToPad: TIVector; const Seq: Integer);
 var
   OldLen, NewLen, i: Integer;
@@ -174,31 +172,6 @@ begin
   for i := OldLen to NewLen - 1 do
     TokenVectorToPad[i] := EOS;
 end;
-
-// Run the model forward.                                    QueryInput is the query from the user, like Corpus.
-{procedure ForwardQuery;                                   // QueryString is the string input from the user.
-var                                                        // QueryOutput is the output tokens from the model.
-  i: Integer;                                              // QueryTokenized is the tokenization of QueryInput, like TokenizedCorpus.
-  QueryString: string;
-begin
-  Training := False;
-  repeat
-    Writeln('Enter query: ');
-    Readln(QueryString);
-
-    SetLength(QueryInput, Length(QueryString));
-    for i := 0 to Length(QueryString) - 1 do
-      QueryInput[i] := Ord(QueryString[i + 1]);
-    for i := 0 to Length(QueryOutput) - 1 do
-      Writeln(QueryOutput[i]);
-
-    RunInfer(WModelParams, WModelState, QueryTokenized, QueryOutput);
-
-    Writeln('Query Full Token Output: ');
-    for i := 0 to High(QueryOutput) do
-      Write(QueryOutput[i]);
-  until QueryString = EmptyStr;
-end;}
 
 // Start of main program.
 begin
@@ -215,20 +188,19 @@ begin
   Writeln('Options:');
   Writeln('  1: Tokenize an input corpus from a file using WesChat''s byte-level byte-pair encoding, with');
   Writeln('     deterministic left-to-right longest-prefix matching and greedy longest-match decoding.');
-  Writeln('  2: Tokenize an input set of corpuses listed one per line in a file, using WesChat''s tokenization routine,');
-  Writeln('     to create a concatenated token list.');
-  Writeln('  3: Tokenize Bela corpus using WesChat''s Bela symbol table.');
+  Writeln('  2: Tokenize an input set of corpuses listed one per line in a file, to create a concatenated token list,');
+  Writeln('     using WesChat''s tokenization routine.');
+  Writeln('  3: Tokenize Bela corpus using WesChat''s tokenization routine.');
   Writeln('  4: Tokenize an input corpus, based on an input symbol table, using WesChat''s tokenization routine.');
   Writeln('  5: Tokenize an input corpus using ChatGPT''s symbol and merge tables and WesChat''s');
   Writeln('     tokenization routine.');
   Writeln('  6: Input a token list to be used in training.');
-  Writeln('  7: Combine two symbol tables for use with WesChat''s tokenization routine.');
-  Writeln('  8: Tokenize an input set of corpuses listed one per line in a file, using an input symbol table,');
-  Writeln('     to create a concatenated token list.');
+  Writeln('  7: Combine two symbol tables.');
+  Writeln('  8: Tokenize an input set of corpuses listed one per line in a file, to create a concatenated token list,');
+  Writeln('     using an input symbol table and WesChat''s tokenization routine.');
   Writeln('  9: Create symbol table from input corpus.');
   Writeln('  10: Save a model.');
-  Writeln('  11: Load a model and run it forward using WesChat''s tokenization routine.');
-  Writeln('  12: Load a model and run it forward using ChatGPT''s tokenization routine.');
+  Writeln('  11: Load a model.');
   Writeln('  H: Help.');
   Writeln('  X: Exit.');
   Writeln;
@@ -236,7 +208,7 @@ begin
   Writeln('Ater tokenization, WesChat prompts for training the transformer, which consists');
   Writeln('of 4 to 8 blocks. The attention stage has 8 heads. There are a weight stage wih a bias');
   Writeln('and a weight stage without a bias. The activation function is softmax with temperature.');
-  Writeln('Model dimensions are 256. The activation stage expands dimensionality fourfold.');
+  Writeln('Model dimensions are 512. The activation stage expands dimensionality fourfold.');
   Writeln('Precision is single. Sequence length is 128 or 256 bytes. Pre-layer normalization');
   Writeln('standardizes for means and standard deviations. Attention, MLP, and residual dropouts are 0.1.');
   Writeln('The softmax function normalizes exponentially with a temperature of 1.0. The learning rate is 0.01.');
@@ -277,11 +249,6 @@ begin
 
         // Run tokenizer.
         Tokenizer := WesTokenizer;
-        if Tokenizer = WesTokenizer then
-          RunWesTokenize(Corpus, TokenizedCorpus)
-        else
-          RunGPT2Tokenize(CorpusFileName, TokenizedCorpus);
-
         RunWesTokenize(Corpus, TokenizedCorpus);
         PadToSeqMultiple(TokenizedCorpus, SeqLen);
 
@@ -307,7 +274,7 @@ begin
         // Display symboltable.
         DisplayByteSymbolTable(SymbolTable);
 
-        // Run WesChat tokenizer.
+        // Run tokenizer.
         Tokenizer := WesTokenizer;
         RunWesTokenize(Corpus, TokenizedCorpus);
         PadToSeqMultiple(TokenizedCorpus, SeqLen);
@@ -336,7 +303,7 @@ begin
         if SaveFiles then
           LogFile('bela.txt');
 
-        // Run WesChat tokenizer.
+        // Run tokenizer.
         Tokenizer := WesTokenizer;
         RunWesTokenize(Corpus, TokenizedCorpus);
         PadToSeqMultiple(TokenizedCorpus, SeqLen);
@@ -394,7 +361,7 @@ begin
         if SaveFiles then
           LogFile(CorpusFileName);
 
-        // Run WesChat tokenizer.
+        // Run tokenizer.
         Tokenizer := WesTokenizer;
         RunWesTokenize(Corpus, TokenizedCorpus);
         PadToSeqMultiple(TokenizedCorpus, SeqLen);
@@ -431,7 +398,7 @@ begin
         if SaveFiles then
           LogFile(CorpusFileName);
 
-        // Run ChatGPT tokenizer.
+        // Run tokenizer.
         Tokenizer := GPT2Tokenizer;
         RunGPT2Tokenize(CorpusFileName, TokenizedCorpus);
         PadToSeqMultiple(TokenizedCorpus, SeqLen);
@@ -523,7 +490,7 @@ begin
         // Display symboltable.
         DisplayByteSymbolTable(SymbolTable);
 
-        // Run WesChat tokenizer.
+        // Run tokenizer.
         Tokenizer := WesTokenizer;
         RunWesTokenize(Corpus, TokenizedCorpus);
         PadToSeqMultiple(TokenizedCorpus, SeqLen);
@@ -586,17 +553,6 @@ begin
           Writeln('File not loaded.');
         Pause;
       end;
-      '12': begin
-        Write('Enter filename: ');
-        Readln(ModelFileName);
-        if LoadModel(ModelFileName, WModelParams) then begin
-          Writeln('File ', ModelFileName, ' loaded.');
-          RunInfer(WModelParams, WModelState);
-        end
-        else
-          Writeln('File not loaded.');
-        Pause;
-      end;
       'X':     Exit;
       'H':     Help;
       'VTO':   VerboseTokenize := True;
@@ -609,8 +565,6 @@ begin
       'DP':    DoNotPause := False;
       'SF':    SaveFiles := True;
       'NSF':   SaveFiles := False;
-      'WT':    Tokenizer := WesTokenizer;
-      'GT':    Tokenizer := GPT2Tokenizer;
       'M': begin
         Write('Maximum merges: ');
         Readln(MaxMerges);

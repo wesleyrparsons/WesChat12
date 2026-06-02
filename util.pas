@@ -14,7 +14,6 @@ const
   WeightSize: Integer = ModelDim * ModelDim * SizeOf(Single);
   WeightProjectedSize: Integer = ModelDim * ModelDimProj * SizeOf(Single);
   ProjectedSize: Integer = ModelDimProj * SizeOf(Single);
-  // bSize: Integer = ModelDim * SizeOf(Single);         // bSize
   SeqSize: Integer = SeqLen * SizeOf(Single);
   ModelSize: Integer = ModelDim * SizeOf(Single);
   XSize: Integer = SeqLen * ModelDim * SizeOf(Single);
@@ -46,8 +45,10 @@ procedure ApplyAutoRegressiveMask(var ScoresHead: TScoresMatrix; const L: Intege
 procedure LaunchAutoRegressiveMask(Scores: PSingle; SeqLen: Integer); cdecl; external 'WesChatKernel12.dll';
 procedure LaunchAutoRegressiveMaskBackward(ScoresGrad: PSingle; SeqLen: Integer);
   cdecl; external 'WesChatKernel12.dll';
-procedure LaunchDropout(X: PSingle; N: Integer; DropProb: Single; Seed: UInt64); cdecl; external 'WesChatKernel12.dll';
-procedure SoftmaxForwardN(const x: PSingle; y: PSingle; const N: Integer);
+procedure LaunchDropout(X: PSingle; N: Integer; DropProb: Single; Seed: UInt64);
+  cdecl; external 'WesChatKernel12.dll';
+procedure LaunchDropoutBackward(dX: PSingle; N: Integer; DropProb: Single; Seed: UInt64);
+  cdecl; external 'WesChatKernel12.dll';procedure SoftmaxForwardN(const x: PSingle; y: PSingle; const N: Integer);
 procedure LaunchSoftmaxForwardN(X: PSingle; Y: PSingle; Rows: Integer; N: Integer; Temperature: Single);
   cdecl; external 'WesChatKernel12.dll';
 procedure SoftmaxBackward(const y, dy:  TFVector; out dx: array of Single);
@@ -148,6 +149,8 @@ procedure MAllocCublas(var WModelParams: TWModelParams; var WModelState: TWModel
 var
   h, k: Integer;
 begin
+  CudaAllocated := True;
+
   // Input and target tokens.
   cudaMalloc(@dInputTokens, SeqLen * SizeOf(Integer));
   cudaMalloc(@dTargetTokens, SeqLen * SizeOf(Integer));
@@ -243,6 +246,8 @@ procedure MDeallocateCublas(var WModelParams: TWModelParams; var WModelState: TW
 var
   h, k: Integer;
 begin
+  CudaAllocated := False;
+
   cudaFree(dInputTokens);
   cudaFree(dTargetTokens);
 
@@ -336,7 +341,7 @@ var
   k: Integer;
 begin
   // Embeddings (global).
-  cudaMemcpy(WModelParams.Embeddings.dValue, @WModelParams.Embeddings.Value[0,0], EmbeddingsSize, cudaMemcpyHostToDevice);
+  cudaMemcpy(@WModelParams.Embeddings.Value[0,0], WModelParams.Embeddings.dValue, EmbeddingsSize, cudaMemcpyDeviceToHost);
 
   // Other.
   for k := 0 to nBlock - 1 do
@@ -440,7 +445,7 @@ begin
       FillChar(b2.Value, ModelSize, 0);
 
       // Initialize Beta and Gamma, LN 1 and 2, with SD and mean.
-      FillChar(Beta1.Value, ProjectedSize, 0);
+      FillChar(Beta1.Value, ModelSize, 0);
       FillChar(Beta2.Value, ModelSize, 0);
       for j := 0 to ModelDim - 1 do begin
         Gamma1.Value[j] := 1.0;
@@ -491,8 +496,8 @@ begin
     FillChar(Wq.Grad, WeightSize, 0);
     FillChar(Wv.Grad, WeightSize, 0);
     FillChar(W0.Grad, WeightSize, 0);
-    FillChar(W1.Grad, WeightSize, 0);
-    FillChar(W2.Grad, WeightSize, 0);
+    FillChar(W1.Grad, WeightProjectedSize, 0);
+    FillChar(W2.Grad, WeightProjectedSize, 0);
     FillChar(b1.Grad, ProjectedSize, 0);
     FillChar(b2.Grad, ModelSize, 0);
     FillChar(Gamma1.Grad, ModelSize, 0);
@@ -503,7 +508,8 @@ begin
     cudaMemset(Wq.dGrad, 0, WeightSize);
     cudaMemset(Wv.dGrad, 0, WeightSize);
     cudaMemset(W0.dGrad, 0, WeightSize);
-    cudaMemset(W1.dGrad, 0, WeightSize);
+    cudaMemset(W1.dGrad, 0, WeightProjectedSize);
+    cudaMemset(W2.dGrad, 0, WeightProjectedSize);
     cudaMemset(b1.dGrad, 0, ProjectedSize);
     cudaMemset(b2.dGrad, 0, ModelSize);
     cudaMemset(Gamma1.dGrad, 0, ModelSize);
@@ -529,14 +535,21 @@ begin
 end;
 
 { Optimization }
-// Update the weights and biases.
+// Update the weights and biases. At some point, eliminate non-cublas updates.
 procedure Optimization(var WModelParams: TWModelParams; const Blk: Integer);
 begin
   with WModelParams.ParamBlock[Blk] do begin
-    // W0 weights: main attention output.
+    // W weights: main attention output.
     UpdateParam(ModelDim * ModelDim, LearningRate, @W0.Grad[0,0], @W0.Value[0,0]);
     CuUpdateParam(CuHandle, ModelDim * ModelDim, LearningRate, W0.dGrad, W0.dValue);
     // cblas_saxpy(ModelDim * ModelDim, -LearningRate, @W0.Grad[0, 0], 1, @W0.Value[0, 0], 1);
+    UpdateParam(ModelDim * ModelDim, LearningRate, @W1.Grad[0,0], @W1.Value[0,0]);
+    CuUpdateParam(CuHandle, ModelDim * ModelDim, LearningRate, W1.dGrad, W1.dValue);
+    // cblas_saxpy(ModelDim * ModelDim, -LearningRate, @W1.Grad[0, 0], 1, @W1.Value[0, 0], 1);
+    UpdateParam(ModelDim * ModelDim, LearningRate, @W2.Grad[0,0], @W2.Value[0,0]);
+    CuUpdateParam(CuHandle, ModelDim * ModelDim, LearningRate, W2.dGrad, W2.dValue);
+    // cblas_saxpy(ModelDim * ModelDim, -LearningRate, @W2.Grad[0, 0], 1, @W2.Value[0, 0], 1);
+
     // Wq, Wk, Wv weights: Q, K, V.
     UpdateParam(ModelDim * ModelDim, LearningRate, @Wq.Grad[0,0], @Wq.Value[0,0]);
     CuUpdateParam(CuHandle, ModelDim * ModelDim, LearningRate, Wq.dGrad, Wq.dValue);

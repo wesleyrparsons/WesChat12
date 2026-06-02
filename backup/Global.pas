@@ -10,6 +10,7 @@ var
 { Place all verbosity and control options at start }
   DoNotPause: Boolean = False;         // Pause disabled.
   PauseIfKeyPressed: Boolean = True;   // Pause if a key is pressed.
+  StopTraining: Boolean;
   DisplayCorpus: Boolean = True;       // One set for real tokenizing and one set for debug.
   Verbose: Boolean = True;             // Verbose.
   VeryVerbose: Boolean = False;        // More verbose.
@@ -145,9 +146,12 @@ type                                                                           /
     LNXhat1:    TSeqMatrix;                                // Cache for Xhat in LayerNorm.
     dLNXhat1:   PSingle;
     LNInvStd2:  TFSVector;                                 // Cache for inverse standard deviation in LayerNorm.
-    dLNInvStd2:  PSingle;
+    dLNInvStd2: PSingle;
     LNXhat2:    TSeqMatrix;                                // Cache for Xhat in LayerNorm.
     dLNXhat2:   PSingle;
+    AttentionDropoutSeed: UInt64;                          // Seeds for dropouts.
+    MLPDropoutSeed:       UInt64;
+    ResidualDropoutSeed:  UInt64;
   end;
   TWModelState = record                                         // Model of non-trainable parameters.
     StateBlock:                     TStateBlock;
@@ -160,6 +164,7 @@ type                                                                           /
 var
   // cublas vars.
   CuHandle: TcublasHandle;
+  CudaAllocated: Boolean = False;
   One: Single = 1.0;
   Zero: Single = 0.0;
   // DLL accessibility vars.

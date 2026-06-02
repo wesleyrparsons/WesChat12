@@ -146,9 +146,12 @@ type                                                                           /
     LNXhat1:    TSeqMatrix;                                // Cache for Xhat in LayerNorm.
     dLNXhat1:   PSingle;
     LNInvStd2:  TFSVector;                                 // Cache for inverse standard deviation in LayerNorm.
-    dLNInvStd2:  PSingle;
+    dLNInvStd2: PSingle;
     LNXhat2:    TSeqMatrix;                                // Cache for Xhat in LayerNorm.
     dLNXhat2:   PSingle;
+    AttentionDropoutSeed: UInt64;                          // Seeds for dropouts.
+    MLPDropoutSeed:       UInt64;
+    ResidualDropoutSeed:  UInt64;
   end;
   TWModelState = record                                         // Model of non-trainable parameters.
     StateBlock:                     TStateBlock;
@@ -161,6 +164,7 @@ type                                                                           /
 var
   // cublas vars.
   CuHandle: TcublasHandle;
+  CudaAllocated: Boolean = False;
   One: Single = 1.0;
   Zero: Single = 0.0;
   // DLL accessibility vars.
@@ -188,7 +192,7 @@ var
   Mt0, Mt1, t0, t1, StopTime: TDateTime;         // For timing.
   Version: shortstring = '1.2';                  // Version 1.2.
   FromSymbolTable: Boolean = False;              // Operating from input Symbol Table rather than from tokenization.
-  // Model vars.
+  GlobalSeed: UInt64;                            // Initialize random sequence.
   nSymbols: Integer;                             // Number of symbols = Length(SymbolTable);
   nVocab: Integer;                               // nVocab is also nSymbol. Number of symbol items.
   TokenID: TIVector;                             // Same as TokenizedCorpus.

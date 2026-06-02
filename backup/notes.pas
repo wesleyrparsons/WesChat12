@@ -68,10 +68,9 @@ Transform/Matrix/Utils.
 
 a. Is InvFreq dimmed as ModelDim or HeadDim?
 
-0. ApplyRope inside each rather than across all model.
+b. Eliminate non-cublas optimization in Util.
 
-b. Cuda Softmax only works if SeqLen <= 256.
-LaunchSoftMaxForwardN only works in nVocab <= 256.
+0. ApplyRope inside each rather than across all model.
 
 1. Many models reuse the embedding matrix for output projection.
 This is called weight tying. WVocab not needed. I am doing it.

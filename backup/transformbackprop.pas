@@ -25,8 +25,7 @@ implementation
 // Run the transformer backprop.
 procedure RunTransformBackprop(var WModelParams: TWModelParams; var WModelState: TWModelState; const Blk: Integer);
 var
-  h, i, HeadOffset, BestTok: Integer;
-  BestProb: Single;
+  h, i, HeadOffset: Integer;
 
 begin
   // Display entry to transform.
@@ -44,6 +43,10 @@ begin
 
       // 2E. Backprop Addition/Accumulation. Obtain b2 from X6.
       Writeln('            Transform Backprop Stage 2E');
+
+      // Dropout Backward.
+      if Training then
+        LaunchDropoutBackward(X6.dGrad, SeqLen * ModelDim, RDropout, ResidualDropoutSeed);
 
       // Backprop X6 Grad creates b2 Grad. Input X6.Grad. Output b2.Grad.
       // Equation: b2.Grad = sum of X6.Grad. b2.Grad is R^{L x D}. X6.Grad in R^{L x D}.
@@ -69,6 +72,10 @@ begin
       // MatMulNT(@X6.Grad, @W2.Value, @Hidden2.Grad, SeqLen, ModelDimProj, ModelDim);
       // cublas. X6.Grad is in cublas. No need to copy Hidden2.Grad.
       CuMatMulNT(CuHandle, X6.dGrad, W2.dValue, Hidden2.dGrad, SeqLen, ModelDimProj, ModelDim);
+
+      // Droput Backward.
+      if Training then
+        LaunchDropoutBackward(Hidden2.dGrad, SeqLen * ModelDimProj, MLPDropout, MLPDropoutSeed);
 
       // 2C. Backprop ReLU. Obtain Hidden1 from Hidden2.
       Writeln('            Transform Backprop Stage 2C');

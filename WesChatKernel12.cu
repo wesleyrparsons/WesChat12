@@ -340,6 +340,68 @@ void LaunchDropout(
     DropoutKernel<<<blocks, threads>>>(X, N, DropProb, Seed);
 }
 
+// Dropout Backward.
+#include <cuda_runtime.h>
+#include <stdint.h>
+
+__device__ unsigned int HashUInt(unsigned int x)
+{
+    x ^= x >> 17;
+    x *= 0xed5ad4bbU;
+    x ^= x >> 11;
+    x *= 0xac4c1b51U;
+    x ^= x >> 15;
+    x *= 0x31848babU;
+    x ^= x >> 14;
+    return x;
+}
+
+__device__ float Random01(uint64_t seed, int idx)
+{
+    unsigned int x = (unsigned int)(seed ^ (uint64_t)idx);
+    x = HashUInt(x);
+    return (x & 0x00FFFFFF) / 16777216.0f;
+}
+
+extern "C" __global__
+void DropoutBackwardKernel(
+    float* dX,
+    int N,
+    float DropProb,
+    uint64_t Seed)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (idx < N) {
+        float r = Random01(Seed, idx);
+
+        if (r < DropProb)
+            dX[idx] = 0.0f;
+        else
+            dX[idx] = dX[idx] / (1.0f - DropProb);
+    }
+}
+
+extern "C" __declspec(dllexport)
+void LaunchDropoutBackward(
+    float* dX,
+    int N,
+    float DropProb,
+    uint64_t Seed)
+{
+    int threads = 256;
+    int blocks = (N + threads - 1) / threads;
+
+    DropoutBackwardKernel<<<blocks, threads>>>(
+        dX,
+        N,
+        DropProb,
+        Seed
+    );
+
+    cudaDeviceSynchronize();
+}
+
 // ReLUForward.
 #include <cuda_runtime.h>
 

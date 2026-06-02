@@ -241,7 +241,7 @@ var
 
 begin
   // Copy all the weights in cublas to RAM.
-  CopyParamsToHost(WModelParams);
+  CopyParamsToHost(Model);
 
   Assign(F, FileName);
   Result := False;

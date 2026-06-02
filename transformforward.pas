@@ -27,15 +27,17 @@ procedure RunTransformForward(var WModelParams: TWModelParams; var WModelState: 
 // Run the transformer forward.
 var
   h, i, HeadOffset: Integer;
-  Seed: UInt64;
 begin
-  // Seed RNG.
-  Seed := GetTickCount64;
-
   // Display entry to transform.
   writeln('Entering Forward Transformer');
 
   with WModelParams.ParamBlock[Blk] do with WModelState.StateBlock[Blk] do begin
+
+    // Seed random number generation.
+      AttentionDropoutSeed := GlobalSeed + Blk * 1000 + 1;
+      MLPDropoutSeed       := GlobalSeed + Blk * 1000 + 2;
+      ResidualDropoutSeed  := GlobalSeed + Blk * 1000 + 3;
+
     // Display X.Value matrix.
     if VerboseTransform then begin
       cudaMemcpy(@X.Value[0, 0], X.dValue, XSize, cudaMemcpyDeviceToHost);
@@ -182,7 +184,7 @@ begin
         //    else
         //      ScoresHead2[h].Value[i, j] := ScoresHead2[h].Value[i, j] / (1.0 - ADropOut);
         // cuda kernel.
-        LaunchDropout(ScoresHead2[h].dValue, SeqLen * SeqLen, ADropOut, UInt64(Seed) + h);
+        LaunchDropout(ScoresHead2[h].dValue, SeqLen * SeqLen, ADropOut, AttentionDropoutSeed + h);
 
     // 1G. Multiplication/Overwrite. Obtain X2Head from ScoresHead2.
     Writeln('          Transform Forward Stage 1G');
@@ -244,7 +246,7 @@ begin
     // non-cuda kernel.
     // LayerNormForward(X4.Value, X5.Value, SeqLen, Gamma2.Value, Beta2.Value, LNXhat2, LNInvStd2);
     // cuda kernel.
-    LaunchLayerNormForward(X4.dValue, X5.dValue, Gamma1.dValue, Beta1.dValue, dLNXhat1, dLNInvStd1, SeqLen, ModelDim);
+    LaunchLayerNormForward(X4.dValue, X5.dValue, Gamma2.dValue, Beta2.dValue, dLNXhat2, dLNInvStd2, SeqLen, ModelDim);
 
     // Display X5.Value matrix.
     if VerboseTransform then begin
@@ -303,7 +305,7 @@ begin
         //    else
         //      Hidden2.Value[i, j] := Hidden2.Value[i, j] / (1.0 - MLPDropOut);
         // cuda kernel.
-        LaunchDropout(Hidden2.dValue, SeqLen * ModelDimProj, RDropOut, UInt64(GetTickCount64));
+        LaunchDropout(Hidden2.dValue, SeqLen * ModelDimProj, MLPDropOut, MLPDropoutSeed);
 
       // 2D. Multiplication/Overwrite. Obtain X6 from Hidden2.
       Writeln('            Transform Forward Stage 2D');
@@ -325,6 +327,7 @@ begin
         // cblas.
         // AddScaled(ModelDim, 1.0, @b2.Value[0], @X6.Value[i,0]);
         // cublas.
+        // Replace with a CUDA AddBiasRowsKernel to avoid SeqLen cuBLAS calls.
         CuAddScaled(CuHandle, ModelDim, 1.0, b2.dValue, PSingle(X6.dValue) + i * ModelDim);
 
       // Display X6.Value matrix.
@@ -345,7 +348,7 @@ begin
         //    else
         //      X6.Value[i, j] := Hidden2.Value[i, j] / (1.0 - RDropOut);
         // cuda kernel.
-        LaunchDropout(X3.dValue, SeqLen * ModelDim, RDropout, UInt64(GetTickCount64));
+        LaunchDropout(X6.dValue, SeqLen * ModelDim, RDropout, ResidualDropoutSeed);
 
       // Backprop Merge Addition: Input Residual X6, X5. Output X7.
       // Equation: X7 = X5 + X6. X7 in R^{L · D}. X5 in R^{L · D}. X6 in R^{L x D}.

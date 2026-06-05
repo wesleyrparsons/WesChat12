@@ -2,14 +2,14 @@ unit Infer;
 
 {$mode ObjFPC}{$H+}{$I proprietary.txt}
 
-{ WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wespar.com.}
+{ WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wesparsons.com.}
 
 interface
 
 uses
-  GPT2Tokenize,
   Display,
   Global,
+  GPT2Tokenize,
   Matrix,
   SysUtils,
   TransformForward,
@@ -136,7 +136,7 @@ begin
         VTPDisplayX('Display X.Value before transform.', StateBlock[Blk].X.Value, G);
       end;
 
-      RunTransformForward(WModelParams, WModelState, Blk);
+      RunTransformForward(WModelParams, WModelState, Blk, 0);
 
       // Feed this block's output into the next block's input.
       if Blk < nBlock - 1 then
@@ -178,8 +178,6 @@ end;
 // QueryOutput is the output tokens from the model.
 // QueryTokenized is the tokenization of QueryInput, like TokenizedCorpus.
 // QueryToken is the single next token produced by the infer proc.
-var
-  i: Integer;
 procedure RunInfer(var WModelParams: TWModelParams; var WModelState: TWModelState);
 const
   MaxNewTokens = 100;        // Limit on new tokens produced.
@@ -190,10 +188,10 @@ var
   QueryString: string;
 begin
   CheckAllDLLs;
-
+  Training := False;
   nVocab := nSymbols;
 
-  InitializeTransformer(WModelParams, WModelState);
+  InitializeTransformerState(WModelState);
   MAllocCublas(WModelParams, WModelState);
 
   try
@@ -222,6 +220,11 @@ begin
       else
         RunGPT2Tokenize(QueryString, QueryTokenized);
 
+      if Length(QueryTokenized) = 0 then begin
+        Writeln('No tokens produced.');
+        Continue;
+      end;
+
       SetLength(QueryOutput, 0);
       WorkTokens := Copy(QueryTokenized);
 
@@ -239,9 +242,23 @@ begin
         if QueryToken = EOS then Break;
       end;
 
-      Writeln('Query Full Token Output: ');
+      Writeln('Query token output: ');
       for i := 0 to High(QueryOutput) do
         Write(QueryOutput[i], ' ');
+      Writeln;
+
+      if Tokenizer = GPT2Tokenizer then begin
+        // GPT2.
+        LoadVocab('vocab.json', Vocab);
+        Writeln('Query decoded token output: ');
+        for i := 0 to High(QueryOutput) do
+          Write(DisplayToken(UTF8Decode(Vocab[QueryOutput[i]])));
+      end
+      else begin
+        // WesChat.
+        Writeln('Query decoded token output: ');
+        DetokenizeToDisplay(QueryOutput, F);
+      end;
       Writeln;
     until False;
 

@@ -2,7 +2,7 @@ unit CombineTables;
 
 {$mode ObjFPC}{$H+}{$I proprietary.txt}
 
-{ WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wespar.com.}
+{ WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wesparsons.com.}
 { Note: Edited 3/21/2026 5:07 pm }
 
 interface
@@ -35,7 +35,7 @@ var
   F: TextFile;
   FilesRead: TSVector;
   Tables: array of TSymbolTable;
-begin
+begin                                       // NEED TO SETLENGTH TABLES???
   write('Enter name of file list: ');
     readln(ListFile);
     if not FileExists(ListFile) then begin
@@ -55,17 +55,18 @@ begin
     Line := Trim(Line);
     if Line = '' then
       Continue;         // Skip blank lines.
+
     if FileExists(Line) then begin
+      SetLength(Tables, Count + 1);
+
       LoadSymbolTable(Line, Tables[Count]);
+
       Writeln('  File processed: ', Line, '; symbol bytes read: ', Length(Tables[Count]));
 
       Inc(Count);
+
       SetLength(FilesRead, Count);
       FilesRead[Count - 1] := Line;
-    end
-    else begin
-      Writeln('  File not found: ', Line);
-      Pause;
     end;
   end;
 
@@ -80,9 +81,9 @@ begin
   k := 0;
 
   { 2. Union (deduplicate) }
-  for i := Low(Tables) to High(Tables) do
+  for i := 0 to Count - 1 do
     for j := 0 to High(Tables[i]) do begin
-      s := Tables[i, j];
+      s := Tables[i][j];
       Found := False;
       for Total := 0 to k - 1 do
         if CombinedTable[Total] = s then begin

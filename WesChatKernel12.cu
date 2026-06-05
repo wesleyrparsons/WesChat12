@@ -1,4 +1,4 @@
-// LayerNormForward.
+// LayerNorm Forward.
 
 extern "C" __global__
 void LayerNormForwardKernel(
@@ -89,7 +89,7 @@ void LaunchLayerNormForward(
     );
 }
 
-// LayerNormBackward.
+// LayerNorm Backward.
 #include <cuda_runtime.h>
 
 extern "C" __global__
@@ -210,7 +210,7 @@ void LaunchAutoRegressiveMask(float* Scores, int SeqLen)
     AutoRegressiveMaskKernel<<<blocks, threads>>>(Scores, SeqLen);
 }
 
-// AutoRegressiveMackBackward.
+// AutoRegressiveMack Backward.
 #include <cuda_runtime.h>
 
 extern "C" __global__
@@ -245,7 +245,7 @@ void LaunchAutoRegressiveMaskBackward(
     cudaDeviceSynchronize();
 }
 
-// RoPEForward.
+// RoPE Forward.
 #include <cuda_runtime.h>
 #include <math.h>
 
@@ -298,6 +298,65 @@ void LaunchRoPEForward(
         SeqLen,
         ModelDim
     );
+}
+
+// RoPE Backward.
+#include <cuda_runtime.h>
+#include <math.h>
+
+extern "C" __global__
+void RoPEBackwardKernel(
+    float* dH,
+    const float* InvFreq,
+    int SeqLen,
+    int ModelDim)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+    int pairsPerRow = ModelDim / 2;
+    int totalPairs = SeqLen * pairsPerRow;
+
+    if (idx < totalPairs) {
+        int row = idx / pairsPerRow;
+        int pair = idx - row * pairsPerRow;
+
+        float angle = row * InvFreq[pair];
+
+        // Inverse rotation uses -angle:
+        // cos(-a)=cos(a), sin(-a)=-sin(a)
+        float c = cosf(angle);
+        float s = sinf(angle);
+
+        int base = row * ModelDim + 2 * pair;
+
+        float g0 = dH[base];
+        float g1 = dH[base + 1];
+
+        dH[base]     =  g0 * c + g1 * s;
+        dH[base + 1] = -g0 * s + g1 * c;
+    }
+}
+
+extern "C" __declspec(dllexport)
+void LaunchRoPEBackward(
+    float* dH,
+    const float* InvFreq,
+    int SeqLen,
+    int ModelDim)
+{
+    int pairs = SeqLen * (ModelDim / 2);
+
+    int threads = 256;
+    int blocks = (pairs + threads - 1) / threads;
+
+    RoPEBackwardKernel<<<blocks, threads>>>(
+        dH,
+        InvFreq,
+        SeqLen,
+        ModelDim
+    );
+
+    cudaDeviceSynchronize();
 }
 
 // DropOut.
@@ -402,7 +461,7 @@ void LaunchDropoutBackward(
     cudaDeviceSynchronize();
 }
 
-// ReLUForward.
+// ReLU Forward.
 #include <cuda_runtime.h>
 
 extern "C" __global__
@@ -434,7 +493,7 @@ void LaunchReLUForward(
     ReLUForwardKernel<<<blocks, threads>>>(A, B, N);
 }
 
-// ReLUBackward.
+// ReLU Backward.
 #include <cuda_runtime.h>
 
 extern "C" __global__
@@ -475,7 +534,7 @@ void LaunchReLUBackward(
     cudaDeviceSynchronize();  // good for debugging
 }
 
-// SoftmaxForward, strided.
+// Softmax Forward, strided.
 #include <cuda_runtime.h>
 #include <math.h>
 #include <float.h>
@@ -563,7 +622,7 @@ void LaunchSoftmaxForwardN(
     cudaDeviceSynchronize();
 }
 
-// SoftmaxBackward, strided.
+// Softmax Backward, strided.
 #include <cuda_runtime.h>
 
 extern "C" __global__
@@ -624,7 +683,7 @@ void LaunchSoftmaxBackward(
     cudaDeviceSynchronize();
 }
 
-// CEGradientFromProbabilities.
+// CE Gradient From Probabilities.
 #include <cuda_runtime.h>
 
 extern "C" __global__
@@ -670,6 +729,7 @@ void LaunchCEGradient(
     );
 }
 
+// Embedding Lookup.
 extern "C" __global__
 void EmbeddingLookupKernel(
     const float* Embeddings,
@@ -747,6 +807,84 @@ void LaunchAddInputEmbeddingGrad(
 
     AddInputEmbeddingGradKernel<<<blocks, threads>>>(
         XGrad, EmbGrad, InputTokens, SeqLen, ModelDim, nVocab
+    );
+
+    cudaDeviceSynchronize();
+}
+
+// Add Bias Rows.
+#include <cuda_runtime.h>
+
+extern "C" __global__
+void AddBiasRowsKernel(
+    float* X,
+    const float* Bias,
+    int Rows,
+    int Cols)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    int total = Rows * Cols;
+
+    if (idx < total) {
+        int col = idx % Cols;
+        X[idx] += Bias[col];
+    }
+}
+
+extern "C" __declspec(dllexport)
+void LaunchAddBiasRows(
+    float* X,
+    const float* Bias,
+    int Rows,
+    int Cols)
+{
+    int threads = 256;
+    int blocks = (Rows * Cols + threads - 1) / threads;
+
+    AddBiasRowsKernel<<<blocks, threads>>>(
+        X,
+        Bias,
+        Rows,
+        Cols
+    );
+
+    cudaDeviceSynchronize();
+}
+
+// Add Bias Rows Backward.
+#include <cuda_runtime.h>
+
+extern "C" __global__
+void AddBiasRowsBackwardKernel(
+    const float* dX,
+    float* dBias,
+    int Rows,
+    int Cols)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    int total = Rows * Cols;
+
+    if (idx < total) {
+        int col = idx % Cols;
+        atomicAdd(&dBias[col], dX[idx]);
+    }
+}
+
+extern "C" __declspec(dllexport)
+void LaunchAddBiasRowsBackward(
+    const float* dX,
+    float* dBias,
+    int Rows,
+    int Cols)
+{
+    int threads = 256;
+    int blocks = (Rows * Cols + threads - 1) / threads;
+
+    AddBiasRowsBackwardKernel<<<blocks, threads>>>(
+        dX,
+        dBias,
+        Rows,
+        Cols
     );
 
     cudaDeviceSynchronize();

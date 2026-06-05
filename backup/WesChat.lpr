@@ -2,14 +2,14 @@ program WesChat;
 
 {$mode ObjFPC}{$H+}{$I proprietary.txt}
 
-{ WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wespar.com }
-{ Note: Edited 6/2/2026 5 pm -- working from WesChat12 on OneDrive }
+{ WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wesparsons.com }
+{ Note: Edited 6/4/2026 5 pm -- working from WesChat12 on OneDrive }
 { Notes: TokCorpus comes from WesTokenize or ChatGPTTokenize; WModelParams (with Embeddings) and WModelState are from here }
 { Notes: Corpus is here }
 {        Input Train        Input Query        Output
  Raw                        QueryString
  Bytes   Corpus             QueryCorpus
- Token   TokenizedCorpus    TokenizedCorpus    QueryOutput }
+ Token   TokenizedCorpus    QueryTokenized     QueryOutput }
 
 uses
   CombineTables,
@@ -26,8 +26,6 @@ uses
   WesTokenize,
   Windows;
 
-//type
-  //TTokRoutine = (WesRoutine, GPT2Routine);
 var
   // Corpus vars.
   Corpus: TBVector;                         // Vector of byte.
@@ -148,8 +146,19 @@ begin
   Writeln;
 end;
 
-// Helper function for proceeding to Embed.
-function QueryEmbed: Boolean;
+// Helper function for proceeding to Train.
+function QueryTrain: Boolean;
+begin
+  Write('Do you wish to proceed to training? (y/n) ');
+  Readln(Ch);
+  if UpCase(Ch) = 'N' then
+    Result := False
+  else
+    Result := True;
+end;
+
+// Helper function for proceeding to Infer.
+function QueryInfer: Boolean;
 begin
   Write('Do you wish to proceed to training? (y/n) ');
   Readln(Ch);
@@ -179,11 +188,26 @@ begin
   SetMultiByteConversionCodePage(CP_UTF8);
   SetMultiByteRTLFileSystemCodePage(CP_UTF8);
 
+  // More startup for GPT2.
+  Vocab := TStringList.Create;
+  LoadVocab('vocab.json', Vocab);
+
   { Below is not working on my Lazarus console }
   SetConsoleOutputCP(CP_UTF8);
   SetConsoleCP(CP_UTF8);
 
-  Writeln('WesChat, Version 1.2, begun January 19, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wespar.com.');
+  { Possible CLI -- need model, model = tokenlist + params, tokenlist = wes symbol table or gpt symbol and merge tables }
+  // tokenize: westok, gpttok + filenames (1 or more)
+  // run one preset: bela winston
+  // input symbol table: symtab + filename
+  // input merge table: mergetab + filename
+  // input token list: toklist + filename
+  // combine 2 symbol tables: comb (enhance to 2+)
+  // create wes symbol table: symb + filename
+  // load model: load, save model: save + filenames
+  // perform forward inference on model: infer + optional filenames
+
+  Writeln('WesChat, Version 1.2, begun January 19, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wesparsons.com.');
   Writeln;
   Writeln('Options:');
   Writeln('  1: Tokenize an input corpus from a file using WesChat''s byte-level byte-pair encoding, with');
@@ -200,12 +224,13 @@ begin
   Writeln('     using an input symbol table and WesChat''s tokenization routine.');
   Writeln('  9: Create symbol table from input corpus.');
   Writeln('  10: Save a model.');
-  Writeln('  11: Load a model.');
+  Writeln('  11: Load a model, but do not run forward.');
+  Writeln('  11: Load a model, and run forward.');
   Writeln('  H: Help.');
   Writeln('  X: Exit.');
   Writeln;
   Writeln('The symbol table and other information, including if desired the token list, will be written to disk.');
-  Writeln('Ater tokenization, WesChat prompts for training the transformer, which consists');
+  Writeln('After tokenization, WesChat prompts for training the transformer, which consists');
   Writeln('of 4 to 8 blocks. The attention stage has 8 heads. There are a weight stage wih a bias');
   Writeln('and a weight stage without a bias. The activation function is softmax with temperature.');
   Writeln('Model dimensions are 512. The activation stage expands dimensionality fourfold.');
@@ -213,7 +238,7 @@ begin
   Writeln('standardizes for means and standard deviations. Attention, MLP, and residual dropouts are 0.1.');
   Writeln('The softmax function normalizes exponentially with a temperature of 1.0. The learning rate is 0.01.');
   Writeln('All output files will be contained in a folder or file named with the input file name,');
-  Writeln('appended with a timestamp.');
+  Writeln('appended with a timestamp. After training, a model will run forward.');
   while True do begin
     Write('W>');
     Readln(Ch);
@@ -259,9 +284,10 @@ begin
         end;
 
         // Train.
-        if QueryEmbed then begin
+        if QueryTrain then begin
           RunTrain(WModelParams, WModelState, TokenizedCorpus);
-          RunInfer(WModelParams, WModelState);
+          if QueryInfer then
+            RunInfer(WModelParams, WModelState);
         end;
       end;
       '2': begin
@@ -280,9 +306,10 @@ begin
         PadToSeqMultiple(TokenizedCorpus, SeqLen);
 
         // Train.
-        If QueryEmbed then begin
+        If QueryTrain then begin
           RunTrain(WModelParams, WModelState, TokenizedCorpus);
-          RunInfer(WModelParams, WModelState);
+          if QueryInfer then
+            RunInfer(WModelParams, WModelState);
         end;
       end;
       '3': begin
@@ -309,9 +336,10 @@ begin
         PadToSeqMultiple(TokenizedCorpus, SeqLen);
 
         // Run Train.
-        if QueryEmbed then begin
+        if QueryTrain then begin
           RunTrain(WModelParams, WModelState, TokenizedCorpus);
-          RunInfer(WModelParams, WModelState);
+          if QueryInfer then
+            RunInfer(WModelParams, WModelState);
         end;
       end;
       '4': begin
@@ -367,9 +395,10 @@ begin
         PadToSeqMultiple(TokenizedCorpus, SeqLen);
 
         // Run Train.
-        if QueryEmbed then begin
+        if QueryTrain then begin
           RunTrain(WModelParams, WModelState, TokenizedCorpus);
-          RunInfer(WModelParams, WModelState);
+          if QueryInfer then
+            RunInfer(WModelParams, WModelState);
         end;
       end;
       '5': begin
@@ -413,7 +442,8 @@ begin
         // Check number of symbols, and Train.
         if nSymbols > 0 then begin
           RunTrain(WModelParams, WModelState, TokenizedCorpus);
-          RunInfer(WModelParams, WModelState);
+          if QueryInfer then
+            RunInfer(WModelParams, WModelState);
         end
         else
           Writeln('Symbols not found in table.');
@@ -441,9 +471,10 @@ begin
           PadToSeqMultiple(TokenizedCorpus, SeqLen);
 
         // Run Train.
-        If QueryEmbed then begin
+        If QueryTrain then begin
           RunTrain(WModelParams, WModelState, TokenizedCorpus);
-          RunInfer(WModelParams, WModelState);
+          if QueryInfer then
+            RunInfer(WModelParams, WModelState);
         end;
       end;
       '7': begin
@@ -496,9 +527,10 @@ begin
         PadToSeqMultiple(TokenizedCorpus, SeqLen);
 
         // RunTrain.
-        If QueryEmbed then begin
+        If QueryTrain then begin
           RunTrain(WModelParams, WModelState, TokenizedCorpus);
-          RunInfer(WModelParams, WModelState);
+          if QueryInfer then
+            RunInfer(WModelParams, WModelState);
         end;
       end;
       '9': begin
@@ -547,6 +579,17 @@ begin
         Readln(ModelFileName);
         if LoadModel(ModelFileName, WModelParams) then begin
           Writeln('File ', ModelFileName, ' loaded.');
+        end
+        else
+          Writeln('File not loaded.');
+        Pause;
+      end;
+      '12': begin
+        Write('Enter filename: ');
+        Readln(ModelFileName);
+        if LoadModel(ModelFileName, WModelParams) then begin
+          Writeln('File ', ModelFileName, ' loaded.');
+          NewModel := False;
           RunInfer(WModelParams, WModelState);
         end
         else
@@ -580,4 +623,5 @@ begin
       else Writeln('Invalid input');
     end;
   end;
+  Vocab.Free;
 end.

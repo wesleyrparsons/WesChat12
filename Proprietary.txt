@@ -6,9 +6,9 @@
 {  (or Delphi) for personal, research, and educational use.                    }
 {                                                                              }
 {  Author        : Wesley R. Parsons                                           }
-{  wespar@bellouth.net, www.wespar.com, Miami, Florida.                        }                                  
+{  wespar@bellouth.net, www.wesparsons.com, Miami, Florida.                    }                                  
 {  First release : January 2026                                                }
-{  Version       : 1.0                                                         }
+{  Version       : 1.2                                                         }
 {  Date          : January 18, 2026                                            }
 {                                                                              }
 {  Copyright © 2026 Wesley R. Parsons. All rights reserved.                    }

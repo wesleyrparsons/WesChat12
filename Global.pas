@@ -2,9 +2,11 @@ unit Global;
 
 {$mode ObjFPC}{$H+}{$I proprietary.txt}
 
-{ WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wespar.com.}
+{ WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wesparsons.com.}
 
 interface
+
+uses Classes;
 
 var
 { Place all verbosity and control options at start }
@@ -61,7 +63,6 @@ type                                                                           /
   TWeightProjMatrixT = array[0..ModelDimProj - 1] of TSeqVector;               // DB x D
   THiddenMatrix = array[0..SeqLen - 1] of TSeqVectorProj;                      // L x DB
   TScoresMatrix = array[0..SeqLen - 1] of TDimVector;                          // L x L
-  TVocabWeightMatrix = array[0..ModelDim - 1] of TVocabVector;                 // D x MaxVocab
   TSeqVocabMatrix = array [0..SeqLen - 1] of TVocabVector;                     // L x MaxVocab
   TFSVector = array[0..SeqLen - 1] of Single;                                  // L
   TEmbeddingsMatrix = array[0..DimVocab - 1] of TSeqVector;                    // DV x D. Array for embeddings matrix, at DimVocab, a maximum.
@@ -149,9 +150,10 @@ type                                                                           /
     dLNInvStd2: PSingle;
     LNXhat2:    TSeqMatrix;                                // Cache for Xhat in LayerNorm.
     dLNXhat2:   PSingle;
-    AttentionDropoutSeed: UInt64;                          // Seeds for dropouts.
+    // Dropout seeds.
+    ADropoutSeed: UInt64;                                  // Seeds for dropouts.
     MLPDropoutSeed:       UInt64;
-    ResidualDropoutSeed:  UInt64;
+    RDropoutSeed:  UInt64;
   end;
   TWModelState = record                                         // Model of non-trainable parameters.
     StateBlock:                     TStateBlock;
@@ -171,6 +173,8 @@ var
   CublasPresent: Boolean;
   CudartPresent: Boolean;
   WesChatKernelPresent: Boolean;
+  // GPT2 vars.                                 // Need in order to use in decoding in Infer.
+  Vocab: TStringList;
   // Corpus vars.
   CorpusFileNames: TSVector;                     // Name of corpus file.
   SymbolTable: TSymbolTable;                     // Symbol table.
@@ -181,13 +185,16 @@ var
   // Target and Query vars.
   InputTokens: TIDimVector;                      // Input tokens.
   dInputTokens: PInteger;                        // Input tokens.
-  TargetTokens: TIDimVector;                     // Target tokens. Shited by  +1.
+  TargetTokens: TIDimVector;                     // Target tokens. Shifted by  +1.
   dTargetTokens: PInteger;
   // Extra char vars.
   BOS: Integer = 256;
   EOS: Integer = 257;
   PAD: Integer = 258;
   UNK: Integer = 259;
+  // Model setings vars.
+  LearningRate: Single = 0.01;                   // LearningRate for Gradient.
+  Temperature: Single = 1.0;                     // Temperature for softmax.
   // Utility vars.
   Mt0, Mt1, t0, t1, StopTime: TDateTime;         // For timing.
   Version: shortstring = '1.2';                  // Version 1.2.
@@ -196,18 +203,14 @@ var
   nSymbols: Integer;                             // Number of symbols = Length(SymbolTable);
   nVocab: Integer;                               // nVocab is also nSymbol. Number of symbol items.
   TokenID: TIVector;                             // Same as TokenizedCorpus.
-  XSize: Integer = SeqLen * ModelDim;            // Size of X matrices.
-  HiddenSize: Integer = SeqLen * ModelDimProj;   // Size of Hidden matrices.
-  LearningRate: Single = 0.01;                   // LearningRate for Gradient.
-  Temperature: Single = 1.0;                     // Temperature for softmax.
   Training: Boolean = True;                      // In training as opposed to inference mode.
-  Tokenizer: TTokenizer;                         // Either Wes or GPT2.
+  Tokenizer: TTokenizer;                         // WesChat or GPT2Chat tokenizer;
+  NewModel: Boolean = True;                      // If new model, initialize params.
   // Other.
   TestVector: TFSVector;                         // Vector for testing. [0..SeqLen] of Single.
 
 implementation
 
 begin
-
 end.
 

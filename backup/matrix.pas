@@ -33,51 +33,52 @@ function cudaMemset(devPtr: Pointer; value: Integer; count: NativeUInt): Integer
 function cudaFree(devPtr: Pointer): Integer; cdecl; external cudartDLL;
 
 // Multiply and add procedures.
-procedure MatMulFullNN(const A, B: PSingle; C: PSingle; M, N, K, lda, ldb, ldc: Integer);
+// procedure MatMulFullNN(const A, B: PSingle; C: PSingle; M, N, K, lda, ldb, ldc: Integer);
 procedure CuMatMulFullNN(Handle: TcublasHandle; const A, B: PSingle; C: PSingle; M, N, K, lda, ldb, ldc: Integer);
-procedure MatMulFullTN(const A, B: PSingle; C: PSingle; M, N, K, lda, ldb, ldc: Integer);
+// procedure MatMulFullTN(const A, B: PSingle; C: PSingle; M, N, K, lda, ldb, ldc: Integer);
 procedure CuMatMulFullTN(Handle: TcublasHandle; const A, B: PSingle; C: PSingle; M, N, K, lda, ldb, ldc: Integer);
-procedure MatMulFullNT(const A, B: PSingle; C: PSingle; M, N, K, lda, ldb, ldc: Integer);
+// procedure MatMulFullNT(const A, B: PSingle; C: PSingle; M, N, K, lda, ldb, ldc: Integer);
 procedure CuMatMulFullNT(Handle: TcublasHandle; const A, B: PSingle; C: PSingle; M, N, K, lda, ldb, ldc: Integer);
-procedure MatMulFullAccNN(const A, B: PSingle; C: PSingle; M, N, K, lda, ldb, ldc: Integer);
+// procedure MatMulFullAccNN(const A, B: PSingle; C: PSingle; M, N, K, lda, ldb, ldc: Integer);
 procedure CuMatMulFullAccNN(handle: TcublasHandle; const A, B: PSingle; C: PSingle; M, N, K: Integer; lda, ldb, ldc: Integer);
-procedure MatMulFullAccNT(const A, B: PSingle; C: PSingle; M, N, K, lda, ldb, ldc: Integer);
+// procedure MatMulFullAccNT(const A, B: PSingle; C: PSingle; M, N, K, lda, ldb, ldc: Integer);
 procedure CuMatMulFullAccNT(handle: TcublasHandle; const A, B: PSingle; C: PSingle; M, N, K: Integer; lda, ldb, ldc: Integer);
-procedure MatMulFullAccTN(const A, B: PSingle; C: PSingle; M, N, K, lda, ldb, ldc: Integer);
+// procedure MatMulFullAccTN(const A, B: PSingle; C: PSingle; M, N, K, lda, ldb, ldc: Integer);
 procedure CuMatMulFullAccTN(handle: TcublasHandle; const A, B: PSingle; C: PSingle; M, N, K: Integer; lda, ldb, ldc: Integer);
-procedure MatMulFullScaledNT(const A, B: PSingle; C: PSingle; M, N, K, lda, ldb, ldc: Integer; Alpha, Beta: Single);
+// procedure MatMulFullScaledNT(const A, B: PSingle; C: PSingle; M, N, K, lda, ldb, ldc: Integer; Alpha, Beta: Single);
 procedure CuMatMulFullScaledNT(handle: TcublasHandle; const A, B: PSingle; C: PSingle; M, N, K, lda, ldb, ldc: Integer; Alpha, Beta: Single);
-procedure MatMulNN(const A, B: PSingle; C: PSingle; M, N, K: Integer);
+// procedure MatMulNN(const A, B: PSingle; C: PSingle; M, N, K: Integer);
 procedure CuMatMulNN(handle: TcublasHandle; const A, B: PSingle; C: PSingle; M, N, K: Integer);
-procedure MatMulNT(const A, B: PSingle; C: PSingle; M, N, K: Integer);
+// procedure MatMulNT(const A, B: PSingle; C: PSingle; M, N, K: Integer);
 procedure CuMatMulNT(handle: TcublasHandle; const A, B: PSingle; C: PSingle; M, N, K: Integer);
-procedure MatMulTN(const A, B: PSingle; C: PSingle; M, N, K: Integer);
+// procedure MatMulTN(const A, B: PSingle; C: PSingle; M, N, K: Integer);
 procedure CuMatMulTN(handle: TcublasHandle; const A, B: PSingle; C: PSingle; M, N, K: Integer);
-procedure AddScaled(const N: Integer; const Alpha: Single; const X: PSingle; Y: PSingle);
+// procedure AddScaled(const N: Integer; const Alpha: Single; const X: PSingle; Y: PSingle);
 procedure CuAddScaled(handle: TcublasHandle; N: Integer; Alpha: Single; const X: PSingle; Y: PSingle);
+// procedure Scale(const N: Integer; const Alpha: Single; X: PSingle);
 procedure CuScale(handle: TcublasHandle; N: Integer; Alpha: Single; X: PSingle);
-procedure Scale(const N: Integer; const Alpha: Single; X: PSingle);
-procedure MatAdd(const A, B: TSeqMatrix; var C: TSeqMatrix; Rows, Cols: Integer);
+// procedure MatAdd(const A, B: TSeqMatrix; var C: TSeqMatrix; Rows, Cols: Integer);
 procedure CuMatAdd(handle: TcublasHandle; const A, B: PSingle; C: PSingle; Rows, Cols: Integer);
 
 // Split and accumulate procedures.
-procedure GradSplit(const Upstream: TSeqMatrix; var Left, Right: TSeqMatrix; Rows, Cols: Integer);
+// procedure GradSplit(const Upstream: TSeqMatrix; var Left, Right: TSeqMatrix; Rows, Cols: Integer);
 procedure CuGradSplit(handle: TcublasHandle; const Upstream: PSingle; Left, Right: PSingle; Rows, Cols: Integer);
-procedure AccumulateGrad(const Src: TSeqMatrix; var Dst: TSeqMatrix; Rows, Cols: Integer);
+// procedure AccumulateGrad(const Src: TSeqMatrix; var Dst: TSeqMatrix; Rows, Cols: Integer);
 procedure CuAccumulateGrad(handle: TcublasHandle; const Src: PSingle; Dst: PSingle; Rows, Cols: Integer);
-procedure MatMulAccNT(const A, B: PSingle; C: PSingle; M, N, K: Integer);
+// procedure MatMulAccNT(const A, B: PSingle; C: PSingle; M, N, K: Integer);
 procedure CuMatMulAccNT(handle: TcublasHandle; const A, B: PSingle; C: PSingle; M, N, K: Integer);
-procedure MatMulAccNN(const A, B: PSingle; C: PSingle; M, N, K: Integer);
+// procedure MatMulAccNN(const A, B: PSingle; C: PSingle; M, N, K: Integer);
 procedure CuMatMulAccNN(handle: TcublasHandle; const A, B: PSingle; C: PSingle; M, N, K: Integer);
 
 // ReLU procedure.
-procedure ReLUMaskForward(const A: THiddenMatrix; var B: THiddenMatrix);
+// procedure ReLUMaskForward(const A: THiddenMatrix; var B: THiddenMatrix);
 procedure LaunchReLUForward(A: PSingle; B: PSingle; Rows: Integer; Cols: Integer);
   cdecl; external 'WesChatKernel12.dll';
 procedure LaunchReLUBackward(Hidden1: PSingle; GradOut: PSingle; GradIn: PSingle; Rows: Integer; Cols: Integer);
   cdecl; external 'WesChatKernel12.dll';
+
 // Copy matrix procedure.
-procedure CopyXTensor(const A: TSeqTensor; var B: TSeqTensor);
+// procedure CopyXTensor(const A: TSeqTensor; var B: TSeqTensor);
 procedure CuCopyXTensor(handle: TcublasHandle; const A_Value, A_Grad: PSingle; B_Value, B_Grad: PSingle; SeqLen, ModelDim: Integer);
 
 // sgemm.
@@ -216,13 +217,11 @@ end;
 procedure CuAccumulateGrad(handle: TcublasHandle; const Src: PSingle; Dst: PSingle; Rows, Cols: Integer);
 var
   n: Integer;
-  one: Single;
+  alpha: Single;
 begin
   n := Rows * Cols;
-  one := 1.0;
-
-  cublasSgemm_v2(handle, 0,0, n, 1, 1, @one, Src, n,
-    @one, 1, @one, Dst, n);
+  alpha := 1.0;
+  cublasSaxpy_v2(handle, n, @alpha, Src, 1, Dst, 1);
 end;
 
 // Full matrix multiplication (lda, ldb, ldc), A no transpose, B no transpose, overwrite, row-major.
@@ -303,7 +302,7 @@ begin
 end;
 
 // Full matrix multiply, A no transpose, B transpose, accumulate.
-// C := C + A^T * B
+// C := C + A * B^T
 procedure MatMulFullAccNT(const A, B: PSingle; C: PSingle;
   M, N, K, lda, ldb, ldc: Integer);
 begin
@@ -311,28 +310,19 @@ begin
     A, lda, B, ldb, 1.0, C, ldc);
 end;
 
-procedure CuMatMulFullAccNT(handle: TcublasHandle;
-                            const A, B: PSingle; C: PSingle;
-                            M, N, K: Integer;
-                            lda, ldb, ldc: Integer);
+procedure CuMatMulFullAccNT(handle: TcublasHandle; const A, B: PSingle; C: PSingle; M, N, K: Integer; lda, ldb, ldc: Integer);
 var
   alpha, beta: Single;
 begin
   alpha := 1.0;
-  beta  := 1.0;   // accumulate into C
+  beta  := 1.0;   // Accumulate into C.
 
-  cublasSgemm_v2(handle,
-                 0, 1,                       // B * A^T
-                 N, M, K,                    // swapped M,N
-                 @alpha,
-                 B, ldb,                     // ldb = N
-                 A, lda,                     // lda = K
-                 @beta,
-                 C, ldc);                    // ldc = N
+  cublasSgemm_v2(handle, 0, 1, N, M, K, @alpha,
+    B, ldb, A, lda, @beta, C, ldc);
 end;
 
 // Full matrix multiply, A transpose, B no transpose, accumulate.
-// C := C + A * B^T
+// C := C + A^T * B
 procedure MatMulFullAccTN(const A, B: PSingle; C: PSingle;
   M, N, K, lda, ldb, ldc: Integer);
 begin
@@ -340,24 +330,15 @@ begin
     A, lda, B, ldb, 1.0, C, ldc);
 end;
 
-procedure CuMatMulFullAccTN(handle: TcublasHandle;
-                            const A, B: PSingle; C: PSingle;
-                            M, N, K: Integer;
-                            lda, ldb, ldc: Integer);
+procedure CuMatMulFullAccTN(handle: TcublasHandle; const A, B: PSingle; C: PSingle; M, N, K: Integer; lda, ldb, ldc: Integer);
 var
   alpha, beta: Single;
 begin
   alpha := 1.0;
-  beta  := 1.0;   // accumulate into C
+  beta  := 1.0;   // Accumulate into C.
 
-  cublasSgemm_v2(handle,
-                 1, 0,                       // B^T * A
-                 N, M, K,                    // swapped M,N
-                 @alpha,
-                 B, ldb,                     // ldb = N
-                 A, lda,                     // lda = K
-                 @beta,
-                 C, ldc);                    // ldc = N
+  cublasSgemm_v2(handle, 1, 0, N, M, K, @alpha,
+    B, ldb, A, lda, @beta, C, ldc);
 end;
 
 // Matrix multiplication, A no transpose, B transpose, scaled overwrite, row-major.
@@ -368,20 +349,10 @@ begin
 end;
 
 // cublas.
-procedure CuMatMulFullScaledNT(handle: TcublasHandle;
-                               const A, B: PSingle; C: PSingle;
-                               M, N, K, lda, ldb, ldc: Integer;
-                               Alpha, Beta: Single);
+procedure CuMatMulFullScaledNT(handle: TcublasHandle; const A, B: PSingle; C: PSingle; M, N, K, lda, ldb, ldc: Integer; Alpha, Beta: Single);
 begin
-
-  cublasSgemm_v2(handle,
-                 0, 1,                       // B * A^T
-                 N, M, K,                    // swapped M,N
-                 @Alpha,
-                 B, ldb,                     // ldb = N
-                 A, lda,                     // lda = K
-                 @Beta,
-                 C, ldc);                    // ldc = N
+  cublasSgemm_v2(handle, 0, 1, N, M, K, @Alpha,
+    B, ldb, A, lda, @Beta, C, ldc);
 end;
 
 // Matrix multiplication, A no transpose, B no transpose, overwrite, row-major.
@@ -391,23 +362,15 @@ begin
     A, K, B, N, 0.0, C, N);
 end;
 
-procedure CuMatMulNN(handle: TcublasHandle;
-                     const A, B: PSingle; C: PSingle;
-                     M, N, K: Integer);
+procedure CuMatMulNN(handle: TcublasHandle; const A, B: PSingle; C: PSingle; M, N, K: Integer);
 var
   alpha, beta: Single;
 begin
   alpha := 1.0;
-  beta  := 0.0;   // overwrite C
+  beta  := 0.0;   // Overwrite C.
 
-  cublasSgemm_v2(handle,
-                 0, 0,                       // B * A
-                 N, M, K,                    // swapped M,N
-                 @alpha,
-                 B, N,                       // ldb = N
-                 A, K,                       // lda = K
-                 @beta,
-                 C, N);                      // ldc = N
+  cublasSgemm_v2(handle, 0, 0, N, M, K, @alpha,
+    B, N, A, K,@beta, C, N);
 end;
 
 // Matrix multiplication, A no transpose, B transpose, overwrite, row-major.
@@ -424,14 +387,8 @@ begin
   alpha := 1.0;
   beta  := 0.0;   // overwrite C
 
-  cublasSgemm_v2(handle,
-                 0, 1,                       // B * A^T
-                 N, M, K,                    // swapped M,N
-                 @alpha,
-                 B, K,                       // ldb = K (B is N×K row-major)
-                 A, K,                       // lda = K (A is M×K row-major)
-                 @beta,
-                 C, N);                      // ldc = N
+  cublasSgemm_v2(handle, 0, 1, N, M, K, @alpha,
+    B, K, A, K, @beta, C, N);
 end;
 
 // Matrix multiplication, A transpose, B no transpose, overwrite, row-major.
@@ -441,23 +398,15 @@ begin
     A, M, B, N, 0.0, C, N);
 end;
 
-procedure CuMatMulTN(handle: TcublasHandle;
-                     const A, B: PSingle; C: PSingle;
-                     M, N, K: Integer);
+procedure CuMatMulTN(handle: TcublasHandle; const A, B: PSingle; C: PSingle; M, N, K: Integer);
 var
   alpha, beta: Single;
 begin
   alpha := 1.0;
-  beta  := 0.0;   // overwrite C
+  beta  := 0.0;   // Overwrite C.
 
-  cublasSgemm_v2(handle,
-                 1, 0,                       // B^T * A
-                 N, M, K,                    // swapped M,N
-                 @alpha,
-                 B, N,                       // ldb = N (row-major B is K×N)
-                 A, M,                       // lda = M (row-major A is M×K)
-                 @beta,
-                 C, N);                      // ldc = N
+  cublasSgemm_v2(handle, 1, 0, N, M, K, @alpha,
+    B, N, A, M, @beta, C, N);
 end;
 
 // Matrix multiplication, A no transpose, B no transpose, accumulate, row-major.
@@ -469,23 +418,15 @@ begin
 end;
 
 // cublas.
-procedure CuMatMulAccNN(handle: TcublasHandle;
-                        const A, B: PSingle; C: PSingle;
-                        M, N, K: Integer);
+procedure CuMatMulAccNN(handle: TcublasHandle; const A, B: PSingle; C: PSingle; M, N, K: Integer);
 var
   alpha, beta: Single;
 begin
   alpha := 1.0;
-  beta  := 1.0;   // accumulate into C
+  beta  := 1.0;   // Accumulate into C.
 
-  cublasSgemm_v2(handle,
-                 0, 0,                       // B * A
-                 N, M, K,                    // swapped M,N
-                 @alpha,
-                 B, N,                       // ldb = N
-                 A, K,                       // lda = K
-                 @beta,
-                 C, N);                      // ldc = N
+  cublasSgemm_v2(handle, 0, 0, N, M, K, @alpha,
+    B, N, A, K, @beta, C, N);
 end;
 
 // Matrix multiplication, A no transpose, B transpose, accumulate, row-major.
@@ -497,38 +438,26 @@ begin
 end;
 
 // cublas.
-procedure CuMatMulAccNT(handle: TcublasHandle;
-                        const A, B: PSingle; C: PSingle;
-                        M, N, K: Integer);
+procedure CuMatMulAccNT(handle: TcublasHandle; const A, B: PSingle; C: PSingle; M, N, K: Integer);
 var
   alpha, beta: Single;
 begin
   alpha := 1.0;
-  beta  := 1.0;   // accumulate into C
+  beta  := 1.0;   // Accumulate into C.
 
-  cublasSgemm_v2(handle,
-                 0, 1,                       // B * A^T
-                 N, M, K,                    // swapped M,N
-                 @alpha,
-                 B, K,                       // ldb = K (row-major B is N×K)
-                 A, K,                       // lda = K (row-major A is M×K)
-                 @beta,
-                 C, N);                      // ldc = N
+  cublasSgemm_v2(handle, 0, 1, N, M, K, @alpha,
+    B, K, A, K, @beta, C, N);
 end;
 
 // Add scaled vector.
 procedure AddScaled(const N: Integer; const Alpha: Single; const X: PSingle; Y: PSingle);
 begin
-  cblas_saxpy(N,
-    Alpha,
-    X, 1,
-    Y, 1
-  );
+  cblas_saxpy(N, Alpha, X, 1, Y, 1);
 end;
 
 procedure CuAddScaled(handle: TcublasHandle; N: Integer; Alpha: Single; const X: PSingle; Y: PSingle);
 begin
-  // Performs: Y[i] := Alpha * X[i] + Y[i]
+  // Performs: Y[i] := Alpha * X[i] + Y[i].
   cublasSaxpy_v2(handle, N, @Alpha, X, 1, Y, 1);
 end;
 
@@ -540,7 +469,7 @@ end;
 
 procedure CuScale(handle: TcublasHandle; N: Integer; Alpha: Single; X: PSingle);
 begin
-  // Performs: X[i] := Alpha * X[i]
+  // Performs: X[i] := Alpha * X[i].
   cublasSscal_v2(handle, N, @Alpha, X, 1);
 end;
 

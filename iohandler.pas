@@ -2,7 +2,7 @@ unit IOHandler;
 
 {$mode ObjFPC}{$H+}{$I proprietary.txt}
 
-{ WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wespar.com.}
+{ WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wesparsons.com.}
 
 interface
 
@@ -26,10 +26,6 @@ function LoadModel(const FileName: string; var Model: TWModelParams): Boolean;
 implementation
 
 var
-  BOS: Integer = 256;                                 // Meta-symbols.
-  EOS: Integer = 257;
-  PAD: Integer = 258;
-  UNK: Integer = 259;
   Magic: array[0..3] of Char = ('S', 'Y', 'M', 'T');  // Magic, for saving symbol table.
 
 procedure ReadFileBytes(const FileName: String; var OneCorpus: TBVector);
@@ -233,8 +229,7 @@ begin
   end;
 end;
 
-// Save a model.
-function SaveModel(const FileName: string; var Model: TWModelParams): Boolean;
+{function SaveModel(const FileName: string; var Model: TWModelParams): Boolean;
 var
   F: file of TWModelParams;
   IOModelDim: Integer;
@@ -267,7 +262,7 @@ end;
 // Load a model.
 function LoadModel(const FileName: string; var Model: TWModelParams): Boolean;
 var
-  F: file of TWModelParams;
+  F: file;
   Magic: array[0..3] of Char;
   IOModelDim: Integer;
   nVocabRead: Integer;
@@ -286,6 +281,106 @@ begin
     Close(F);
   end;
   ClearDevicePointers(Model);
+end;}
+
+// Save a model.
+function SaveModel(const FileName: string; var Model: TWModelParams): Boolean;
+var
+  F: file;
+  Magic: array[0..3] of Char = ('W', 'E', 'S', '1');
+  IOModelDim, IONVocab, IONBlock, IOSeqLen: Integer;
+begin
+  Result := False;
+
+  if CudaAllocated then
+    CopyParamsToHost(Model);
+
+  IOModelDim := ModelDim;
+  IONVocab   := nVocab;
+  IONBlock   := nBlock;
+  IOSeqLen   := SeqLen;
+
+  AssignFile(F, FileName);
+  try
+    Rewrite(F, 1);
+
+    BlockWrite(F, Magic, SizeOf(Magic));
+    BlockWrite(F, Version, 16);
+
+    BlockWrite(F, IOModelDim, SizeOf(IOModelDim));
+    BlockWrite(F, IONVocab,   SizeOf(IONVocab));
+    BlockWrite(F, IONBlock,   SizeOf(IONBlock));
+    BlockWrite(F, IOSeqLen,   SizeOf(IOSeqLen));
+
+    BlockWrite(F, Model, SizeOf(Model));
+
+    CloseFile(F);
+    Result := True;
+  except
+    try
+      CloseFile(F);
+    except
+    end;
+    Result := False;
+  end;
+end;
+
+// Load a model.
+function LoadModel(const FileName: string; var Model: TWModelParams): Boolean;
+var
+  F: file;
+  Magic: array[0..3] of Char;
+  IOModelDim, IONVocab, IONBlock, IOSeqLen: Integer;
+begin
+  Result := False;
+
+  AssignFile(F, FileName);
+  try
+    Reset(F, 1);
+
+    BlockRead(F, Magic, SizeOf(Magic));
+    if (Magic[0] <> 'W') or (Magic[1] <> 'E') or
+       (Magic[2] <> 'S') or (Magic[3] <> '1') then begin
+      CloseFile(F);
+      Exit;
+    end;
+
+    BlockRead(F, Version, 16);
+
+    BlockRead(F, IOModelDim, SizeOf(IOModelDim));
+    BlockRead(F, IONVocab,   SizeOf(IONVocab));
+    BlockRead(F, IONBlock,   SizeOf(IONBlock));
+    BlockRead(F, IOSeqLen,   SizeOf(IOSeqLen));
+
+    if IOModelDim <> ModelDim then begin
+      CloseFile(F);
+      Writeln('ModelDim mismatch. File=', IOModelDim,
+              ' Program=', ModelDim);
+      Exit;
+    end;
+
+    if IONBlock <> nBlock then begin
+      CloseFile(F);
+      Writeln('nBlock mismatch. File=', IONBlock,
+              ' Program=', nBlock);
+      Exit;
+    end;
+
+    BlockRead(F, Model, SizeOf(Model));
+
+    CloseFile(F);
+
+    nVocab := IONVocab;
+    ClearDevicePointers(Model);
+
+    Result := True;
+  except
+    try
+      CloseFile(F);
+    except
+    end;
+    Result := False;
+  end;
 end;
 
 end.

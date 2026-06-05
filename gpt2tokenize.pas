@@ -2,7 +2,7 @@ unit GPT2Tokenize;
 
 {$mode objfpc}{$H+}{$I proprietary.txt}
 
-{ WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wespar.com.}
+{ WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wesparsons.com.}
 
 interface
 
@@ -17,6 +17,8 @@ uses
   WesTokenize;
 
 procedure RunGPT2Tokenize(const FileName: string; var TokenizedCorpus: TIVector);
+procedure LoadVocab(const FileName: string; Vocab: TStringList);
+function DisplayToken(const S: UnicodeString): AnsiString;
 
 implementation
 
@@ -25,7 +27,6 @@ type
   TUStringArray = array of UnicodeString;
 
 var
-  Vocab: TStringList;
   InputBytes: RawByteString;
   EncodedText: UnicodeString;
 
@@ -622,8 +623,8 @@ var
 begin
   VeryVerbose := False;
 
-  Vocab := TStringList.Create;
-  LoadVocab('vocab1.json', Vocab);
+  //Vocab := TStringList.Create;
+  //LoadVocab('vocab1.json', Vocab);
 
   Merges := TStringList.Create;
   LoadMerges('merges.txt', Merges);
@@ -720,7 +721,6 @@ begin
   Writeln;
   Pause;
 
-  Vocab.Free;
   Merges.Free;
 end;
 

@@ -57,7 +57,7 @@ var
   ElapsedMS, MElapsedMS: Int64;                  // For timing.
   MHours, Hours, MMIns, Mins: Int64;             // For timing.
   Secs, MSecs: Double;                           // For timing.
-  BOS, EOS, PAD, UNK: Integer;                   // Extra symbols for control.
+  // BOS, EOS, PAD, UNK: Integer;                   // Extra symbols for control.
   Head, Tail: PTokenNode;                        // Start and end node of list of tokens.
   MergeCount: Integer;                           // Maximum allowed number of merges and actual number.
   Merges: TMergeArray;                           // Array recording the merges.

@@ -70,6 +70,8 @@ a. Is InvFreq dimmed as ModelDim or HeadDim?
 
 b. Eliminate non-cublas optimization in Util.
 
+c. Use CPU/GPU or host/device or cblas/cublas nomenclature?
+
 0. ApplyRope inside each rather than across all model.
 
 1. Many models reuse the embedding matrix for output projection.

@@ -947,7 +947,7 @@ begin
 
     // 1I. Merge. Obtain X4 from X1 and X3.
     // Merge Addition: Input X1, X3. Output X4.
-    // Equation: X4 = X1 + X3. X4 in R^{L · D}. X1 in R^{L · D}. X2 in R^(L x D}.
+    // Equation: X4 = X1 + X3. X4 in R^{L · D}. X1 in R^{L · D}. X2 in R^{L x D}.
     MatAdd(X1.Value, X3.Value, X4.Value, SeqLen, ModelDim);
 
     // Display X4 matrix.
@@ -1094,7 +1094,7 @@ begin
         @TopGradient[0, 0], MaxVocab,  @WVocab.Value[0, 0], MaxVocab, 0.0,  @X7.Grad[0, 0], ModelDim);
 
       // Backprop TopGradient modifies/overwrites WVocab: Input X7ᵀ, TopGradient. Output WVocab.Grad.
-      // Equation: WVocab.Grad = X7ᵀ · TopGradient. WVocab.Grad in R^{D x nVocab}. X7ᵀ in R^(D x L}. TopGradient in R^{L x nVocab}.
+      // Equation: WVocab.Grad = X7ᵀ · TopGradient. WVocab.Grad in R^{D x nVocab}. X7ᵀ in R^{D x L}. TopGradient in R^{L x nVocab}.
       cblas_sgemm(101, 112, 111,  ModelDim, nVocab, SeqLen,  1.0,  @X7.Value[0,0], ModelDim,
         @TopGradient[0,0], MaxVocab,  1.0,  @WVocab.Grad[0,0], MaxVocab);
 
@@ -1614,6 +1614,6 @@ If VerboseTransform then begin
 Writeln('End of tranformer .');
 Pause;
 end;
-
 }
+
 

@@ -2,7 +2,7 @@ unit Display;
 
 {$mode ObjFPC}{$H+}{$I proprietary.txt}
 
-{ WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wespar.com.}
+{ WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wesparsons.com.}
 
 interface
 
@@ -241,7 +241,7 @@ begin
     E: begin
       iB := High(X) - 9;
       iE := High(X);
-      jB := High(X[0]) - 9;;
+      jB := High(X[0]) - 9;
       jE := High(X[0]);
     end;
     F: begin
@@ -293,77 +293,6 @@ begin
   end;
 end;
 
-// Display a Vocab Weight matrix, B, E, F, or G.
-procedure DisplayX(const X: TVocabWeightMatrix; const Part: TPart = B); overload;
-const
-  tStride = 10;
-var
-  i, j, iB, iE, jB, jE: Integer;
-  vStride: Integer = 1;
-  hStride: Integer = 1;
-begin
-  Case Part of
-    B: begin
-      iB := 0;
-      iE := 9;
-      jB := 0;
-      jE := 9;
-    end;
-    E: begin
-      iB := High(X) - 9;
-      iE := High(X);
-      jB := High(X[0]) - 9;;
-      jE := High(X[0]);
-    end;
-    F: begin
-      iB := 0;
-      iE := High(X);
-      jB := 0;
-      jE := High(X[0]);
-    end;
-    G: begin
-      vStride := Floor(Length(X) / tStride);
-      hStride := Floor(Length(X[0]) / tStride);
-      iB := 0;
-      iE := tStride;
-      jB := 0;
-      jE := tStride;
-    end;
-  end;
-  Write('       ');
-  for j := jB to jE do
-    Write(j * hStride: 8, '    ');
-  if Part = G then
-    Write(High(X[0]): 8, '    ');
-  Writeln;
-  for i := iB to iE do begin
-    Write(i * vStride: 4);
-    for j := jB to jE do
-      Write(X[i * vStride, j * hStride]: 11: 5, ' ');
-    if Part = G then
-      Write(X[i * vStride, High(X[0])]: 11: 5, ' ');
-    Writeln;
-  end;
-  if Part = G then begin
-    Write(High(X): 4);
-    for j := jB to jE do
-      Write(X[High(X), j * hStride]: 11: 5, ' ');
-    Write(X[High(X), High(X[0])]: 11: 5, ' ');
-    Writeln;
-  end;
-end;
-
-// Conditional form of DisplayX.
-procedure VTPDisplayX(const Mess: string; const X: TVocabWeightMatrix; const Part: TPart = B); overload;
-begin
-  if VerboseTransform then begin
-    Write(Mess);
-    PartScope(Part);
-    DisplayX(X, Part);
-    Pause;
-  end;
-end;
-
 // Display a Embeddings matrix, B, E, F, or G.
 procedure DisplayX(const X: TEmbeddingsMatrix; const Part: TPart = B); overload;
 const
@@ -381,14 +310,14 @@ begin
       jE := 9;
     end;
     E: begin
-      iB := nVocab - 9;
-      iE := nVocab;
-      jB := High(X[0]) - 9;;
+      iB := Max(0, nVocab - 10);
+      iE := nVocab - 1;
+      jB := High(X[0]) - 9;
       jE := High(X[0]);
     end;
     F: begin
       iB := 0;
-      iE := nVocab;
+      iE := nVocab - 1;
       jB := 0;
       jE := High(X[0]);
     end;
@@ -416,10 +345,10 @@ begin
     Writeln;
   end;
   if Part = G then begin
-    Write(nVocab: 4);
+    Write(nVocab - 1: 4);
     for j := jB to jE do
-      Write(X[nVocab, j * hStride]: 11: 5, ' ');
-    Write(X[nVocab, High(X[0])]: 11: 5, ' ');
+      Write(X[nVocab - 1, j * hStride]: 11: 5, ' ');
+    Write(X[nVocab - 1, High(X[0])]: 11: 5, ' ');
     Writeln;
   end;
 end;
@@ -454,7 +383,7 @@ begin
     E: begin
       iB := High(X) - 9;
       iE := High(X);
-      jB := High(X[0]) - 9;;
+      jB := High(X[0]) - 9;
       jE := High(X[0]);
     end;
     F: begin
@@ -525,7 +454,7 @@ begin
     E: begin
       iB := High(X) - 9;
       iE := High(X);
-      jB := High(X[0]) - 9;;
+      jB := High(X[0]) - 9;
       jE := High(X[0]);
     end;
     F: begin

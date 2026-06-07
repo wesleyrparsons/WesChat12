@@ -8,8 +8,7 @@
       <Unit>
         <Filename Value="WesChat.lpr"/>
         <IsPartOfProject Value="True"/>
-        <IsVisibleTab Value="True"/>
-        <CursorPos X="22" Y="12"/>
+        <CursorPos X="36" Y="15"/>
         <UsageCount Value="233"/>
         <Loaded Value="True"/>
       </Unit>
@@ -183,9 +182,10 @@
         <Filename Value="infer.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="Infer"/>
+        <IsVisibleTab Value="True"/>
         <EditorIndex Value="11"/>
-        <TopLine Value="181"/>
-        <CursorPos X="15" Y="198"/>
+        <TopLine Value="160"/>
+        <CursorPos X="38" Y="176"/>
         <UsageCount Value="203"/>
         <Loaded Value="True"/>
       </Unit>
@@ -201,7 +201,7 @@
         <Filename Value="TNotes.txt"/>
         <EditorIndex Value="-1"/>
         <CursorPos X="57" Y="21"/>
-        <UsageCount Value="46"/>
+        <UsageCount Value="45"/>
         <DefaultSyntaxHighlighter Value="Text"/>
       </Unit>
     </Units>

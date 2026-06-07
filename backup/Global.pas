@@ -14,11 +14,10 @@ var
   PauseIfKeyPressed: Boolean = True;   // Pause if a key is pressed.
   StopTraining: Boolean;
   DisplayCorpus: Boolean = True;       // One set for real tokenizing and one set for debug.
-  Verbose: Boolean = True;             // Verbose.
-  VeryVerbose: Boolean = False;        // More verbose.
-  VVVerbose: Boolean = False;          // Maximum verbose.
   VerboseTokenize: Boolean = False;    // Verbose in Tokenize units.
-  VerboseTransform: Boolean = True;    // Verbose in Transform units.  Do I need this?
+  VerboseTransform: Boolean = False;   // Verbose in Transform units.
+  VeryVerboseTokenize: Boolean = False;     // Very verbose in Tokenize units.
+  VeryVerboseTransform: Boolean = False;    // Displays X, Q, ScoresHead1, etc. in Transform units.
   ShowTokenWork: Boolean = True;       // Show token work in Tokenize units.
   ShowMergeWork: Boolean = True;       // Show merge work in Tokenize units.
   ShowVerification: Boolean = True;    // Do verification by rebyulding corpus in Tokenize units.
@@ -167,6 +166,7 @@ var
   // cublas vars.
   CuHandle: TcublasHandle;
   CudaAllocated: Boolean = False;
+  CuBlasInitialized: Boolean = False;
   One: Single = 1.0;
   Zero: Single = 0.0;
   // DLL accessibility vars.
@@ -192,6 +192,9 @@ var
   EOS: Integer = 257;
   PAD: Integer = 258;
   UNK: Integer = 259;
+  // Model setings vars.
+  LearningRate: Single = 0.01;                   // LearningRate for Gradient.
+  Temperature: Single = 1.0;                     // Temperature for softmax.
   // Utility vars.
   Mt0, Mt1, t0, t1, StopTime: TDateTime;         // For timing.
   Version: shortstring = '1.2';                  // Version 1.2.
@@ -200,8 +203,6 @@ var
   nSymbols: Integer;                             // Number of symbols = Length(SymbolTable);
   nVocab: Integer;                               // nVocab is also nSymbol. Number of symbol items.
   TokenID: TIVector;                             // Same as TokenizedCorpus.
-  LearningRate: Single = 0.01;                   // LearningRate for Gradient.
-  Temperature: Single = 1.0;                     // Temperature for softmax.
   Training: Boolean = True;                      // In training as opposed to inference mode.
   Tokenizer: TTokenizer;                         // WesChat or GPT2Chat tokenizer;
   NewModel: Boolean = True;                      // If new model, initialize params.
@@ -211,6 +212,5 @@ var
 implementation
 
 begin
-
 end.
 

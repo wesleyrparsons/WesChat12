@@ -183,9 +183,9 @@ begin
       vStride := Floor(Length(X) / tStride);
       hStride := Floor(Length(X[0]) / tStride);
       iB := 0;
-      iE := tStride;
+      iE := tStride - 2;
       jB := 0;
-      jE := tStride;
+      jE := tStride - 2;
     end;
   end;
   Write('       ');
@@ -241,7 +241,7 @@ begin
     E: begin
       iB := High(X) - 9;
       iE := High(X);
-      jB := High(X[0]) - 9;;
+      jB := High(X[0]) - 9;
       jE := High(X[0]);
     end;
     F: begin
@@ -254,9 +254,9 @@ begin
       vStride := Floor(Length(X) / tStride);
       hStride := Floor(Length(X[0]) / tStride);
       iB := 0;
-      iE := tStride;
+      iE := tStride - 2;
       jB := 0;
-      jE := tStride;
+      jE := tStride - 2;
     end;
   end;
   Write('       ');
@@ -310,14 +310,14 @@ begin
       jE := 9;
     end;
     E: begin
-      iB := nVocab - 9;
-      iE := nVocab;
-      jB := High(X[0]) - 9;;
+      iB := Max(0, nVocab - 10);
+      iE := nVocab - 1;
+      jB := High(X[0]) - 9;
       jE := High(X[0]);
     end;
     F: begin
       iB := 0;
-      iE := nVocab;
+      iE := nVocab - 1;
       jB := 0;
       jE := High(X[0]);
     end;
@@ -325,9 +325,9 @@ begin
       vStride := Floor(nVocab / tStride);
       hStride := Floor(Length(X[0]) / tStride);
       iB := 0;
-      iE := tStride;
+      iE := tStride - 2;
       jB := 0;
-      jE := tStride;
+      jE := tStride - 2;
     end;
   end;
   Write('       ');
@@ -345,10 +345,10 @@ begin
     Writeln;
   end;
   if Part = G then begin
-    Write(nVocab: 4);
+    Write(nVocab - 1: 4);
     for j := jB to jE do
-      Write(X[nVocab, j * hStride]: 11: 5, ' ');
-    Write(X[nVocab, High(X[0])]: 11: 5, ' ');
+      Write(X[nVocab - 1, j * hStride]: 11: 5, ' ');
+    Write(X[nVocab - 1, High(X[0])]: 11: 5, ' ');
     Writeln;
   end;
 end;
@@ -383,7 +383,7 @@ begin
     E: begin
       iB := High(X) - 9;
       iE := High(X);
-      jB := High(X[0]) - 9;;
+      jB := High(X[0]) - 9;
       jE := High(X[0]);
     end;
     F: begin
@@ -396,9 +396,9 @@ begin
       vStride := Floor(Length(X) / tStride);
       hStride := Floor(Length(X[0]) / tStride);
       iB := 0;
-      iE := tStride;
+      iE := tStride - 2;
       jB := 0;
-      jE := tStride;
+      jE := tStride - 2;
     end;
   end;
   Write('       ');
@@ -454,7 +454,7 @@ begin
     E: begin
       iB := High(X) - 9;
       iE := High(X);
-      jB := High(X[0]) - 9;;
+      jB := High(X[0]) - 9;
       jE := High(X[0]);
     end;
     F: begin
@@ -464,12 +464,12 @@ begin
       jE := High(X[0]);
     end;
     G: begin
-      vStride := Floor(Length(X) / tStride);
+      vStride := Max(1, Floor(Length(X) / tStride));
       hStride := Floor(Length(X[0]) / tStride);
       iB := 0;
-      iE := tStride;
+      iE := tStride - 2;
       jB := 0;
-      jE := tStride;
+      jE := tStride - 2;
     end;
   end;
   Write('       ');

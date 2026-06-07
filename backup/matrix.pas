@@ -2,7 +2,7 @@ unit Matrix;
 
 {$mode ObjFPC}{$H+}{$I proprietary.txt}
 
-{ WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wespar.com.}
+{ WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wesparsons.com.}
 interface
 
 uses
@@ -251,17 +251,30 @@ begin
 end;
 
 // cublas.
-procedure CuMatMulFullNT(Handle: TcublasHandle; const A, B: PSingle; C: PSingle; M, N, K, lda, ldb, ldc: Integer);
+procedure CuMatMulFullNT(
+  Handle: TcublasHandle;
+  const A, B: PSingle;
+  C: PSingle;
+  M, N, K, lda, ldb, ldc: Integer);
 var
   alpha, beta: Single;
 begin
   alpha := 1.0;
   beta  := 0.0;
 
-  cublasSgemm_v2(Handle, 0, 1, N, M, K, @alpha,
-    B, ldb, A, lda, @beta, C, ldc);
+  // Row-major C = A * B^T
+  // Column-major equivalent: C^T = B * A^T
+  cublasSgemm_v2(
+    Handle,
+    1, 0,          // B transposed, A not transposed in column-major view
+    N, M, K,
+    @alpha,
+    B, ldb,
+    A, lda,
+    @beta,
+    C, ldc
+  );
 end;
-
 // Full matrix multiplication (lda, ldb, ldc), A transpose, B no transpose, overWrite, row-major.
 procedure MatMulFullTN(const A, B: PSingle; C: PSingle; M, N, K, lda, ldb, ldc: Integer);
 begin
@@ -380,15 +393,10 @@ begin
     A, K, B, K, 0.0, C, N);
 end;
 
-procedure CuMatMulNT(handle: TcublasHandle; const A, B: PSingle; C: PSingle; M, N, K: Integer);
-var
-  alpha, beta: Single;
+procedure CuMatMulNT(handle: TcublasHandle;
+  const A, B: PSingle; C: PSingle; M, N, K: Integer);
 begin
-  alpha := 1.0;
-  beta  := 0.0;   // overwrite C
-
-  cublasSgemm_v2(handle, 0, 1, N, M, K, @alpha,
-    B, K, A, K, @beta, C, N);
+  CuMatMulFullNT(handle, A, B, C, M, N, K, K, K, N);
 end;
 
 // Matrix multiplication, A transpose, B no transpose, overwrite, row-major.

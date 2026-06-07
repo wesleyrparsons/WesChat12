@@ -40,13 +40,13 @@ begin
   SetLength(OneCorpus, Size);
 
   // Write the Corpus as it is read.
-  if VeryVerbose and VerboseTokenize then
+  if VeryVerboseTokenize then
     Writeln('--- Original Corpus ---');
   for i := 0 to Size - 1 do begin
     BlockRead(F, B, 1);
     OneCorpus[i] := B;
 
-    if VeryVerbose and VerboseTokenize then
+    if VeryVerboseTokenize then
       if ShowEachByteRead then
         if B < 32 then
           Write('<', B, '>')
@@ -55,13 +55,13 @@ begin
   end;
   CloseFile(F);
 
-  if VeryVerbose and VerboseTokenize then begin
+  if VeryVerboseTokenize then begin
     Writeln('ReadByteFile: ');
     for i := 0 to 150 do
       Write(OneCorpus[i], ' ');
     Readln;
   end;
-  if VeryVerbose and VerboseTokenize then
+  if VeryVerboseTokenize then
     Writeln;
 
   // Display initial Corpus length.

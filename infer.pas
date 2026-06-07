@@ -24,39 +24,6 @@ procedure RunInfer(var WModelParams: TWModelParams; var WModelState: TWModelStat
 
 implementation
 
-function CheckDLL(const LibName: string): Boolean;
-var
-  DLLHandle: THandle;
-begin
-  // Attempt to load the library.
-  DLLHandle := LoadLibrary(PChar(LibName));
-
-  // If the handle is non-zero, it loaded successfully.
-  Result := (DLLHandle <> 0);
-
-  // Clean up if it was successfully loaded.
-  if Result then
-    FreeLibrary(DLLHandle);
-end;
-
-// Check DLL accessibility.
-procedure CheckAllDLLs;
-begin
-  If CheckDLL('cublas64_13.dll') then CublasPresent := True else CublasPresent := False;
-  If CheckDLL('cudart64_13.dll') then CudartPresent := True else CudartPresent := False;
-  If CheckDLL('WesChatKernel12.dll') then WesChatKernelPresent := True else WesChatKernelPresent := False;
-  if not CublasPresent or not CudartPresent or not WesChatkernelPresent then begin
-      Writeln('One of the following DLLs is required but not present: cublas64_13.dll, cudart64_13.dll, WesChatKernel12.dll.');
-      Pause;
-      Halt;
-  end;
-  if CublasPresent and (cublasCreate_v2(CuHandle) <> 0) then begin
-    Writeln('cuBLAS initialization required but failed.');
-    Pause;
-    Halt;
-  end;
-end;
-
 // Build the input vector .
 {procedure BuildInputVector(var Input: TIDimVector; const TokenizedCorpus: TIVector; const StartIndex, L: Integer);
 var
@@ -187,9 +154,11 @@ var
   QueryInput: TBVector;
   QueryString: string;
 begin
-  CheckAllDLLs;
   Training := False;
   nVocab := nSymbols;
+
+  if not CuBlasInitialized then
+    InitializeCuBlas;
 
   InitializeTransformerState(WModelState);
   MAllocCublas(WModelParams, WModelState);
@@ -198,13 +167,13 @@ begin
     CopyParamsToDevice(WModelParams);
     CopyInvFreqToDevice(WModelState);
 
-    Training := False;
-
     repeat
-      Writeln('Enter query: ');
+      Write('Enter query: ');
       Readln(QueryString);
 
       if QueryString = EmptyStr then Break;
+
+      VerboseTransform := True;  // Temporary debug.
 
       if VerboseTransform then with WModelParams do begin
         cudaMemcpy(@Embeddings.Value[0, 0], Embeddings.dValue, EmbeddingsSize, cudaMemcpyDeviceToHost);
@@ -215,10 +184,21 @@ begin
       for i := 0 to Length(QueryString) - 1 do
         QueryInput[i] := Ord(QueryString[i + 1]);
 
+      Write(Length(QueryInput), ' ', 'QueryInput: ');
+      for i := 0 to Length(QueryInput) - 1 do
+         Write(QueryInput[i], ' ');
+      Writeln;
+
       if Tokenizer = WesTokenizer then
         RunWesTokenize(QueryInput, QueryTokenized)
       else
         RunGPT2Tokenize(QueryString, QueryTokenized);
+
+      PadToSeqMultiple(QueryTokenized, SeqLen);
+
+      TC100(QueryTokenized);
+      TCSeqLen(QueryTokenized);
+      Pause;
 
       if Length(QueryTokenized) = 0 then begin
         Writeln('No tokens produced.');

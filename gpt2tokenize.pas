@@ -45,7 +45,7 @@ begin
     FS.Free;
   end;
 
- if VeryVerbose then begin
+ if VeryVerboseTokenize then begin
     Writeln('Display rawbytes read:');
     for i := 500 to high(result) do
       Writeln(i: 5, ord(Result[i]): 5, '   *', Result[i], '* ');
@@ -336,7 +336,7 @@ begin
   end;
 
   WriteLn('End of loading symbol table. Length of vocab: ', Vocab.Count);
-  if VeryVerbose then begin
+  if VeryVerboseTokenize then begin
     DisplayVocab(0, 9);
     DisplayVocab(120, 130);
     DisplayVocab(288, 301);
@@ -375,7 +375,7 @@ begin
   end;
 
   Writeln('End of loading merges. Length of merges: ', i);
-  if VeryVerbose then begin
+  if VeryVerboseTokenize then begin
     Write('Merges 0: ',Merges[0],'   Raw: ');
     for i := 1 to Length(Merges[0]) do
       Write(ord(merges[0][i]), ' ');
@@ -621,7 +621,7 @@ var
   s: string;
   SaveOut: Text;
 begin
-  VeryVerbose := False;
+  VeryVerboseTokenize := False;
 
   //Vocab := TStringList.Create;
   //LoadVocab('vocab1.json', Vocab);
@@ -664,7 +664,7 @@ begin
 
   // Report statistics.
   if VerboseTokenize then
-    ReportStatistics;
+    ReportStatistics(TokenizedCorpus);
 
   // Save TokenizedCorpus and other data.
   if SaveFiles then begin
@@ -678,7 +678,7 @@ begin
     Assign(Output, WorkingName + '.log');
     Append(Output);
 
-    ReportStatistics;
+    ReportStatistics(TokenizedCorpus);
 
     // Restore Output to console.
     Close(Output);
@@ -709,17 +709,18 @@ begin
   Writeln;
   Pause;
 
-  Writeln('Decoded First 100 TokenizedCorpus:');
-  for i := 0 to 99 do
-    Write(DisplayToken(UTF8Decode(Vocab[TokenizedCorpus[i]])));
-  Writeln;
-  Pause;
+  if VerboseTokenize then begin
+    Writeln('Decoded First 100 TokenizedCorpus:');
+    for i := 0 to 99 do
+      Write(DisplayToken(UTF8Decode(Vocab[TokenizedCorpus[i]])));
+    Writeln;
+    Pause;
 
-  Writeln('Decoded Last 100 TokenizedCorpus:');
-  for i := High(TokenizedCorpus) - 100 to High(TokenizedCorpus) do
-    Write(DisplayToken(UTF8Decode(Vocab[TokenizedCorpus[i]])));
-  Writeln;
-  Pause;
+    Writeln('Decoded Last 100 TokenizedCorpus:');
+    for i := High(TokenizedCorpus) - 100 to High(TokenizedCorpus) do
+      Write(DisplayToken(UTF8Decode(Vocab[TokenizedCorpus[i]])));
+    Writeln;
+  end;
 
   Merges.Free;
 end;

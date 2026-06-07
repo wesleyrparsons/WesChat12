@@ -4,14 +4,13 @@ program WesChat;
 
 { WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wesparsons.com }
 { Note: Edited 6/4/2026 5 pm -- working from WesChat12 on OneDrive }
-{ Notes: TokCorpus comes from WesTokenize or ChatGPTTokenize; WModelParams (with Embeddings) and WModelState are from here }
-{ Notes: Corpus is here }
 {        Input Train        Input Query        Output
  Raw                        QueryString
  Bytes   Corpus             QueryCorpus
  Token   TokenizedCorpus    QueryTokenized     QueryOutput }
 
 uses
+  Classes,
   CombineTables,
   Crt,
   GPT2Tokenize,
@@ -23,12 +22,14 @@ uses
   Symbolize,
   SysUtils,
   Train,
+  Util,
   WesTokenize,
   Windows;
 
 var
   // Corpus vars.
   Corpus: TBVector;                         // Vector of byte.
+  TokenizedCorpus: TIVector;
   // Model vars.
   WModelParams: TWModelParams;              // Parameters.
   WModelState: TWModelState;                // State.
@@ -160,26 +161,12 @@ end;
 // Helper function for proceeding to Infer.
 function QueryInfer: Boolean;
 begin
-  Write('Do you wish to proceed to training? (y/n) ');
+  Write('Do you wish to proceed to inference? (y/n) ');
   Readln(Ch);
   if UpCase(Ch) = 'N' then
     Result := False
   else
     Result := True;
-end;
-
-// Pad token vector to multiple of SeqLen.
-procedure PadToSeqMultiple(var TokenVectorToPad: TIVector; const Seq: Integer);
-var
-  OldLen, NewLen, i: Integer;
-begin
-  OldLen := Length(TokenVectorToPad);
-  NewLen := ((OldLen + Seq - 1) div Seq) * Seq;
-
-  SetLength(TokenVectorToPad, NewLen);
-
-  for i := OldLen to NewLen - 1 do
-    TokenVectorToPad[i] := EOS;
 end;
 
 // Start of main program.
@@ -599,10 +586,10 @@ begin
       'X':     Exit;
       'H':     Help;
       'VTO':   VerboseTokenize := True;
-      'VV':    VeryVerbose := True;
+      'VV':    VeryVerboseTokenize := True;
       'VTR':   VerboseTransform := True;
       'NVTO':  VerboseTokenize := False;
-      'NVV':   VeryVerbose := False;
+      'NVV':   VeryVerboseTokenize := False;
       'NVTR':  VerboseTransform := False;
       'DNP':   DoNotPause := True;
       'DP':    DoNotPause := False;

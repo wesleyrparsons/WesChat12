@@ -14,7 +14,9 @@ uses
   FileUtil,
   Global,
   IOHandler,
-  SysUtils;
+  Math,
+  SysUtils,
+  Util;
 
 type
   TTokenCount = record                 // Records count of tokens.
@@ -39,7 +41,7 @@ type
   TMergedTokenStats = array of TMergedTokenStat;
 var
   StartSymbol: Integer = 260;                    // UTF-8 0.255, BOS, EOS, PAD, UNK is 259.
-  TokenizedCorpus: TIVector;
+  //TokenizedCorpus: TIVector;
   nCorpus: Integer;
   BOS, EOS, PAD, UNK: Integer;                   // Extra symbols for control.
   ElapsedMS: Int64;                              // For timing.
@@ -52,11 +54,11 @@ var
   MergedInstances, UnmergedInstances: Integer;
   i: Integer;
 
-procedure WriteTokenList(const Part: TPart = B);
+procedure WriteTokenList(const TokenizedCorpus: TIVector; const Part: TPart = B);
 procedure BuildTrie(out Root: PTrieNode);
 function MatchLongest(root: PTrieNode; const text: TBVector; startPos: Integer;
   out tokenID, matchLen: Integer): Boolean;
-procedure ReportStatistics;
+procedure ReportStatistics(const TokenizedCorpus: TIVector);
 procedure DetokenizeToDisplay(const TokenizedCorpus: TIVector; const Part: TPart = B);
 procedure RunWesTokenize(const Corpus: TBVector; var TokenizedCorpus: TIVector);
 
@@ -147,8 +149,8 @@ begin
     Result := False;
 end;
 
-// Tokenize Corpus from SymbolTable loaded by program.
-procedure TokenizeFromSymbolTable(const TextFileName: string; const Corpus: TBVector);
+// Tokenize Corpus from SymbolTable loaded by program. ``
+procedure TokenizeFromSymbolTable(const TextFileName: string; var TokenizedCorpus: TIVector; const Corpus: TBVector);
 var
   i, BestSym, BestLen: Integer;
 begin
@@ -177,11 +179,15 @@ begin
 
   nTokenizedCorpus := Length(TokenizedCorpus);
 
+  Writeln('Input corpus is: ');
+  for i := 0 to Length(Corpus) - 1 do
+    Write(Corpus[i], ' ');
+  Writeln;
   Writeln('Created ', nTokenizedCorpus, ' tokens from ', TextFileName);
 
   if VerboseTokenize then Begin
     Writeln('First 50 token of tokenized corpus');
-    for i := 0 to 49 do
+    for i := 0 to Min(49, (nTokenizedCorpus - 1)) do
       Write(TokenizedCorpus[i], ' ');
     Writeln;
     Pause;
@@ -199,36 +205,8 @@ begin
   Secs := (ElapsedMS mod 60000) / 1000.0;
 end;
 
-// Calculate number of symbol types and token instances.
-procedure CalculateSymbolCount;
-var
-  i, T: Integer;
-begin
-  MergedTypes := 0;
-  UnmergedTypes := 0;
-
-  // Count symbol types.
-  for i := 0 to High(SymbolTable) do
-    if Length(SymbolTable[i]) > 1 then
-      Inc(MergedTypes)
-    else
-      Inc(UnmergedTypes);
-
-  // Count token instances.
-  MergedInstances := 0;
-  UnmergedInstances := 0;
-
-  for i := 0 to High(TokenizedCorpus) do begin
-    T := TokenizedCorpus[i];
-    if Length(SymbolTable[T]) > 1 then
-      Inc(MergedInstances)
-    else
-      Inc(UnmergedInstances);
-  end;
-end;
-
 // Count the number of occurrences of each symbol.
-procedure CountSymbols;
+procedure CountSymbols(const TokenizedCorpus: TIVector);
 var
   Counts, Index: TIVector;
   i, j, k, n, TmpIndex: Integer;
@@ -264,12 +242,48 @@ begin
   Writeln('Top 60 most frequent symbols:');
   for i := 0 to 59 do begin
     k := Index[i];
-    Write(i + 1: 8, ': Symbol ', k: 8, '  Count=', Counts[k]: 6, '  ', '"' + CleanUpSymbol(SymbolTable[k]) + '"': 15);
-    if ((i + 1) mod 3) = 0 then
-      Writeln;
+    if Counts[k] > 0 then begin
+      Write(i + 1: 8, ': Symbol ', k: 8, '  Count=', Counts[k]: 6, '  ', '"' + CleanUpSymbol(SymbolTable[k]) + '"': 15);
+      if ((i + 1) mod 3) = 0 then
+        Writeln;
+    end;
   end;
 
   if VerboseTokenize and (TextRec(Output).Handle = StdOutputHandle) then Pause;
+end;
+
+
+
+
+// Report all statistics.
+procedure ReportStatistics(const TokenizedCorpus: TIVector);
+
+// Calculate number of symbol types and token instances.
+procedure CalculateSymbolCount;
+var
+  i, T: Integer;
+begin
+  MergedTypes := 0;
+  UnmergedTypes := 0;
+
+  // Count symbol types.
+  for i := 0 to High(SymbolTable) do
+    if Length(SymbolTable[i]) > 1 then
+      Inc(MergedTypes)
+    else
+      Inc(UnmergedTypes);
+
+  // Count token instances.
+  MergedInstances := 0;
+  UnmergedInstances := 0;
+
+  for i := 0 to High(TokenizedCorpus) do begin
+    T := TokenizedCorpus[i];
+    if Length(SymbolTable[T]) > 1 then
+      Inc(MergedInstances)
+    else
+      Inc(UnmergedInstances);
+  end;
 end;
 
 // Count token usage.
@@ -338,8 +352,8 @@ begin
 
   for i := 0 to Limit - 1 do begin
     S := CleanUpSymbol(SymbolTable[Stats[i].TokenID]);
-    Writeln(i + 1:4, '  ID=', Stats[i].TokenID:6, '  Count=',
-      Stats[i].Count:8, '  Symbol="', S, '"');
+    if Stats[i].Count > 0 then
+      Writeln(i + 1:4, '  ID=', Stats[i].TokenID:6, '  Count=', Stats[i].Count:8, '  Symbol="', S, '"');
   end;
    if TextRec(Output).Handle = StdOutputHandle then Pause;
 end;
@@ -453,8 +467,6 @@ begin
   Writeln;
   end;
 
-// Report all statistics.
-procedure ReportStatistics;
 begin
   CalculateTimeStatistics;
   CalculateSymbolCount;
@@ -467,7 +479,7 @@ end;
 
 { Save data from tokenization }
 // Display the tokenized corpus.
-procedure WriteTokenList(const Part: TPart = B);
+procedure WriteTokenList(const TokenizedCorpus: TIVector; const Part: TPart = B);
 var
   i, iB, iE: Integer;
 begin
@@ -546,23 +558,34 @@ begin
   t0 := Now;       // Start of timing for entire tokenization;
   StopTime := 0;   // Time to subtract from timing.
 
-  // Create the tokenized corpus.
-  nCorpus := Length(Corpus);
-  TokenizeFromSymbolTable(FileName, Corpus);
+  // Create the tokenized corpus.     ''
+    nCorpus := Length(Corpus);
+    if not Training then
+      FileName := 'Inference';
+    TokenizeFromSymbolTable(FileName, TokenizedCorpus, Corpus);
+    // try putting global TC into this proc's TC.
+    // RunWesTokenize.TokenizedCorpus := TokenizedCorpus; nope
 
+  TC100(TokenizedCorpus);
+                                 // Query tokenized (from infer) is overwriting TC.
   // Timing.
   t1 := Now;
+  TC100(TokenizedCorpus);
 
   if ShowTokenWork and VerboseTokenize then begin
     Writeln('---  Token Frequencies ---');
-    CountSymbols;
+    CountSymbols(TokenizedCorpus);
   end;
+  TC100(TokenizedCorpus);
 
   nSymbols := Length(SymbolTable);
+  TC100(TokenizedCorpus);
 
   // Report statistics.
   if VerboseTokenize then
-    ReportStatistics;
+    ReportStatistics(TokenizedCorpus);
+
+  TC100(TokenizedCorpus);
 
   // Save TokenizedCorpus and other data.
   if SaveFiles then begin
@@ -576,7 +599,7 @@ begin
     Assign(Output, WorkingName + '.log');
     Append(Output);
 
-    ReportStatistics;
+    ReportStatistics(TokenizedCorpus);
 
     // Restore Output to console.
     Close(Output);
@@ -585,23 +608,25 @@ begin
     ChDir('..');
   end;
 
+  TC100(TokenizedCorpus);
+
   // Verify by reconstructing.
   if ShowVerification and VerboseTokenize and DisplayCorpus then begin
-    Writeln('--- Reconstructed Corpus ---');
+    Writeln('--- Reconstructed Corpus, Beginning ---');
+    Writeln('Length = ', Length(TokenizedCorpus));
     DetokenizeToDisplay(TokenizedCorpus, B);
     Writeln;
   end;
 
   if VerboseTokenize then Begin
     Writeln('First 150 tokens of tokenized corpus:');
-    for i := 0 to 149 do
+    for i := 0 to Min(149, High(TokenizedCorpus)) do
       Write(TokenizedCorpus[i], ' ');
     Writeln;
     Pause;
   end;
 
   Writeln('End of tokenization procedure.');
-  Pause;
 
 end;
 

@@ -7,6 +7,7 @@ unit Util;
 interface
 
 uses
+  Display,
   Global,
   Math,
   Matrix;
@@ -24,6 +25,10 @@ const
   InvFreqSize: Integer = (ModelDim div 2) * SizeOf(Single);
   ProbsSize: Integer = SeqLen * DimVocab * SizeOf(Single);
 
+procedure InitializeCublas;
+procedure PadToSeqMultiple(var TokenVectorToPad: TIVector; const Seq: Integer);
+procedure TC100(const TC: TIVector);
+procedure TCSeqLen(const TC: TIVector);
 procedure XGUniformW(var W: TWeightMatrix; FanIn, FanOut: Integer);
 procedure XGUniformWHead(var W: TWeightHeadMatrix; FanIn, FanOut: Integer);
 procedure XGUniformW1(var W: TWeightProjMatrix; FanIn, FanOut: Integer);
@@ -82,13 +87,96 @@ procedure LaunchAddBiasRowsBackward(dX: PSingle; dBias: PSingle; Rows: Integer; 
 
 implementation
 
+// Test procedure, not used.
 // Initialize test vector.
-procedure InitTestVector(var N: TFSVector);           // Test procedure, not used.
+procedure InitTestVector(var N: TFSVector);
 var
   i: Integer;
 begin
 for i := 0 to SeqLen - 1 do
   N[i] := 0.0;
+end;
+
+// Check existence of any DLL.
+function CheckDLL(const LibName: string): Boolean;
+var
+  DLLHandle: THandle;
+begin
+  // Attempt to load the library.
+  DLLHandle := LoadLibrary(PChar(LibName));
+
+  // If the handle is non-zero, it loaded successfully.
+  Result := (DLLHandle <> 0);
+
+  // Clean up if it was successfully loaded.
+  if Result then
+    FreeLibrary(DLLHandle);
+end;
+
+// Check accessibility of three necessary DLLs.
+procedure CheckAllDLLs;
+begin
+  If CheckDLL('cublas64_13.dll') then CublasPresent := True else CublasPresent := False;
+  If CheckDLL('cudart64_13.dll') then CudartPresent := True else CudartPresent := False;
+  If CheckDLL('WesChatKernel12.dll') then WesChatKernelPresent := True else WesChatKernelPresent := False;
+  if not CublasPresent or not CudartPresent or not WesChatkernelPresent then begin
+      Writeln('One of the following DLLs is required but not present: cublas64_13.dll, cudart64_13.dll, WesChatKernel12.dll.');
+      Pause;
+      Halt;
+  end;
+end;
+
+procedure InitializeCublas;
+begin
+  CheckAllDLLs;
+  if CublasPresent and (cublasCreate_v2(CuHandle) <> 0) then begin
+    Writeln('cuBLAS initialization required but failed.');
+    Pause;
+    Halt;
+  end;
+  CuBlasInitialized := True;
+end;
+
+// Pad token vector to multiple of SeqLen.
+procedure PadToSeqMultiple(var TokenVectorToPad: TIVector; const Seq: Integer);
+var
+  OldLen, NewLen, i: Integer;
+begin
+  OldLen := Length(TokenVectorToPad);
+  NewLen := ((OldLen + Seq - 1) div Seq) * Seq;
+
+  SetLength(TokenVectorToPad, NewLen);
+
+  for i := OldLen to NewLen - 1 do
+    TokenVectorToPad[i] := EOS;
+end;
+
+procedure TC100(const TC: TIVector);
+var
+  i: Integer;
+begin
+  Write('Tokenized Corpus: ');
+  for i := 0 to Min(99, High(TC)) do
+    Write(TC[i], ' ');
+  Writeln;
+  Write('Detokenized Corpus: ');
+  for i := 0 to Min(99, High(TC)) do
+    Write(SymbolTable[TC[i]]);
+  Writeln;
+end;
+
+procedure TCSeqLen(const TC: TIVector);
+var
+  i: Integer;
+begin
+  Write('Tokenized Corpus: ');
+  for i := 0 to SeqLen - 1 do
+    Write(TC[i], ' ');
+  Writeln;
+  Write('Detokenized Corpus: ');
+  for i := 0 to SeqLen - 1 do
+    Write(SymbolTable[TC[i]]);
+  Writeln;
 end;
 
 // Xavier-Glorot initialization on W0 matrix.

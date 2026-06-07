@@ -155,11 +155,11 @@ procedure TC100(const TC: TIVector);
 var
   i: Integer;
 begin
-  Write('Tokenized Corpus: ');
+  Write('Tokenized Corpus (length up to 100): ');
   for i := 0 to Min(99, High(TC)) do
     Write(TC[i], ' ');
   Writeln;
-  Write('Detokenized Corpus: ');
+  Write('Detokenized Corpus (length up to 100): ');
   for i := 0 to Min(99, High(TC)) do
     Write(SymbolTable[TC[i]]);
   Writeln;
@@ -169,11 +169,11 @@ procedure TCSeqLen(const TC: TIVector);
 var
   i: Integer;
 begin
-  Write('Tokenized Corpus: ');
+  Write('Tokenized Corpus (length up to ', SeqLen, '): ');
   for i := 0 to SeqLen - 1 do
     Write(TC[i], ' ');
   Writeln;
-  Write('Detokenized Corpus: ');
+  Write('Detokenized Corpus (length up to ', SeqLen, '): ');
   for i := 0 to SeqLen - 1 do
     Write(SymbolTable[TC[i]]);
   Writeln;

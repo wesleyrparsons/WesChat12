@@ -576,15 +576,14 @@ begin
     Writeln('---  Token Frequencies ---');
     CountSymbols(TokenizedCorpus);
   end;
-  TC100(TokenizedCorpus);
 
   nSymbols := Length(SymbolTable);
-  TC100(TokenizedCorpus);
 
   // Report statistics.
   if VerboseTokenize then
     ReportStatistics(TokenizedCorpus);
 
+  Writeln('WesTokenize, near end, before save files, do TC100.');
   TC100(TokenizedCorpus);
 
   // Save TokenizedCorpus and other data.
@@ -626,7 +625,7 @@ begin
     Pause;
   end;
 
-  Writeln('End of tokenization procedure.');
+  Writeln('End of tokenization procedure in WesTokenize.');
 
 end;
 

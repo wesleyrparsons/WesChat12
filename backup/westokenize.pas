@@ -15,7 +15,8 @@ uses
   Global,
   IOHandler,
   Math,
-  SysUtils;
+  SysUtils,
+  Util;
 
 type
   TTokenCount = record                 // Records count of tokens.
@@ -565,7 +566,7 @@ begin
     // try putting global TC into this proc's TC.
     // RunWesTokenize.TokenizedCorpus := TokenizedCorpus; nope
 
-    TC100(TokenizedCorpus);
+  TC100(TokenizedCorpus);
                                  // Query tokenized (from infer) is overwriting TC.
   // Timing.
   t1 := Now;

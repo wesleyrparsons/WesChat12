@@ -175,11 +175,6 @@ begin
 
       VerboseTransform := True;  // Temporary debug.
 
-      if VerboseTransform then with WModelParams do begin
-        cudaMemcpy(@Embeddings.Value[0, 0], Embeddings.dValue, EmbeddingsSize, cudaMemcpyDeviceToHost);
-        VTPDisplayX('Display Embeddings.Value prior to Transform.', Embeddings.Value, B);
-      end;
-
       SetLength(QueryInput, Length(QueryString));
       for i := 0 to Length(QueryString) - 1 do
         QueryInput[i] := Ord(QueryString[i + 1]);
@@ -194,8 +189,7 @@ begin
       else
         RunGPT2Tokenize(QueryString, QueryTokenized);
 
-      PadToSeqMultiple(QueryTokenized, SeqLen);
-
+      Writeln('In Infer procedure, after WesTokenize, do TC100 and TCSeqLen, and pause.');
       TC100(QueryTokenized);
       TCSeqLen(QueryTokenized);
       Pause;
@@ -222,6 +216,11 @@ begin
         if QueryToken = EOS then Break;
       end;
 
+      if (QueryOutput[i] >= 0) and (QueryOutput[i] < Vocab.Count) then
+        Write(DisplayToken(UTF8Decode(Vocab[QueryOutput[i]])))
+      else
+        Write('<BADTOKEN:', QueryOutput[i], '>');
+
       Writeln('Query token output: ');
       for i := 0 to High(QueryOutput) do
         Write(QueryOutput[i], ' ');
@@ -242,6 +241,7 @@ begin
     until False;
 
   finally
+    Training := True;
     MDeallocateCublas(WModelParams, WModelState);
     cublasDestroy_v2(CuHandle);
   end;

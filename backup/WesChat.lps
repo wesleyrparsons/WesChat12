@@ -8,8 +8,7 @@
       <Unit>
         <Filename Value="WesChat.lpr"/>
         <IsPartOfProject Value="True"/>
-        <IsVisibleTab Value="True"/>
-        <CursorPos X="22" Y="12"/>
+        <CursorPos X="36" Y="15"/>
         <UsageCount Value="233"/>
         <Loaded Value="True"/>
       </Unit>
@@ -44,9 +43,10 @@
         <Filename Value="train.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="Train"/>
+        <IsVisibleTab Value="True"/>
         <EditorIndex Value="10"/>
-        <TopLine Value="97"/>
-        <CursorPos X="21" Y="104"/>
+        <TopLine Value="303"/>
+        <CursorPos Y="334"/>
         <UsageCount Value="210"/>
         <Loaded Value="True"/>
       </Unit>
@@ -55,7 +55,7 @@
         <IsPartOfProject Value="True"/>
         <UnitName Value="Notes"/>
         <EditorIndex Value="16"/>
-        <CursorPos X="106" Y="5"/>
+        <CursorPos X="8" Y="10"/>
         <UsageCount Value="209"/>
         <Loaded Value="True"/>
       </Unit>
@@ -157,8 +157,8 @@
         <IsPartOfProject Value="True"/>
         <UnitName Value="TransformForward"/>
         <EditorIndex Value="2"/>
-        <TopLine Value="261"/>
-        <CursorPos X="94" Y="293"/>
+        <TopLine Value="262"/>
+        <CursorPos X="47" Y="279"/>
         <UsageCount Value="251"/>
         <Loaded Value="True"/>
       </Unit>
@@ -184,8 +184,8 @@
         <IsPartOfProject Value="True"/>
         <UnitName Value="Infer"/>
         <EditorIndex Value="11"/>
-        <TopLine Value="181"/>
-        <CursorPos X="15" Y="198"/>
+        <TopLine Value="33"/>
+        <CursorPos Y="53"/>
         <UsageCount Value="203"/>
         <Loaded Value="True"/>
       </Unit>
@@ -201,38 +201,11 @@
         <Filename Value="TNotes.txt"/>
         <EditorIndex Value="-1"/>
         <CursorPos X="57" Y="21"/>
-        <UsageCount Value="46"/>
+        <UsageCount Value="45"/>
         <DefaultSyntaxHighlighter Value="Text"/>
       </Unit>
     </Units>
     <JumpHistory HistoryIndex="29">
-      <Position>
-        <Filename Value="infer.pas"/>
-        <Caret Line="185" Column="34" TopLine="169"/>
-      </Position>
-      <Position>
-        <Filename Value="infer.pas"/>
-        <Caret Line="19"/>
-      </Position>
-      <Position>
-        <Filename Value="infer.pas"/>
-        <Caret Line="154" Column="17" TopLine="124"/>
-      </Position>
-      <Position>
-        <Filename Value="util.pas"/>
-        <Caret Line="139" Column="52" TopLine="121"/>
-      </Position>
-      <Position>
-        <Filename Value="WesChat.lpr"/>
-        <Caret Line="176" Column="34" TopLine="159"/>
-      </Position>
-      <Position>
-        <Filename Value="WesChat.lpr"/>
-      </Position>
-      <Position>
-        <Filename Value="util.pas"/>
-        <Caret Line="29" Column="45" TopLine="13"/>
-      </Position>
       <Position>
         <Filename Value="util.pas"/>
         <Caret Line="139" Column="52" TopLine="112"/>
@@ -324,6 +297,34 @@
       <Position>
         <Filename Value="westokenize.pas"/>
         <Caret Line="568" Column="15" TopLine="552"/>
+      </Position>
+      <Position>
+        <Filename Value="infer.pas"/>
+        <Caret Line="101" Column="22" TopLine="83"/>
+      </Position>
+      <Position>
+        <Filename Value="train.pas"/>
+        <Caret Line="115" Column="53" TopLine="97"/>
+      </Position>
+      <Position>
+        <Filename Value="transformforward.pas"/>
+        <Caret Line="293" Column="94" TopLine="240"/>
+      </Position>
+      <Position>
+        <Filename Value="transformforward.pas"/>
+        <Caret Line="146" Column="53" TopLine="130"/>
+      </Position>
+      <Position>
+        <Filename Value="transformforward.pas"/>
+        <Caret Line="252" Column="28" TopLine="241"/>
+      </Position>
+      <Position>
+        <Filename Value="infer.pas"/>
+        <Caret Line="229" Column="21" TopLine="217"/>
+      </Position>
+      <Position>
+        <Filename Value="train.pas"/>
+        <Caret Line="180" Column="16" TopLine="149"/>
       </Position>
     </JumpHistory>
     <RunParams>

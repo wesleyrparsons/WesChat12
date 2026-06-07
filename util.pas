@@ -170,11 +170,11 @@ var
   i: Integer;
 begin
   Write('Tokenized Corpus (length up to ', SeqLen, '): ');
-  for i := 0 to SeqLen - 1 do
+  for i := 0 to Min(SeqLen - 1, High(TC)) do
     Write(TC[i], ' ');
   Writeln;
   Write('Detokenized Corpus (length up to ', SeqLen, '): ');
-  for i := 0 to SeqLen - 1 do
+  for i := 0 to (SeqLen - 1, High(TC)) do
     Write(SymbolTable[TC[i]]);
   Writeln;
 end;

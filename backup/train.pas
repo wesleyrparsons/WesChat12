@@ -48,8 +48,7 @@ end;
 // Run the training.
 procedure RunTrain(var WModelParams: TWModelParams; var WModelState: TWModelState; const TokenizedCorpus: TIVector);
 var
-  i, j, k, Blk, LastBlk: Integer;
-  Start, EmbedLoop: Integer;
+  i, j, k, Blk, LastBlk, Start, EmbedLoop, Stage: Integer;
   Stride: Integer = 64;      // Stride 64 tokens every sequence.
 
   function TrainReadIfKeyPressed: Boolean;
@@ -101,6 +100,7 @@ var
 
 begin
   StopTraining := False;
+  Training := False;
   GlobalSeed := 123456789;        // For debugging.
   GlobalSeed := GetTickCount64;   // For training.
   nVocab := nSymbols;             // Need nVocab (second name for variable) for Transform.
@@ -122,9 +122,9 @@ begin
     // SetLength(TokenID, Length(TokenizedCorpus));
     // TokenID := TokenizedCorpus;
 
-    if VerboseTransform then
+    {if VerboseTransform then
       Writeln('Start Training. nVocab = ', nVocab, ' nSymbols = ', nSymbols, ' ModelDim = ', ModelDim,
-        ' SeqLen = ', SeqLen, ' Length of TokenizedCorpus = ', Length(TokenizedCorpus));
+        ' SeqLen = ', SeqLen, ' Length of TokenizedCorpus = ', Length(TokenizedCorpus));}
 
     if VerboseTransform then begin
       Writeln('First quarter of first row of embeddings.');
@@ -141,13 +141,13 @@ begin
     // Stride loop thru Sequence.
     Start := 0;
     EmbedLoop := 0;
+    Writeln('** Start Training  ', DateTimeToStr(Now), '  X = Exit program. B = Break out of merge loop. V = toggle Very Verbose mode **');
+    Writeln('P = Program information. E = Embedding information. Transforming...');
     while ((Start + SeqLen + 1) <= Length(TokenizedCorpus)) and (not StopTraining) do with WModelState do begin
 
       // Display number of loops thru embed loop.
       Inc(EmbedLoop);
-      Writeln(DateTimeToStr(Now), '  X = Exit program. B = Break out of merge loop. V = toggle Very Verbose mode.');
-      Writeln('P = Program information. E = Embedding information. Transforming...');
-      Writeln('--- SeqLen loop: start ', Start, ' and loop number ', EmbedLoop, ' ---');
+      Writeln('  -- SeqLen loop: start ', Start, ' and loop number ', EmbedLoop, ' ---');
       Pause;
 
       // Build the target vector, one ahead, for the loss stage.
@@ -190,10 +190,10 @@ begin
       for Blk := 0 to nBlock - 1 do begin
         if StopTraining then Break;
 
-        if VerboseTransform then begin
+        {if VerboseTransform then begin
           Writeln('     $$$ Forward Block loop: start ', Blk, '  Sequence Start ', Start, ' $$$');
           Pause;
-        end;
+        end;}
 
         RunTransformForward(WModelParams, WModelState, Blk, Start);
 
@@ -211,8 +211,10 @@ begin
       // 3. FORWARD HEAD OUTPUT STAGE.
 
       with WModelParams do with WModelState do begin
+        Stage := Blk * 3 + 2;
+
         // 3A. Multiplication/Overwrite. Obtain Probs from X7 and Vocab.
-        Writeln('              Transform Gradient Stage 3A, Obtain Probs from X7 and Vocab');
+        Writeln('': Stage, '3A. Transform Gradient, Obtain Probs from X7 and Vocab');
 
         // Multiplication: Input X7, Vocab. Output Probs.
         // Equation: Probs = X7 · Embeddingsᵀ. Probs in R^{L x nVocab}. X in R^{L x D}.  Embeddings in R^{nVocab x D}.
@@ -232,7 +234,7 @@ begin
         end;
 
         // 3B. Softmax. Obtain Probs from Sotmax(Probs).
-        Writeln('              Transform Forward Stage 3B, Softmax Probs');
+        Writeln('': Stage, '3B. Transform Forward, Softmax Probs');
 
         // Softmax: Input Probs. Output Probs.
         // Equation: Probs = Softmax(Probs).
@@ -247,7 +249,7 @@ begin
         end;
 
         // 3C. Cross-Entropy Loss. Obtain TopGradient from Probs.
-        Writeln('              Transform Forward Stage 3C, Obtain TopGradient from Probs');
+        Writeln('': Stage, '3C. Transform Forward, Obtain TopGradient from Probs');
         // Gradient: Input Probs. Output TopGradient. Also option of CalculateGradient from KLDivergence.
         // Equation: TopGradient in R^{L x nVocab}. Probs in R^{L x nVocab}.
         // GradientFromCEProbabilities(WModelState);  // Using CE.
@@ -261,7 +263,7 @@ begin
         end;
 
         // 3D. Backprop TopGradient creates X7 Grad: Input TopGradient, WVocabᵀ. Output X7.Grad.
-        Writeln('              Transform Backprop Stage 3D, Create X7 from TopGradient');
+        Writeln('': Stage, '3D. Transform Backprop, Create X7 from TopGradient');
 
         with StateBlock[LastBlk] do begin
           // Equation: X7.Grad = TopGradient · Embeddings.Value. X7.Grad in R^{L x D}. TopGradient in R^{L x nVocab}. Embeddings.Value in R^{nVocab x D}.
@@ -288,17 +290,17 @@ begin
       end; // End gradient stage.
 
 
-      Writeln('            Switch from Forward to Backprop');
-      Pause;
+      if VerboseTransform then
+        Writeln('            Switch from Forward to Backprop');
 
       // Backprop pass thru transformer.
       for Blk := nBlock - 1 downto 0 do with WModelState do begin
         if StopTraining then Break;
 
-        if VerboseTransform then begin
+        {if VerboseTransform then begin
           Writeln('     $$$ Backprop Block loop: start ', Blk, '  Sequence Start ', Start, ' $$$');
           Pause;
-        end;
+        end;}
 
         RunTransformBackprop(WModelParams, WModelState, Blk);
 

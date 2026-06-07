@@ -7,6 +7,8 @@ unit Notes;
 General
 1. Replace nStmbols with nVocab.
 
+1a. If VVerbose, then also Verbose.
+
 2. Where do I use scale, invfreq? Need?
 
 Init state, init grads and probs

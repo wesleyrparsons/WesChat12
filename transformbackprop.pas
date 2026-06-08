@@ -25,7 +25,7 @@ implementation
 // Run the transformer backprop.
 procedure RunTransformBackprop(var WModelParams: TWModelParams; var WModelState: TWModelState; const Blk: Integer);
 var
-  h, HeadOffset, Stage: Integer;
+  h, HeadOffset: Integer;
 
 begin
   with WModelParams.ParamBlock[Blk] do with WModelState.StateBlock[Blk] do begin
@@ -40,7 +40,8 @@ begin
     // BACK PROPAGATION. FEED BACKWARD NETWORK.
 
       // 2E. Backprop Addition/Accumulation. Obtain b2 from X6.
-      Writeln('': Stage, '2E. Transform Backprop, Residual Dropout');
+      if SStage then Writeln('' : Stage, 'Stage  2, Block ', Blk, ',  Transform Backprop');
+      if VStage then Writeln('': Stage, '2E. Transform Backprop, Residual Dropout');
 
       // Dropout Backward.
       if Training then
@@ -53,7 +54,7 @@ begin
       LaunchAddBiasRowsBackward(X6.dGrad, b2.dGrad, SeqLen, ModelDim);
 
       // 2D. Backprop Multiplication/Overwrite. Obtain W2 from Hidden2 and X6.
-      Writeln('': Stage, '2D. Transform Backprop, Backprop X6 Grad creates W2 Grad and Backprop X6 Grad creates Hidden2 Grad');
+      if VStage then Writeln('': Stage, '2D. Transform Backprop, Backprop X6 Grad creates W2 Grad and Backprop X6 Grad creates Hidden2 Grad');
 
       // Backprop X6 Grad creates W2 Grad: Input Hidden2ᵀ.Value, X6.Grad. Output W2.Grad.
       // Equation: W2.Grad = Hidden2ᵀ.Value · X6.Grad. W2.Grad is R^{DB x D}. Hidden2ᵀ.Value is R^{DB x L}. X6.Grad in R^{L x D}.
@@ -71,7 +72,7 @@ begin
         LaunchDropoutBackward(Hidden2.dGrad, SeqLen * ModelDimProj, MLPDropout, MLPDropoutSeed);
 
       // 2C. Backprop ReLU. Obtain Hidden1 from Hidden2.
-      Writeln('': Stage, '2C. Transform Backprop, ReLU and Obtain Hidden 1 from Hidden2');
+      if VStage then Writeln('': Stage, '2C. Transform Backprop, ReLU and Obtain Hidden 1 from Hidden2');
 
       // Backprop BackReLU activation on Hidden: Input Hidden2.Grad. Output Hidden1.Grad.
       // Equation: Hidden1.Grad = ReLUMaskBackward(Hidden2.Grad). Hidden1.Grad is R^{L x DB}. Hidden2.Value is R^{L x DB}.
@@ -83,7 +84,7 @@ begin
       LaunchReLUBackward(Hidden1.dValue, Hidden2.dGrad, Hidden1.dGrad, SeqLen, ModelDimProj);
 
       // 2B. Backprop Addition/Accumulate. Obtain b1 from Hidden1.
-      Writeln('': Stage, '2B. Transform Backprop , Obtain b1 from Hidden1');
+      if VStage then Writeln('': Stage, '2B. Transform Backprop , Obtain b1 from Hidden1');
 
       // Backprop Hidden Grad creates b1 Grad: Input Hidden1.Grad. Output b1.Grad.
       // Equation: b1.Grad = sum of Hidden1.Grad. b1.Grad is R^{L x DB}. Hidden1.Grad in R^{L x DB}.
@@ -92,7 +93,7 @@ begin
       LaunchAddBiasRowsBackward(Hidden1.dGrad, b1.dGrad, SeqLen, ModelDimProj);
 
       // 2A. Backprop Multiplication/Overwrite. Obtain W1 from X5ᵀ and Hidden1.
-      Writeln('': Stage, '2A. Transform Backprop, Obtain X5 from Hidden1 and W1');
+      if VStage then Writeln('': Stage, '2A. Transform Backprop, Obtain X5 from Hidden1 and W1');
 
       // Obtain X5 from Hidden1 and W1.
       // Backprop Hidden1 Grad creates W1 Grad. Input: X5ᵀ.Value, Hidden1.Grad. Output: W1.Grad.
@@ -112,7 +113,8 @@ begin
     //   X5.Grad, X4.Grad, LNXhat2: L x D
     //   Gamma2.Value, Gamma2.Grad, Beta2.Grad: D
     //   LNInvStd2: L    // 1J. Backprop Layer-Norm. Obtain X4 from X5.
-    Writeln('': Stage, '1J. Transform Backprop Stage 1J, Layer Norm Backward X5');
+    if SStage then Writeln('' : Stage, 'Stage  2, Block ', Blk, ',  Transform Backprop');
+    if VStage then Writeln('': Stage, '1J. Transform Backprop Stage 1J, Layer Norm Backward X5');
     // Backprop Layer-Norm: Input X5.Grad, Gamma2.Grad, Beta2.Value. Output X4.Grad, Gamma2.Grad, Beta2.Grad.
     // Equation: X4.Grad, Gamma2.Grad, Beta2.Grad = LayerNorm(X5.Grad, Gamma2.Value, Beta2.Value).
     // X4.Grad, X5.Grad, LNXHat2 in R^{L x D}. Gamma2.Grad, Beta2.Grad in R^{D}.
@@ -126,7 +128,7 @@ begin
     end;
 
     // 1I. Backprop Split. Input: X1.Grad. Output: X3.Grad. Output X4.Grad,
-    Writeln('': Stage, '1I. Transform Backprop Stage 1I, Split X4 = X1 + X3');
+    if VStage then Writeln('': Stage, '1I. Transform Backprop Stage 1I, Split X4 = X1 + X3');
 
     // Equation: X4 = X1 + X3, so dX1 += dX4 and dX3 += dX4. All in R^{L x D}.
     // GradSplit(X4.Grad, X1.Grad, X3.Grad, SeqLen, ModelDim);
@@ -138,7 +140,7 @@ begin
     //        To find the error for the input: dV = Sᵀ · dX2.
 
     // 1H. Backprop Mutiplication/Overwrite. Obtain W0 Grad from X3 Grad: Input: X2ᵀ.Value, X3.Grad. Output: W0.Grad.
-    Writeln('': Stage, '1H. Transform Backprop, Obtain W0 Grad from X3 Grad');
+    if VStage then Writeln('': Stage, '1H. Transform Backprop, Obtain W0 Grad from X3 Grad');
 
     // Equations: W0.Grad = X2ᵀ.Value · X3.Grad. W0.Grad is R^{L x D}. X3.Grad is R^{L x D}.
     // MatMulTN(@X2.Value, @X3.Grad, @W0.Grad, ModelDim, SeqLen, ModelDim);
@@ -155,7 +157,7 @@ begin
       VTPDisplayX('Display X3.Grad, in transform, before stage 1G.', X3.Grad, G);
     end;
 
-    Writeln('': Stage, '1G-E, Transform Backprop, Obtain Scores1, Autoregressive mask, obtain Scores2, Softmax, ADropout');
+    if VStage then Writeln('': Stage, '1G-E, Transform Backprop, Obtain Scores1, Autoregressive mask, obtain Scores2, Softmax, ADropout');
 
     // 1G. Backprop Multiplication/Overwrite. Obtain Scores2.Grad from X2.Grad: Input X2.Grad, Vᵀ.Value. Output: Scores2.Grad.
     // Equations: Scores2.Grad = X2.Grad · Vᵀ.Value. Scores2.Grad is R^{L x L}. X2.Grad is R^{L x D}. Vᵀ.Value is R^{D x L}.
@@ -222,14 +224,14 @@ begin
     end;
 
     // 1D. RoPE Backward.
-    Writeln('': Stage, '1D. Transform Backprop, RoPE');
+    if VStage then Writeln('': Stage, '1D. Transform Backprop, RoPE');
 
     // cuda kernel.
     LaunchRoPEBackward(Q.dGrad, WModelState.dInvFreq, SeqLen, ModelDim);
     LaunchRoPEBackward(K.dGrad, WModelState.dInvFreq, SeqLen, ModelDim);
 
     // 1C. Backprop multiplication/overwrite. Obtain W_.Grad and X1_q.Grad for Q, K, and V.
-    Writeln('': Stage, '1C. Transform Backprop, Obtain W_.Grad and X1_q.Grad for Q, K, and V');
+    if VStage then Writeln('': Stage, '1C. Transform Backprop, Obtain W_.Grad and X1_q.Grad for Q, K, and V');
 
     // Obtain X1q, X1k, X1v, from X1.
     {Wq.Grad = X1ᵀ.Value · Q.Grad
@@ -269,7 +271,7 @@ begin
     CuMatMulNT(CuHandle, V.dGrad, Wv.dValue, X1v.dGrad, SeqLen, ModelDim, ModelDim);
 
     // 1B. Backprop Merge: Obtain X1 Grad as sum of Grads. Input X1q.Grad, X1k.Grad, and X1v.Grad. Output X1.Grad.
-    Writeln('': Stage, '1B. Transform Backprop, Obtain X1 Grad as sum of Grads');
+    if VStage then Writeln('': Stage, '1B. Transform Backprop, Obtain X1 Grad as sum of Grads');
 
     // Equation:  X1.Grad = X1q.Grad + X1k.Grad + X1v.Grad. All in R^{L x D}.
     // for i := 0 to SeqLen - 1 do for j := 0 to ModelDim - 1 do
@@ -293,7 +295,7 @@ begin
     end;
 
     // 1A. Backprop Layer-Norm: Input X1.Value, X1.Grad. Output X.Grad, Gamma1.Grad, Beta1.Grad.
-    Writeln('': Stage, '1A. Transform Backprop, Layer Norm X1');
+    if VStage then Writeln('': Stage, '1A. Transform Backprop, Layer Norm X1');
 
     // Equation: X.Grad, Gamma1.Grad, Beta1.Grad = LayerNorm(X1.Value, X1.Grad, Gamma1.Value, Beta1.Value). X.Grad, X1.Grad in R^{L x D}. Gamma1.Grad, Beta1.Grad in R^{D}.
     // LayerNormBackward(X1.Grad, X.Grad, Gamma1.Grad, Beta1.Grad, SeqLen, Gamma1.Value, LNXhat1, LNInvStd1);

@@ -26,6 +26,7 @@ const
   ProbsSize: Integer = SeqLen * DimVocab * SizeOf(Single);
 
 procedure InitializeCublas;
+procedure CheckCudaError(const Where: string);
 procedure PadToSeqMultiple(var TokenVectorToPad: TIVector; const Seq: Integer);
 procedure TC100(const TC: TIVector);
 procedure TCSeqLen(const TC: TIVector);
@@ -126,6 +127,7 @@ begin
   end;
 end;
 
+// Intialize Cublas.
 procedure InitializeCublas;
 begin
   CheckAllDLLs;
@@ -135,6 +137,23 @@ begin
     Halt;
   end;
   CuBlasInitialized := True;
+end;
+
+// Check for a cude error.
+procedure CheckCudaError(const Where: string);
+var
+  Err: Integer;
+begin
+  Err := cudaDeviceSynchronize;
+
+  if Err <> 0 then begin
+    Writeln;
+    Writeln('*** CUDA ERROR ***');
+    Writeln('Location : ', Where);
+    Writeln('Error #  : ', Err);
+    Writeln('Message  : ', StrPas(cudaGetErrorString(Err)));
+    Pause;
+  end;
 end;
 
 // Pad token vector to multiple of SeqLen.
@@ -170,11 +189,11 @@ var
   i: Integer;
 begin
   Write('Tokenized Corpus (length up to ', SeqLen, '): ');
-  for i := 0 to SeqLen - 1 do
+  for i := 0 to Min(SeqLen - 1, High(TC)) do
     Write(TC[i], ' ');
   Writeln;
   Write('Detokenized Corpus (length up to ', SeqLen, '): ');
-  for i := 0 to SeqLen - 1 do
+  for i := 0 to Min(SeqLen - 1, High(TC)) do
     Write(SymbolTable[TC[i]]);
   Writeln;
 end;
@@ -242,13 +261,16 @@ end;
 // Allocate cublas memory.       Separate for State and Params?
 procedure MAllocCublas(var WModelParams: TWModelParams; var WModelState: TWModelState);
 var
-  h, k: Integer;
+  h, k, err: Integer;
 begin
   CudaAllocated := True;
 
   // Input and target tokens.
   cudaMalloc(@dInputTokens, SeqLen * SizeOf(Integer));
   cudaMalloc(@dTargetTokens, SeqLen * SizeOf(Integer));
+
+
+
 
   // Global/shared parameters.
   with WModelParams do begin

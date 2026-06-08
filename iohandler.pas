@@ -65,7 +65,7 @@ begin
     Writeln;
 
   // Display initial Corpus length.
-  Writeln('Read ', Size, ' bytes from ', FileName);
+  Writeln('Read ', Size, ' bytes from ', FileName, '.');
 end;
 
 // Load the symbol table from file. IOHandler.
@@ -117,7 +117,7 @@ begin
 
   Close(F);
   nSymbols := Length(SymbolTable);
-  Writeln('Loaded ', nSymbols, ' symbols from ', FileName);
+  Writeln('Loaded ', nSymbols, ' symbols from ', FileName, '.');
 end;
 
 // Save symbol table.

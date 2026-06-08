@@ -31,6 +31,9 @@ function cudaMalloc(devPtr: PPointer; size: NativeUInt): Integer; cdecl; externa
 function cudaMemcpy(dst: Pointer; src: Pointer; count: NativeUInt; kind: LongInt): LongInt; cdecl; external cudartDLL;
 function cudaMemset(devPtr: Pointer; value: Integer; count: NativeUInt): Integer; cdecl; external cudartDLL;
 function cudaFree(devPtr: Pointer): Integer; cdecl; external cudartDLL;
+function cudaDeviceReset: Integer; cdecl; external cudartDLL;
+function cudaGetLastError: Integer; cdecl; external cudartDLL;
+function cudaDeviceSynchronize: Integer; cdecl; external cudartDLL;
 
 // Multiply and add procedures.
 // procedure MatMulFullNN(const A, B: PSingle; C: PSingle; M, N, K, lda, ldb, ldc: Integer);
@@ -264,16 +267,8 @@ begin
 
   // Row-major C = A * B^T
   // Column-major equivalent: C^T = B * A^T
-  cublasSgemm_v2(
-    Handle,
-    1, 0,          // B transposed, A not transposed in column-major view
-    N, M, K,
-    @alpha,
-    B, ldb,
-    A, lda,
-    @beta,
-    C, ldc
-  );
+  cublasSgemm_v2(Handle, 1, 0, N, M, K, @alpha,
+    B, ldb, A, lda, @beta, C, ldc);
 end;
 // Full matrix multiplication (lda, ldb, ldc), A transpose, B no transpose, overWrite, row-major.
 procedure MatMulFullTN(const A, B: PSingle; C: PSingle; M, N, K, lda, ldb, ldc: Integer);

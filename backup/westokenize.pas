@@ -15,8 +15,7 @@ uses
   Global,
   IOHandler,
   Math,
-  SysUtils,
-  Util;
+  SysUtils;
 
 type
   TTokenCount = record                 // Records count of tokens.
@@ -179,10 +178,13 @@ begin
 
   nTokenizedCorpus := Length(TokenizedCorpus);
 
-  Writeln('Input corpus is: ');
-  for i := 0 to Length(Corpus) - 1 do
-    Write(Corpus[i], ' ');
-  Writeln;
+  if VerboseTokenize then begin
+    Write('Input corpus is: ');
+    for i := 0 to Length(Corpus) - 1 do
+      Write(Corpus[i], ' ');
+    Writeln;
+  end;
+
   Writeln('Created ', nTokenizedCorpus, ' tokens from ', TextFileName);
 
   if VerboseTokenize then Begin
@@ -252,9 +254,6 @@ begin
   if VerboseTokenize and (TextRec(Output).Handle = StdOutputHandle) then Pause;
 end;
 
-
-
-
 // Report all statistics.
 procedure ReportStatistics(const TokenizedCorpus: TIVector);
 
@@ -304,8 +303,7 @@ begin
 end;
 
 // Build a list of merged token states.
-procedure BuildMergedTokenStats(const Counts: TIVector; FirstMergedToken: Integer;
-  out Stats: TMergedTokenStats);
+procedure BuildMergedTokenStats(const Counts: TIVector; FirstMergedToken: Integer; out Stats: TMergedTokenStats);
 var
   i, k: Integer;
 begin
@@ -563,29 +561,20 @@ begin
     if not Training then
       FileName := 'Inference';
     TokenizeFromSymbolTable(FileName, TokenizedCorpus, Corpus);
-    // try putting global TC into this proc's TC.
-    // RunWesTokenize.TokenizedCorpus := TokenizedCorpus; nope
 
-  TC100(TokenizedCorpus);
-                                 // Query tokenized (from infer) is overwriting TC.
   // Timing.
   t1 := Now;
-  TC100(TokenizedCorpus);
 
   if ShowTokenWork and VerboseTokenize then begin
     Writeln('---  Token Frequencies ---');
     CountSymbols(TokenizedCorpus);
   end;
-  TC100(TokenizedCorpus);
 
   nSymbols := Length(SymbolTable);
-  TC100(TokenizedCorpus);
 
   // Report statistics.
   if VerboseTokenize then
     ReportStatistics(TokenizedCorpus);
-
-  TC100(TokenizedCorpus);
 
   // Save TokenizedCorpus and other data.
   if SaveFiles then begin
@@ -608,8 +597,6 @@ begin
     ChDir('..');
   end;
 
-  TC100(TokenizedCorpus);
-
   // Verify by reconstructing.
   if ShowVerification and VerboseTokenize and DisplayCorpus then begin
     Writeln('--- Reconstructed Corpus, Beginning ---');
@@ -626,7 +613,7 @@ begin
     Pause;
   end;
 
-  Writeln('End of tokenization procedure.');
+  Writeln('End of tokenization procedure in WesTokenize.');
 
 end;
 

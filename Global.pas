@@ -14,7 +14,7 @@ var
   PauseIfKeyPressed: Boolean = True;   // Pause if a key is pressed.
   StopTraining: Boolean;
   DisplayCorpus: Boolean = True;       // One set for real tokenizing and one set for debug.
-  VerboseTokenize: Boolean = True;     // Verbose in Tokenize units.
+  VerboseTokenize: Boolean = False;    // Verbose in Tokenize units.
   VerboseTransform: Boolean = False;   // Verbose in Transform units.
   VeryVerboseTokenize: Boolean = False;     // Very verbose in Tokenize units.
   VeryVerboseTransform: Boolean = False;    // Displays X, Q, ScoresHead1, etc. in Transform units.
@@ -195,6 +195,10 @@ var
   // Model setings vars.
   LearningRate: Single = 0.01;                   // LearningRate for Gradient.
   Temperature: Single = 1.0;                     // Temperature for softmax.
+  // Staging vars.
+  VStage: Boolean = False;                       // Display progress by stage in train and transform.
+  SStage: Boolean = True;                        // Display progress by stage in train and transform.
+  Stage: Integer;                                // Indentation for stage;
   // Utility vars.
   Mt0, Mt1, t0, t1, StopTime: TDateTime;         // For timing.
   Version: shortstring = '1.2';                  // Version 1.2.

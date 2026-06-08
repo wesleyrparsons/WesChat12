@@ -3,7 +3,7 @@ program WesChat;
 {$mode ObjFPC}{$H+}{$I proprietary.txt}
 
 { WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wesparsons.com }
-{ Note: Edited 6/4/2026 5 pm -- working from WesChat12 on OneDrive }
+{ Note: Edited 6/7/2026 8 am -- working from WesChat12 on OneDrive }
 {        Input Train        Input Query        Output
  Raw                        QueryString
  Bytes   Corpus             QueryCorpus
@@ -19,6 +19,7 @@ uses
   Global,
   Infer,
   IOHandler,
+  Matrix,
   Symbolize,
   SysUtils,
   Train,
@@ -304,6 +305,7 @@ begin
         ReadFileBytes('bela.txt', Corpus);
         FromSymbolTable := True;
         nCorpus := Length(Corpus);
+        FileName := 'bela.txt';
 
         // Read symbol table file.
         SymbolFileName := 'bela.sym';
@@ -610,5 +612,13 @@ begin
       else Writeln('Invalid input');
     end;
   end;
+
+  // Clean up cublas.
+  if CudaAllocated then
+    MDeallocateCublas(WModelParams, WModelState);
+  if CublasInitialized then
+    cublasDestroy_v2(CuHandle);
+
+  // Free Vocab.
   Vocab.Free;
 end.

@@ -15,8 +15,7 @@ uses
   Global,
   IOHandler,
   Math,
-  SysUtils,
-  Util;
+  SysUtils;
 
 type
   TTokenCount = record                 // Records count of tokens.
@@ -179,14 +178,17 @@ begin
 
   nTokenizedCorpus := Length(TokenizedCorpus);
 
-  Writeln('Input corpus is: ');
-  for i := 0 to Length(Corpus) - 1 do
-    Write(Corpus[i], ' ');
-  Writeln;
-  Writeln('Created ', nTokenizedCorpus, ' tokens from ', TextFileName);
+  if VerboseTokenize then begin
+    Write('Input corpus is: ');
+    for i := 0 to Length(Corpus) - 1 do
+      Write(Corpus[i], ' ');
+    Writeln;
+  end;
+
+  Writeln('Created ', nTokenizedCorpus, ' tokens from ', TextFileName, '.');
 
   if VerboseTokenize then Begin
-    Writeln('First 50 token of tokenized corpus');
+    Write('First 50 token of tokenized corpus: ');
     for i := 0 to Min(49, (nTokenizedCorpus - 1)) do
       Write(TokenizedCorpus[i], ' ');
     Writeln;
@@ -239,7 +241,7 @@ begin
   end;
 
   // Print top 60.
-  Writeln('Top 60 most frequent symbols:');
+  Writeln('Top 60 most frequent symbols: ');
   for i := 0 to 59 do begin
     k := Index[i];
     if Counts[k] > 0 then begin
@@ -251,9 +253,6 @@ begin
 
   if VerboseTokenize and (TextRec(Output).Handle = StdOutputHandle) then Pause;
 end;
-
-
-
 
 // Report all statistics.
 procedure ReportStatistics(const TokenizedCorpus: TIVector);
@@ -304,8 +303,7 @@ begin
 end;
 
 // Build a list of merged token states.
-procedure BuildMergedTokenStats(const Counts: TIVector; FirstMergedToken: Integer;
-  out Stats: TMergedTokenStats);
+procedure BuildMergedTokenStats(const Counts: TIVector; FirstMergedToken: Integer; out Stats: TMergedTokenStats);
 var
   i, k: Integer;
 begin
@@ -563,14 +561,9 @@ begin
     if not Training then
       FileName := 'Inference';
     TokenizeFromSymbolTable(FileName, TokenizedCorpus, Corpus);
-    // try putting global TC into this proc's TC.
-    // RunWesTokenize.TokenizedCorpus := TokenizedCorpus; nope
 
-  TC100(TokenizedCorpus);
-                                 // Query tokenized (from infer) is overwriting TC.
   // Timing.
   t1 := Now;
-  TC100(TokenizedCorpus);
 
   if ShowTokenWork and VerboseTokenize then begin
     Writeln('---  Token Frequencies ---');
@@ -582,9 +575,6 @@ begin
   // Report statistics.
   if VerboseTokenize then
     ReportStatistics(TokenizedCorpus);
-
-  Writeln('WesTokenize, near end, before save files, do TC100.');
-  TC100(TokenizedCorpus);
 
   // Save TokenizedCorpus and other data.
   if SaveFiles then begin
@@ -606,8 +596,6 @@ begin
 
     ChDir('..');
   end;
-
-  TC100(TokenizedCorpus);
 
   // Verify by reconstructing.
   if ShowVerification and VerboseTokenize and DisplayCorpus then begin

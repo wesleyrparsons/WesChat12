@@ -31,6 +31,10 @@ function cudaMalloc(devPtr: PPointer; size: NativeUInt): Integer; cdecl; externa
 function cudaMemcpy(dst: Pointer; src: Pointer; count: NativeUInt; kind: LongInt): LongInt; cdecl; external cudartDLL;
 function cudaMemset(devPtr: Pointer; value: Integer; count: NativeUInt): Integer; cdecl; external cudartDLL;
 function cudaFree(devPtr: Pointer): Integer; cdecl; external cudartDLL;
+function cudaDeviceReset: Integer; cdecl; external cudartDLL;
+function cudaGetLastError: Integer; cdecl; external cudartDLL;
+function cudaGetErrorString(error: Integer): PAnsiChar; cdecl; external cudartDLL;
+function cudaDeviceSynchronize: Integer; cdecl; external cudartDLL;
 
 // Multiply and add procedures.
 // procedure MatMulFullNN(const A, B: PSingle; C: PSingle; M, N, K, lda, ldb, ldc: Integer);

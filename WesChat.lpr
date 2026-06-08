@@ -19,6 +19,7 @@ uses
   Global,
   Infer,
   IOHandler,
+  Matrix,
   Symbolize,
   SysUtils,
   Train,
@@ -107,7 +108,7 @@ begin
     ReadFileBytes(Line, OneCorpus);     // Read the file into OneCorpus.
     SetLength(CorpusFileNames, Count + 1);
     CorpusFileNames[Count] := Line;
-    Writeln('  File processed: ', Line, '; corpus bytes read: ', Length(OneCorpus));
+    Writeln('  File processed: ', Line, '; corpus bytes read: ', Length(OneCorpus), '.');
     if Length(OneCorpus) < MinCorpus then begin
       Writeln('Corpus too small. Aborting...');
       Continue;
@@ -115,7 +116,7 @@ begin
 
     Corpus := Concat(Corpus, OneCorpus);     // Concat Corpus with OneCorpus.
     nCorpus := Length(Corpus);
-    Writeln('Total bytes read: ', Length(Corpus));
+    Writeln('Total bytes read: ', Length(Corpus), '.');
     Inc(Count);
     SetLength(FilesRead, Count);
     FilesRead[Count - 1] := Line;
@@ -304,6 +305,7 @@ begin
         ReadFileBytes('bela.txt', Corpus);
         FromSymbolTable := True;
         nCorpus := Length(Corpus);
+        FileName := 'bela.txt';
 
         // Read symbol table file.
         SymbolFileName := 'bela.sym';
@@ -610,5 +612,13 @@ begin
       else Writeln('Invalid input');
     end;
   end;
+
+  // Clean up cublas.
+  if CudaAllocated then
+    MDeallocateCublas(WModelParams, WModelState);
+  if CublasInitialized then
+    cublasDestroy_v2(CuHandle);
+
+  // Free Vocab.
   Vocab.Free;
 end.

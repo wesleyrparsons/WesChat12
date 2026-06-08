@@ -48,7 +48,7 @@ end;
 // Run the training.
 procedure RunTrain(var WModelParams: TWModelParams; var WModelState: TWModelState; const TokenizedCorpus: TIVector);
 var
-  i, j, k, Blk, LastBlk, Start, EmbedLoop, Stage: Integer;
+  i, j, k, Blk, LastBlk, Start, EmbedLoop: Integer;
   Stride: Integer = 64;      // Stride 64 tokens every sequence.
 
   function TrainReadIfKeyPressed: Boolean;
@@ -105,15 +105,17 @@ begin
   GlobalSeed := GetTickCount64;   // For training.
   nVocab := nSymbols;             // Need nVocab (second name for variable) for Transform.
 
-  if not CuBlasInitialized then
-    InitializeCuBlas;
 
   // Initialize state.
   InitializeTransformerState(WModelState);
   // Initialize params if new model.
   if NewModel then
     InitializeTransformerParams(WModelParams);
-  MAllocCublas(WModelParams, WModelState);
+
+  // Initialize Cublas and cusa.
+  if not CudaAllocated then
+    MAllocCublas(WModelParams, WModelState);
+  CheckCudaError('Train -- initialize cuda.');
 
   try
     CopyParamsToDevice(WModelParams);
@@ -147,8 +149,7 @@ begin
 
       // Display number of loops thru embed loop.
       Inc(EmbedLoop);
-      Writeln('  -- SeqLen loop: start ', Start, ' and loop number ', EmbedLoop, ' ---');
-      Pause;
+      Writeln('SeqLen loop: start ', Start, ' and loop number ', EmbedLoop);
 
       // Build the target vector, one ahead, for the loss stage.
       BuildTargetVector(TargetTokens, TokenizedCorpus, Start, SeqLen);
@@ -214,7 +215,8 @@ begin
         Stage := Blk * 3 + 2;
 
         // 3A. Multiplication/Overwrite. Obtain Probs from X7 and Vocab.
-        Writeln('': Stage, '3A. Transform Gradient, Obtain Probs from X7 and Vocab');
+        if SStage then Writeln('' : Stage, 'Stage  3, Block ', Blk, ',  Transform Forward');
+        if VStage then Writeln('': Stage, '3A. Transform Gradient, Obtain Probs from X7 and Vocab');
 
         // Multiplication: Input X7, Vocab. Output Probs.
         // Equation: Probs = X7 · Embeddingsᵀ. Probs in R^{L x nVocab}. X in R^{L x D}.  Embeddings in R^{nVocab x D}.
@@ -234,7 +236,7 @@ begin
         end;
 
         // 3B. Softmax. Obtain Probs from Sotmax(Probs).
-        Writeln('': Stage, '3B. Transform Forward, Softmax Probs');
+        if VStage then Writeln('': Stage, '3B. Transform Forward, Softmax Probs');
 
         // Softmax: Input Probs. Output Probs.
         // Equation: Probs = Softmax(Probs).
@@ -249,7 +251,7 @@ begin
         end;
 
         // 3C. Cross-Entropy Loss. Obtain TopGradient from Probs.
-        Writeln('': Stage, '3C. Transform Forward, Obtain TopGradient from Probs');
+        if VStage then Writeln('': Stage, '3C. Transform Forward, Obtain TopGradient from Probs');
         // Gradient: Input Probs. Output TopGradient. Also option of CalculateGradient from KLDivergence.
         // Equation: TopGradient in R^{L x nVocab}. Probs in R^{L x nVocab}.
         // GradientFromCEProbabilities(WModelState);  // Using CE.
@@ -263,7 +265,7 @@ begin
         end;
 
         // 3D. Backprop TopGradient creates X7 Grad: Input TopGradient, WVocabᵀ. Output X7.Grad.
-        Writeln('': Stage, '3D. Transform Backprop, Create X7 from TopGradient');
+        if VStage then Writeln('': Stage, '3D. Transform Backprop, Create X7 from TopGradient');
 
         with StateBlock[LastBlk] do begin
           // Equation: X7.Grad = TopGradient · Embeddings.Value. X7.Grad in R^{L x D}. TopGradient in R^{L x nVocab}. Embeddings.Value in R^{nVocab x D}.
@@ -297,11 +299,6 @@ begin
       for Blk := nBlock - 1 downto 0 do with WModelState do begin
         if StopTraining then Break;
 
-        {if VerboseTransform then begin
-          Writeln('     $$$ Backprop Block loop: start ', Blk, '  Sequence Start ', Start, ' $$$');
-          Pause;
-        end;}
-
         RunTransformBackprop(WModelParams, WModelState, Blk);
 
         if Blk > 0 then
@@ -318,7 +315,8 @@ begin
       // Apply the total embedding gradient (output-side + input-side).
       UpdateEmbeddings(wModelParams, WModelState);
 
-      Writeln('--- SeqLen end: start ', Start, ' and loop number ', EmbedLoop, ' ---');
+      Write('SeqLen loop end: start ', Start, ' and loop number ', EmbedLoop, '  ');
+      Pause;
 
       Start := Start + Stride;
 
@@ -326,12 +324,12 @@ begin
 
   finally
     // Clean up cublas.
-    MDeallocateCublas(WModelParams, WModelState);
-    cublasDestroy_v2(CuHandle);
+    // MDeallocateCublas(WModelParams, WModelState);
+    // cublasDestroy_v2(CuHandle);}
   end;
 
   Writeln('End of training. Press <CR> to continue.');
-  Pause;
+  EZPause;
 end;
 
 end.

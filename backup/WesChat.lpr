@@ -108,7 +108,7 @@ begin
     ReadFileBytes(Line, OneCorpus);     // Read the file into OneCorpus.
     SetLength(CorpusFileNames, Count + 1);
     CorpusFileNames[Count] := Line;
-    Writeln('  File processed: ', Line, '; corpus bytes read: ', Length(OneCorpus));
+    Writeln('  File processed: ', Line, '; corpus bytes read: ', Length(OneCorpus), '.');
     if Length(OneCorpus) < MinCorpus then begin
       Writeln('Corpus too small. Aborting...');
       Continue;
@@ -116,7 +116,7 @@ begin
 
     Corpus := Concat(Corpus, OneCorpus);     // Concat Corpus with OneCorpus.
     nCorpus := Length(Corpus);
-    Writeln('Total bytes read: ', Length(Corpus));
+    Writeln('Total bytes read: ', Length(Corpus), '.');
     Inc(Count);
     SetLength(FilesRead, Count);
     FilesRead[Count - 1] := Line;
@@ -202,7 +202,7 @@ begin
   Writeln('     deterministic left-to-right longest-prefix matching and greedy longest-match decoding.');
   Writeln('  2: Tokenize an input set of corpuses listed one per line in a file, to create a concatenated token list,');
   Writeln('     using WesChat''s tokenization routine.');
-  Writeln('  3: Tokenize Bela corpus using WesChat''s tokenization routine.');
+  Writeln('  3: Tokenize bela corpus using WesChat''s tokenization routine.');
   Writeln('  4: Tokenize an input corpus, based on an input symbol table, using WesChat''s tokenization routine.');
   Writeln('  5: Tokenize an input corpus using ChatGPT''s symbol and merge tables and WesChat''s');
   Writeln('     tokenization routine.');
@@ -213,7 +213,8 @@ begin
   Writeln('  9: Create symbol table from input corpus.');
   Writeln('  10: Save a model.');
   Writeln('  11: Load a model, but do not run forward.');
-  Writeln('  11: Load a model, and run forward.');
+  Writeln('  12: Load a model, and run forward.');
+  Writeln('  13: Load token list and symbol table for dt327.');
   Writeln('  H: Help.');
   Writeln('  X: Exit.');
   Writeln;
@@ -459,6 +460,29 @@ begin
         else
           PadToSeqMultiple(TokenizedCorpus, SeqLen);
 
+        // Ask user for symbol file.
+        Write('Input symbol table file name: ');
+        Readln(SymbolFileName);
+        FromSymbolTable := True;  // Do I need this var. Length(ST) = 0.
+
+        // Check existence of symbol file.
+        if not FileExists(SymbolFileName) then begin
+          Writeln('File not found: ', SymbolFileName, '. Aborting...');
+          Continue;
+        end;
+
+        // Read the symbol table.
+        LoadSymbolTable(SymbolFileName, SymbolTable);
+
+        // Check size of symbol table.
+        if Length(SymbolTable) < MinSymbols then begin
+          Writeln('Too few symbols found. Aborting...');
+          Continue;
+        end;
+
+        // Display full corpus, tokenized and detokenized.
+        TCFull(TokenizedCorpus);
+
         // Run Train.
         If QueryTrain then begin
           RunTrain(WModelParams, WModelState, TokenizedCorpus);
@@ -584,6 +608,31 @@ begin
         else
           Writeln('File not loaded.');
         Pause;
+      end;
+      '13': begin
+        // Ask user for token file.
+        TokenFileName := 'dt327.tok';
+
+        // Read token file.
+        IOHandler.LoadTokenList(TokenFileName, TokenizedCorpus);
+
+        PadToSeqMultiple(TokenizedCorpus, SeqLen);
+
+        SymbolFileName := 'dt327.sym';
+        FromSymbolTable := True;  // Do I need this var. Length(ST) = 0.
+
+        // Read the symbol table.
+        LoadSymbolTable(SymbolFileName, SymbolTable);
+
+        // Display full corpus, tokenized and detokenized.
+        TCFull(TokenizedCorpus);
+
+        // Run Train.
+        If QueryTrain then begin
+          RunTrain(WModelParams, WModelState, TokenizedCorpus);
+          if QueryInfer then
+            RunInfer(WModelParams, WModelState);
+        end;
       end;
       'X':     Exit;
       'H':     Help;

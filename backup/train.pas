@@ -105,6 +105,13 @@ begin
   GlobalSeed := GetTickCount64;   // For training.
   nVocab := nSymbols;             // Need nVocab (second name for variable) for Transform.
 
+  // Start training.
+  Writeln('Start training. nVocab = ', nVocab, ' DimVocab = ', DimVocab, ' Seqlen = ', SeqLen, ' ModelDim = ', ModelDim, ' Projection = ', Proj);
+  if nVocab > DimVocab then begin
+    Writeln('nVocab > DimVocab. Aborting training....');
+    TrainSuccess := False;
+    Exit;
+  end;
 
   // Initialize state.
   InitializeTransformerState(WModelState);
@@ -148,8 +155,7 @@ begin
     while ((Start + SeqLen + 1) <= Length(TokenizedCorpus)) and (not StopTraining) do with WModelState do begin
 
       // Display number of loops thru embed loop.
-      Inc(EmbedLoop);
-      Writeln('SeqLen loop: start ', Start, ' and loop number ', EmbedLoop);
+      Writeln('SeqLen stride: start ', Start, ' and stride number ', EmbedLoop);
 
       // Build the target vector, one ahead, for the loss stage.
       BuildTargetVector(TargetTokens, TokenizedCorpus, Start, SeqLen);
@@ -315,10 +321,11 @@ begin
       // Apply the total embedding gradient (output-side + input-side).
       UpdateEmbeddings(wModelParams, WModelState);
 
-      Write('SeqLen loop end: start ', Start, ' and loop number ', EmbedLoop, '  ');
-      Pause;
+      Write('SeqLen stride end: start ', Start, ' and stride number ', EmbedLoop, '  ');
+      if (EmbedLoop mod 20 = 0) then Pause;
 
       Start := Start + Stride;
+      Inc(EmbedLoop);
 
     end; // End sequence loop.
 
@@ -328,8 +335,9 @@ begin
     // cublasDestroy_v2(CuHandle);}
   end;
 
-  Writeln('End of training. Press <CR> to continue.');
-  EZPause;
+  Writeln('End of training.');
+  TrainSuccess := True;
+  Pause;
 end;
 
 end.

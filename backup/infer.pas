@@ -133,18 +133,16 @@ begin
         BestTok := j;
       end;
 
+    // BestTok is the next predicted token.
+    QueryToken := BestTok;
+
     Write('All the probs in lastpos: ');
-    for j := 1 to nVocab - 1 do
-      Write(j: 3, ' ', Probs[LastPos, j]: 6: 4,  ' ');
-    Writeln;
-    Writeln('Single Token Query Output: ', QueryToken: 3, ' ', Probs[LastPos, QueryToken]: 6: 4);
+    {for j := 1 to nVocab - 1 do
+      Write(j: 3, ' ', Probs[LastPos, j]: 6: 6,  ' ');
+    Writeln;}
+    Writeln('Single Token Query Output: ', QueryToken: 3, ' ', Probs[LastPos, QueryToken]: 6: 6);
     Pause;
   end;
-
-
-
-  // BestTok is the next predicted token.
-  QueryToken := BestTok;
 end;
 
 // Run inference forward without additional training.
@@ -182,7 +180,7 @@ begin
     repeat
       // Write('Enter query: ');
       // Readln(QueryString);
-      QueryString := 'Many years ago';   // Temporary.
+      QueryString := 'The damned thing';   // Temporary.
       Writeln('Query string: ', QueryString);
 
       if QueryString = EmptyStr then Break;
@@ -191,10 +189,10 @@ begin
       for i := 0 to Length(QueryString) - 1 do
         QueryInput[i] := Ord(QueryString[i + 1]);
 
-      {Write(Length(QueryInput), ' ', 'QueryInput: ');
+      Write(Length(QueryInput), ' ', 'QueryInput: ');
       for i := 0 to Length(QueryInput) - 1 do
          Write(QueryInput[i], ' ');
-      Writeln;}
+      Writeln;
 
       if Tokenizer = WesTokenizer then
         RunWesTokenize(QueryInput, QueryTokenized)
@@ -202,12 +200,14 @@ begin
         RunGPT2Tokenize(QueryString, QueryTokenized);
 
       Writeln('In Infer procedure, after WesTokenize.');
-      TCSeqLen(QueryTokenized);
+      TCFull(QueryTokenized);
 
       if Length(QueryTokenized) = 0 then begin
         Writeln('No tokens produced.');
         Continue;
       end;
+
+      TCFull(QueryTokenized);
 
       SetLength(QueryOutput, 0);
       WorkTokens := Copy(QueryTokenized);
@@ -220,6 +220,20 @@ begin
 
         SetLength(WorkTokens, Length(WorkTokens) + 1);
         WorkTokens[High(WorkTokens)] := QueryToken;
+
+        if Tokenizer = WesTokenizer then
+          // Below is for WesTokenizer only.
+          Writeln('Single Query Token Number = ', QueryToken, ' Probability = ', WModelState.Probs[SeqLen - 1, QueryToken]: 6: 6,
+          ' Decoded = ', SymbolTable[QueryToken])
+        else
+          // GPT2Tokenizer.
+          Writeln('Single Query Token Number = ', QueryToken, ' Probability = ', WModelState.Probs[SeqLen - 1, QueryToken]: 6: 6,
+          ' Decoded = ', DisplayToken(UTF8Decode(Vocab[QueryToken])));
+
+        Write('Full Decode: ');
+        for i := 0 to Length(QueryOutput) do
+          Write(SymbolTable[QueryOutput[i]]);
+        Writeln;
 
         if QueryToken = EOS then Break;
       end;

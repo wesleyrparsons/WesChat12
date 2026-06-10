@@ -10,37 +10,38 @@ uses Classes;
 
 var
 { Place all verbosity and control options at start }
-  DoNotPause: Boolean = False;         // Pause disabled.
-  PauseIfKeyPressed: Boolean = True;   // Pause if a key is pressed.
+  DoNotPause: Boolean = False;              // Pause disabled.
+  PauseIfKeyPressed: Boolean = True;        // Pause if a key is pressed.
   StopTraining: Boolean;
-  DisplayCorpus: Boolean = True;       // One set for real tokenizing and one set for debug.
-  VerboseTokenize: Boolean = True;     // Verbose in Tokenize units.
-  VerboseTransform: Boolean = False;   // Verbose in Transform units.
+  TrainSuccess: Boolean = False;            // Training successful and proceed to inference.
+  DisplayCorpus: Boolean = True;            // One set for real tokenizing and one set for debug.
+  VerboseTokenize: Boolean = False;         // Verbose in Tokenize units.
+  VerboseTransform: Boolean = False;        // Verbose in Transform units.
   VeryVerboseTokenize: Boolean = False;     // Very verbose in Tokenize units.
   VeryVerboseTransform: Boolean = False;    // Displays X, Q, ScoresHead1, etc. in Transform units.
-  ShowTokenWork: Boolean = True;       // Show token work in Tokenize units.
-  ShowMergeWork: Boolean = True;       // Show merge work in Tokenize units.
-  ShowVerification: Boolean = True;    // Do verification by rebyulding corpus in Tokenize units.
-  ShowEachByteRead: Boolean = False;   // Verify reading of bytes.
-  SaveFiles: Boolean = False;          // Save various files, otherwise not saved.
-  MaxMerges: Integer = 20000;          // Maximum number of merges.
-  MaxPairCount: Integer = 400000;      // Maximum number of pair in BPE.
-  SavePartialSymbolTable: Boolean = False;       // Save intermediate symbol tables.
-  PartialSymbolTableTrigger: Integer = 5000;     // Trigger to save symbol tables.
+  ShowTokenWork: Boolean = True;            // Show token work in Tokenize units.
+  ShowMergeWork: Boolean = True;            // Show merge work in Tokenize units.
+  ShowVerification: Boolean = True;         // Do verification by rebyulding corpus in Tokenize units.
+  ShowEachByteRead: Boolean = False;        // Verify reading of bytes.
+  SaveFiles: Boolean = False;               // Save various files, otherwise not saved.
+  MaxMerges: Integer = 20000;               // Maximum number of merges.
+  MaxPairCount: Integer = 400000;           // Maximum number of pair in BPE.
+  SavePartialSymbolTable: Boolean = False;  // Save intermediate symbol tables.
+  PartialSymbolTableTrigger: Integer = 5000;// Trigger to save symbol tables.
 
 const
   // Model constants.
   ModelDim = 512;                 // Number of loadings for a symbol.
   Proj = 4;                       // Projection to Hidden arrays.
   ModelDimProj = ModelDim * Proj; // Dimension of model of projected X matrix.
-  SeqLen = 128;                   // Sequence length for X.
+  SeqLen = 256;                   // Sequence length for X.
   nHead = 8;                      // Number of heads for multi-headed attention.
   HeadDim = ModelDim div nHead;   // Length of one head.
-  nBlock = 4;                     // Number of blocks in transformer.
+  nBlock = 8;                     // Number of blocks in transformer.
   ADropOut = 0.1;                 // Probability of attention dropout.
   MLPDropOut = 0.1;               // Probability of MLP dropout.
   RDropout = 0.1;                 // Probability of residual dropout.
-  DimVocab = 1000;                // Need maximum of vocab symbols to dimension array. Needed for Embeddings.
+  DimVocab = 2000;                // Need maximum of vocab symbols to dimension array. Needed for Embeddings.
 
 type                                                                           // SeqLen = L, ModelDim = D, ModelDim/nHead = H, DB is Proj*D, DV is DimVocab.
   // cublas type.

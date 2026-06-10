@@ -29,7 +29,8 @@ procedure InitializeCublas;
 procedure CheckCudaError(const Where: string);
 procedure PadToSeqMultiple(var TokenVectorToPad: TIVector; const Seq: Integer);
 procedure TC100(const TC: TIVector);
-procedure TCSeqLen(const TC: TIVector);
+// procedure TCSeqLen(const TC: TIVector);
+procedure TCFull(const TC: TIVector);
 procedure XGUniformW(var W: TWeightMatrix; FanIn, FanOut: Integer);
 procedure XGUniformWHead(var W: TWeightHeadMatrix; FanIn, FanOut: Integer);
 procedure XGUniformW1(var W: TWeightProjMatrix; FanIn, FanOut: Integer);
@@ -149,9 +150,7 @@ begin
   if Err <> 0 then begin
     Writeln;
     Writeln('*** CUDA ERROR ***');
-    Writeln('Location : ', Where);
-    Writeln('Error #  : ', Err);
-    Writeln('Message  : ', StrPas(cudaGetErrorString(Err)));
+    Writeln('Location : ', Where,' ', 'Error #  : ', Err, ' ', 'Message  : ', StrPas(cudaGetErrorString(Err)));
     Pause;
   end;
 end;
@@ -167,7 +166,7 @@ begin
   SetLength(TokenVectorToPad, NewLen);
 
   for i := OldLen to NewLen - 1 do
-    TokenVectorToPad[i] := EOS;
+    TokenVectorToPad[i] := PAD;
 end;
 
 procedure TC100(const TC: TIVector);
@@ -184,7 +183,7 @@ begin
   Writeln;
 end;
 
-procedure TCSeqLen(const TC: TIVector);
+{procedure TCSeqLen(const TC: TIVector);
 var
   i: Integer;
 begin
@@ -196,6 +195,22 @@ begin
   for i := 0 to Min(SeqLen - 1, High(TC)) do
     Write(SymbolTable[TC[i]]);
   Writeln;
+end;}
+
+procedure TCFull(const TC: TIVector);
+var
+  i: Integer;
+begin
+  Write('Tokenized Corpus (in full length of ', Length(TC), '): ');
+  for i := 0 to High(TC) do
+    Write(TC[i], ' ');
+  Writeln('Length = ', Length(TC));
+  Pause;
+
+  Write('Detokenized Corpus (in full length of ', Length(TC) - 1, '): ');
+  for i := 0 to High(TC) do
+    Write(SymbolTable[TC[i]]);
+  Writeln('Length = ', Length(TC));
 end;
 
 // Xavier-Glorot initialization on W0 matrix.
@@ -261,7 +276,7 @@ end;
 // Allocate cublas memory.       Separate for State and Params?
 procedure MAllocCublas(var WModelParams: TWModelParams; var WModelState: TWModelState);
 var
-  h, k, err: Integer;
+  h, k: Integer;
 begin
   CudaAllocated := True;
 

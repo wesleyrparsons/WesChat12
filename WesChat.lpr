@@ -3,7 +3,7 @@ program WesChat;
 {$mode ObjFPC}{$H+}{$I proprietary.txt}
 
 { WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wesparsons.com }
-{ Note: Edited 6/7/2026 8 am -- working from WesChat12 on OneDrive }
+{ Note: Edited 6/10/2026 11 am -- working from WesChat12 on OneDrive }
 {        Input Train        Input Query        Output
  Raw                        QueryString
  Bytes   Corpus             QueryCorpus
@@ -603,6 +603,7 @@ begin
         if LoadModel(ModelFileName, WModelParams) then begin
           Writeln('File ', ModelFileName, ' loaded.');
           NewModel := False;
+          ParamsNeedCopyToDevice := True;
           RunInfer(WModelParams, WModelState);
         end
         else
@@ -625,7 +626,7 @@ begin
         LoadSymbolTable(SymbolFileName, SymbolTable);
 
         // Display full corpus, tokenized and detokenized.
-        TCFull(TokenizedCorpus);
+        // TCFull(TokenizedCorpus);
 
         // Run Train.
         If QueryTrain then begin

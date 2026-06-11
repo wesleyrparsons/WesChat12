@@ -31,13 +31,14 @@ var
 
 const
   // Model constants.
-  ModelDim = 512;                 // Number of loadings for a symbol.
+  Epochs = 20;                    // Number of epochs, loops over tokenized corpus,
+  ModelDim = 64;                  // Number of loadings for a symbol.
   Proj = 4;                       // Projection to Hidden arrays.
   ModelDimProj = ModelDim * Proj; // Dimension of model of projected X matrix.
-  SeqLen = 256;                   // Sequence length for X.
-  nHead = 8;                      // Number of heads for multi-headed attention.
+  SeqLen = 64;                    // Sequence length for X.
+  nHead = 4;                      // Number of heads for multi-headed attention.
   HeadDim = ModelDim div nHead;   // Length of one head.
-  nBlock = 8;                     // Number of blocks in transformer.
+  nBlock = 4;                     // Number of blocks in transformer.
   ADropOut = 0.1;                 // Probability of attention dropout.
   MLPDropOut = 0.1;               // Probability of MLP dropout.
   RDropout = 0.1;                 // Probability of residual dropout.
@@ -174,7 +175,7 @@ var
   CublasPresent: Boolean;
   CudartPresent: Boolean;
   WesChatKernelPresent: Boolean;
-  // GPT2 vars.                                 // Need in order to use in decoding in Infer.
+  // Tokenize vars.                              // Need in order to use in decoding in Infer.
   Vocab: TStringList;
   // Corpus vars.
   CorpusFileNames: TSVector;                     // Name of corpus file.
@@ -211,6 +212,7 @@ var
   Training: Boolean = True;                      // In training as opposed to inference mode.
   Tokenizer: TTokenizer;                         // WesChat or GPT2Chat tokenizer;
   NewModel: Boolean = True;                      // If new model, initialize params.
+  ParamsNeedCopyToDevice: Boolean = False;       // Start of infer.
   // Other.
   TestVector: TFSVector;                         // Vector for testing. [0..SeqLen] of Single.
 

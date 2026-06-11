@@ -29,8 +29,8 @@ procedure InitializeCublas;
 procedure CheckCudaError(const Where: string);
 procedure PadToSeqMultiple(var TokenVectorToPad: TIVector; const Seq: Integer);
 procedure TC100(const TC: TIVector);
-// procedure TCSeqLen(const TC: TIVector);
 procedure TCFull(const TC: TIVector);
+function Decode(const x: Integer): UnicodeString;
 procedure XGUniformW(var W: TWeightMatrix; FanIn, FanOut: Integer);
 procedure XGUniformWHead(var W: TWeightHeadMatrix; FanIn, FanOut: Integer);
 procedure XGUniformW1(var W: TWeightProjMatrix; FanIn, FanOut: Integer);
@@ -183,20 +183,6 @@ begin
   Writeln;
 end;
 
-{procedure TCSeqLen(const TC: TIVector);
-var
-  i: Integer;
-begin
-  Write('Tokenized Corpus (length up to ', SeqLen, '): ');
-  for i := 0 to Min(SeqLen - 1, High(TC)) do
-    Write(TC[i], ' ');
-  Writeln;
-  Write('Detokenized Corpus (length up to ', SeqLen, '): ');
-  for i := 0 to Min(SeqLen - 1, High(TC)) do
-    Write(SymbolTable[TC[i]]);
-  Writeln;
-end;}
-
 procedure TCFull(const TC: TIVector);
 var
   i: Integer;
@@ -204,16 +190,24 @@ begin
   Write('Tokenized Corpus (in full length of ', Length(TC), '): ');
   for i := 0 to High(TC) do
     Write(TC[i], ' ');
-  Writeln('Length = ', Length(TC));
   Pause;
 
   Write('Detokenized Corpus (in full length of ', Length(TC) - 1, '): ');
   for i := 0 to High(TC) do
     Write(SymbolTable[TC[i]]);
-  Writeln('Length = ', Length(TC));
 end;
 
-// Xavier-Glorot initialization on W0 matrix.
+function Decode(const x: Integer): UnicodeString;
+begin
+  if Tokenizer = WesTokenizer then
+  // WesTokenizer.
+  Result := SymbolTable[x]
+else
+  // GPT2Tokenizer.
+  Result := UTF8Decode(Vocab[x]);
+end;
+
+  // Xavier-Glorot initialization on W0 matrix.
 procedure XGUniformW(var W: TWeightMatrix; FanIn, FanOut: Integer);
 var
   Limit, r: Single;

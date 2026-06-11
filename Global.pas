@@ -31,13 +31,15 @@ var
 
 const
   // Model constants.
-  ModelDim = 512;                 // Number of loadings for a symbol.
+  MaxEpochs = 20;                 // Number of epochs, loops over tokenized corpus,
+  ModelDim = 64;                  // Number of loadings for a symbol.
   Proj = 4;                       // Projection to Hidden arrays.
   ModelDimProj = ModelDim * Proj; // Dimension of model of projected X matrix.
   SeqLen = 256;                   // Sequence length for X.
-  nHead = 8;                      // Number of heads for multi-headed attention.
+  Stride = 64;                    // Stride across sequence lengths.
+  nHead = 4;                      // Number of heads for multi-headed attention.
   HeadDim = ModelDim div nHead;   // Length of one head.
-  nBlock = 8;                     // Number of blocks in transformer.
+  nBlock = 4;                     // Number of blocks in transformer.
   ADropOut = 0.1;                 // Probability of attention dropout.
   MLPDropOut = 0.1;               // Probability of MLP dropout.
   RDropout = 0.1;                 // Probability of residual dropout.
@@ -211,6 +213,7 @@ var
   Training: Boolean = True;                      // In training as opposed to inference mode.
   Tokenizer: TTokenizer;                         // WesChat or GPT2Chat tokenizer;
   NewModel: Boolean = True;                      // If new model, initialize params.
+  ParamsNeedCopyToDevice: Boolean = False;       // Start of infer.
   // Other.
   TestVector: TFSVector;                         // Vector for testing. [0..SeqLen] of Single.
 

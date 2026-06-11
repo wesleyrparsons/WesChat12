@@ -3,7 +3,7 @@ program WesChat;
 {$mode ObjFPC}{$H+}{$I proprietary.txt}
 
 { WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wesparsons.com }
-{ Note: Edited 6/7/2026 8 am -- working from WesChat12 on OneDrive }
+{ Note: Edited 6/10/2026 11 am -- working from WesChat12 on OneDrive }
 {        Input Train        Input Query        Output
  Raw                        QueryString
  Bytes   Corpus             QueryCorpus
@@ -275,7 +275,7 @@ begin
         // Train.
         if QueryTrain then begin
           RunTrain(WModelParams, WModelState, TokenizedCorpus);
-          if QueryInfer then
+          if QueryInfer and TrainSuccess then
             RunInfer(WModelParams, WModelState);
         end;
       end;
@@ -297,7 +297,7 @@ begin
         // Train.
         If QueryTrain then begin
           RunTrain(WModelParams, WModelState, TokenizedCorpus);
-          if QueryInfer then
+          if QueryInfer and TrainSuccess then
             RunInfer(WModelParams, WModelState);
         end;
       end;
@@ -328,7 +328,7 @@ begin
         // Run Train.
         if QueryTrain then begin
           RunTrain(WModelParams, WModelState, TokenizedCorpus);
-          if QueryInfer then
+          if QueryInfer and TrainSuccess then
             RunInfer(WModelParams, WModelState);
         end;
       end;
@@ -387,7 +387,7 @@ begin
         // Run Train.
         if QueryTrain then begin
           RunTrain(WModelParams, WModelState, TokenizedCorpus);
-          if QueryInfer then
+          if QueryInfer and TrainSuccess then
             RunInfer(WModelParams, WModelState);
         end;
       end;
@@ -432,7 +432,7 @@ begin
         // Check number of symbols, and Train.
         if nSymbols > 0 then begin
           RunTrain(WModelParams, WModelState, TokenizedCorpus);
-          if QueryInfer then
+          if QueryInfer and TrainSuccess then
             RunInfer(WModelParams, WModelState);
         end
         else
@@ -486,7 +486,7 @@ begin
         // Run Train.
         If QueryTrain then begin
           RunTrain(WModelParams, WModelState, TokenizedCorpus);
-          if QueryInfer then
+          if QueryInfer and TrainSuccess then
             RunInfer(WModelParams, WModelState);
         end;
       end;
@@ -542,7 +542,7 @@ begin
         // RunTrain.
         If QueryTrain then begin
           RunTrain(WModelParams, WModelState, TokenizedCorpus);
-          if QueryInfer then
+          if QueryInfer and TrainSuccess then
             RunInfer(WModelParams, WModelState);
         end;
       end;
@@ -603,6 +603,7 @@ begin
         if LoadModel(ModelFileName, WModelParams) then begin
           Writeln('File ', ModelFileName, ' loaded.');
           NewModel := False;
+          NeedCopyParamsToDevice := True;
           RunInfer(WModelParams, WModelState);
         end
         else
@@ -625,12 +626,12 @@ begin
         LoadSymbolTable(SymbolFileName, SymbolTable);
 
         // Display full corpus, tokenized and detokenized.
-        TCFull(TokenizedCorpus);
+        // TCFull(TokenizedCorpus);
 
         // Run Train.
         If QueryTrain then begin
           RunTrain(WModelParams, WModelState, TokenizedCorpus);
-          if QueryInfer then
+          if QueryInfer and TrainSuccess then
             RunInfer(WModelParams, WModelState);
         end;
       end;

@@ -10,6 +10,7 @@ uses
   Display,
   Global,
   GPT2Tokenize,
+  Math,
   Matrix,
   SysUtils,
   TransformForward,
@@ -60,7 +61,7 @@ end;
 
 // Infer a single token.
 procedure InferOneToken(var WModelParams: TWModelParams; var WModelState: TWModelState;
-  const QueryTokenized: TIVector; var QueryToken: Integer);
+  const QueryTokenized: TIVector; var QueryToken: Integer; var QueryProb: Single);
 const
   Scale = Sqrt(ModelDim);         // Optional transformer-style embedding scaling by sqrt(d_model).
 var
@@ -84,8 +85,11 @@ begin
     // Build the input vector.
     BuildInferenceInputTokens(InputTokens, QueryTokenized, SeqLen, LastPos);
 
-    if VerboseTransform then
-      Writeln('nVocab=', nVocab, ' DimVocab=', DimVocab);
+    Writeln('Infer step Length(QueryTokenized)=', Length(QueryTokenized), ' LastPos=', LastPos);
+    Write('Last few InputTokens: ');
+    for j := Max(0, LastPos - 5) to LastPos do
+      Write(InputTokens[j], ' ');
+    Writeln;
 
     cudaMemcpy(dInputTokens, @InputTokens[0], SeqLen * SizeOf(Integer), cudaMemcpyHostToDevice);
 
@@ -121,9 +125,14 @@ begin
 
     // Softmax Forward.
     LaunchSoftmaxForwardN(dProbs, dProbs, SeqLen, nVocab, Temperature);
+    cudaMemcpy(@Probs[0, 0], dProbs, ProbsSize, cudaMemcpyDeviceToHost);
+
+    // Check that probs are changing.
+    for j := 0 to 4 do
+      Write('tok ', j, ' prob ', Probs[LastPos, j]: 6: 6, '   ');
+    Pause;
 
     // If nBlock, then pick the largest probs, and save them.
-    cudaMemcpy(@Probs[0, 0], dProbs, ProbsSize, cudaMemcpyDeviceToHost);
     Writeln('Final Inference Stage, pick largest prob');
     BestProb := Probs[LastPos, 0];
     BestTok := 0;
@@ -133,15 +142,28 @@ begin
         BestTok := j;
       end;
 
+
+    if (Length(QueryTokenized) > 0) and (BestTok = QueryTokenized[High(QueryTokenized)]) then begin
+      Probs[LastPos, BestTok] := -1.0;
+      BestProb := Probs[LastPos, 0];
+      BestTok := 0;
+
+      for j := 1 to nVocab - 1 do
+        if Probs[LastPos, j] > BestProb then begin
+          BestProb := Probs[LastPos, j];
+          BestTok := j;
+        end;
+    end;
+
+
     // BestTok is the next predicted token.
     QueryToken := BestTok;
+    QueryProb := BestProb;
 
-    Write('All the probs in lastpos: ');
-    {for j := 1 to nVocab - 1 do
+    {Write('All the probs in lastpos: ');
+    for j := 1 to nVocab - 1 do
       Write(j: 3, ' ', Probs[LastPos, j]: 6: 6,  ' ');
     Writeln;}
-    Writeln('Single Token Query Output: ', QueryToken: 3, ' ', Probs[LastPos, QueryToken]: 6: 6);
-    Pause;
   end;
 end;
 
@@ -155,8 +177,9 @@ procedure RunInfer(var WModelParams: TWModelParams; var WModelState: TWModelStat
 const
   MaxNewTokens = 100;        // Limit on new tokens produced.
 var
-  i, Step, QueryToken, LastToken: Integer;
+  i, Step, QueryToken: Integer;
   QueryTokenized, WorkTokens, QueryOutput: TIVector;
+  QueryProb: Single;
   QueryInput: TBVector;
   QueryString: string;
 begin
@@ -167,29 +190,35 @@ begin
   // Initialize transformer state.
   InitializeTransformerState(WModelState);
 
-  // Intialize cublas and cuda.
-  if not CudaAllocated then
-    MAllocCublas(WModelParams, WModelState);
+  // Intialize cublas and cuda and malloc.
   if not CuBlasInitialized then
     InitializeCuBlas;
+  if not CudaAllocated then
+    MAllocCublas(WModelParams, WModelState);
 
   try
-    CopyParamsToDevice(WModelParams);
+    // Send params (if new model) and inverse freq to device.
+    if ParamsNeedCopyToDevice then
+      CopyParamsToDevice(WModelParams);
     CopyInvFreqToDevice(WModelState);
 
-    repeat
+    begin // Run one query. (Later, repeat loop.)
+      // Get a query from user.
       // Write('Enter query: ');
       // Readln(QueryString);
-      QueryString := 'The damned thing';   // Temporary.
+      QueryString := 'man with';   // Temporary.
       Writeln('Query string: ', QueryString);
 
-      if QueryString = EmptyStr then Break;
+      if QueryString = EmptyStr then begin
+        Writeln('Query is empty.');
+        Exit;
+      end;
 
       SetLength(QueryInput, Length(QueryString));
       for i := 0 to Length(QueryString) - 1 do
         QueryInput[i] := Ord(QueryString[i + 1]);
 
-      Write(Length(QueryInput), ' ', 'QueryInput: ');
+      Write(Length(QueryInput), ' ', 'Query Tokens (Query String as Tokens): ');
       for i := 0 to Length(QueryInput) - 1 do
          Write(QueryInput[i], ' ');
       Writeln;
@@ -199,55 +228,62 @@ begin
       else
         RunGPT2Tokenize(QueryString, QueryTokenized);
 
-      Writeln('In Infer procedure, after WesTokenize.');
-      TCFull(QueryTokenized);
-
       if Length(QueryTokenized) = 0 then begin
         Writeln('No tokens produced.');
-        Continue;
+        Exit;
       end;
 
+      if (Length(QueryTokenized) > 0) and (QueryTokenized[High(QueryTokenized)] = EOS) then
+        SetLength(QueryTokenized, Length(QueryTokenized) - 1);
+      Writeln('Last token after removal = ',
+              QueryTokenized[High(QueryTokenized)]);
+      Writeln('EOS=', EOS,
+              ' Last=', QueryTokenized[High(QueryTokenized)]);
+
+      Write('Query Tokens, Again, Using TCFull');
       TCFull(QueryTokenized);
 
       SetLength(QueryOutput, 0);
       WorkTokens := Copy(QueryTokenized);
 
       for Step := 1 to MaxNewTokens do begin
-        InferOneToken(WModelParams, WModelState, WorkTokens, QueryToken);
+        // Run Infer to get one additional token.
+        InferOneToken(WModelParams, WModelState, WorkTokens, QueryToken, QueryProb);
 
+        // QueryToken is new token, add it to original query, in WorkTokens.
         SetLength(QueryOutput, Length(QueryOutput) + 1);
         QueryOutput[High(QueryOutput)] := QueryToken;
-
         SetLength(WorkTokens, Length(WorkTokens) + 1);
         WorkTokens[High(WorkTokens)] := QueryToken;
 
-        if Tokenizer = WesTokenizer then
+        //if Tokenizer = WesTokenizer then
           // WesTokenizer.
-          Writeln('Single Query Token Number = ', QueryToken, ' Probability = ', WModelState.Probs[SeqLen - 1, QueryToken]: 6: 6,
-          ' Decoded = ', SymbolTable[QueryToken])
-        else
+          Writeln('Single Query Token Number = ', QueryToken, ' Probability = ', QueryProb: 6: 6,
+          ' Decoded = ', Decode(QueryToken));
+        //else
           // GPT2Tokenizer.
-          Writeln('Single Query Token Number = ', QueryToken, ' Probability = ', WModelState.Probs[SeqLen - 1, QueryToken]: 6: 6,
-          ' Decoded = ', DisplayToken(UTF8Decode(Vocab[QueryToken])));
+          //Writeln('Single Query Token Number = ', QueryToken, ' Probability = ', WModelState.Probs[SeqLen - 1, QueryToken]: 6: 6,
+          //' Decoded = ', DisplayToken(UTF8Decode(Vocab[QueryToken])));
 
-        Write('Cumulative Decode: ');
-        for i := 0 to High(QueryOutput) do
-          // WesTokenizer.
-          Write(SymbolTable[QueryOutput[i]]);
-        Writeln;
+          Write('Cumulative Decode: ');
+          for i := 0 to High(QueryOutput) do
+            // WesTokenizer.
+            // Write(SymbolTable[QueryOutput[i]]);
+            Write(Decode(QueryOutput[i]));
+          Writeln;
+
+          Write('New Query Input, WorkTokens: ');
+          for i := 0 to High(WorkTokens) do
+            Write(Decode(WorkTokens[i]));
+          Writeln;
+        Pause;
 
         if QueryToken = EOS then Break;
       end;
 
-      // Bad tokens.
-      if Length(QueryOutput) > 0 then begin
-        LastToken := QueryOutput[High(QueryOutput)];
-
-        if (LastToken >= 0) and (LastToken < Vocab.Count) then
-          Write(DisplayToken(UTF8Decode(Vocab[LastToken])))
-        else
-          Write('<BADTOKEN:', LastToken, '>');
-      end;
+      // Add new token to string QueryOutput.
+      if Length(QueryOutput) > 0 then
+        QueryToken := QueryOutput[High(QueryOutput)];
 
       Writeln('Query token output: ');
       for i := 0 to High(QueryOutput) do
@@ -256,17 +292,20 @@ begin
 
       if Tokenizer = GPT2Tokenizer then begin
         // GPT2.
-        Writeln('Query decoded token output: ');
+        Write('Query decoded token output: ');
         for i := 0 to High(QueryOutput) do
-          Write(DisplayToken(UTF8Decode(Vocab[QueryOutput[i]])));
+          if Assigned(Vocab) and (QueryOutput[i] >= 0) and (QueryOutput[i] < Vocab.Count) then
+            Write(DisplayToken(UTF8Decode(Vocab[QueryOutput[i]])))
+          else
+            Write('<BADTOKEN:', QueryOutput[i], '>');
       end
       else begin
         // WesChat.
-        Writeln('Query decoded token output: ');
+        Write('Query decoded token output: ');
         DetokenizeToDisplay(QueryOutput, F);
       end;
       Writeln;
-    until False;
+    end; // Run query once.
   finally
     Training := True;
     // MDeallocateCublas(WModelParams, WModelState);

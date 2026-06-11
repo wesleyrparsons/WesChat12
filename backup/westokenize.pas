@@ -42,7 +42,7 @@ var
   StartSymbol: Integer = 260;                    // UTF-8 0.255, BOS, EOS, PAD, UNK is 259.
   //TokenizedCorpus: TIVector;
   nCorpus: Integer;
-  BOS, EOS, PAD, UNK: Integer;                   // Extra symbols for control.
+  //BOS, EOS, PAD, UNK: Integer;                   // Extra symbols for control.
   ElapsedMS: Int64;                              // For timing.
   Hours, Mins: Int64;                            // For timing.
   Secs, MSecs: Double;                           // For timing.
@@ -185,10 +185,10 @@ begin
     Writeln;
   end;
 
-  Writeln('Created ', nTokenizedCorpus, ' tokens from ', TextFileName);
+  Writeln('Created ', nTokenizedCorpus, ' tokens from ', TextFileName, '.');
 
   if VerboseTokenize then Begin
-    Writeln('First 50 token of tokenized corpus');
+    Write('First 50 token of tokenized corpus: ');
     for i := 0 to Min(49, (nTokenizedCorpus - 1)) do
       Write(TokenizedCorpus[i], ' ');
     Writeln;
@@ -241,7 +241,7 @@ begin
   end;
 
   // Print top 60.
-  Writeln('Top 60 most frequent symbols:');
+  Writeln('Top 60 most frequent symbols: ');
   for i := 0 to 59 do begin
     k := Index[i];
     if Counts[k] > 0 then begin

@@ -33,6 +33,7 @@ function cudaMemset(devPtr: Pointer; value: Integer; count: NativeUInt): Integer
 function cudaFree(devPtr: Pointer): Integer; cdecl; external cudartDLL;
 function cudaDeviceReset: Integer; cdecl; external cudartDLL;
 function cudaGetLastError: Integer; cdecl; external cudartDLL;
+function cudaGetErrorString(error: Integer): PAnsiChar; cdecl; external cudartDLL;
 function cudaDeviceSynchronize: Integer; cdecl; external cudartDLL;
 
 // Multiply and add procedures.

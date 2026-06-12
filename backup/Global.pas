@@ -31,11 +31,12 @@ var
 
 const
   // Model constants.
-  Epochs = 20;                    // Number of epochs, loops over tokenized corpus,
+  MaxEpochs = 20;                 // Number of epochs, loops over tokenized corpus,
   ModelDim = 64;                  // Number of loadings for a symbol.
   Proj = 4;                       // Projection to Hidden arrays.
   ModelDimProj = ModelDim * Proj; // Dimension of model of projected X matrix.
-  SeqLen = 64;                    // Sequence length for X.
+  SeqLen = 256;                   // Sequence length for X.
+  Stride = 64;                    // Stride across sequence lengths.
   nHead = 4;                      // Number of heads for multi-headed attention.
   HeadDim = ModelDim div nHead;   // Length of one head.
   nBlock = 4;                     // Number of blocks in transformer.

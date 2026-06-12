@@ -31,7 +31,7 @@ var
 
 const
   // Model constants.
-  MaxEpochs = 20;                 // Number of epochs, loops over tokenized corpus,
+  MaxEpochs = 6;                 // Number of epochs, loops over tokenized corpus,
   ModelDim = 64;                  // Number of loadings for a symbol.
   Proj = 4;                       // Projection to Hidden arrays.
   ModelDimProj = ModelDim * Proj; // Dimension of model of projected X matrix.

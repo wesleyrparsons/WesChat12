@@ -67,6 +67,11 @@ var
         Writeln('Break requested. Exiting loop.');
         Result := True;
       end;                   // Break out of the loop cleanly.
+      'p', 'P': begin
+        Write('Pause requested. Hit any key to continue.');
+        Readln;
+        Result := False;
+      end;                   // Break out of the loop cleanly.
       'v', 'V': begin
         VeryVerboseTransform := not VeryVerboseTransform;
         Writeln('Very verbose transform mode: ', VeryVerboseTransform);
@@ -78,10 +83,10 @@ var
         Pause;
       end;
       't', 'T': begin
-        Writeln('Training. nVocab = ', nVocab, ' nSymbols = ', nSymbols, ' ModelDim = ', ModelDim,
-          '  Start = ', Start, ' Stride = ', Stride, ' SeqLen = ', SeqLen, ' Length of TokenizedCorpus = ', Length(TokenizedCorpus));
-        Write(DateTimeToStr(Now), '  X = Exit program. B = Break out of loop. V = toggle Very Verbose mode. P = Pause.');
-        Writeln('  W = WesChat Information. T = Training information. S = Save. Training...');
+        Writeln('Training. nVocab = ', nVocab, ' DimVocab = ', DimVocab, ' Seqlen = ', SeqLen, ' ModelDim = ', ModelDim, ' Projection = ', Proj,
+          '  Epoch = ', Epoch, ' Start = ', Start, ' Stride = ', Stride, ' Length of tokens in corpus = ', Length(TokenizedCorpus));
+        Writeln(DateTimeToStr(Now), '  X = Exit program. B = Break out of loop. P = Pause. V = toggle Very Verbose mode.');
+        Writeln('  I = program Information. T = Training information. S = Save. Training...');
         Pause;
       end;
       's', 'S': begin
@@ -131,8 +136,9 @@ begin
     Epoch := 0;
     Start := 0;
     EmbedLoop := 0;
-    Writeln('*** Start training. nVocab = ', nVocab, ' DimVocab = ', DimVocab, ' Seqlen = ', SeqLen, ' ModelDim = ', ModelDim, ' Projection = ', Proj);
-    Writeln('    X = Exit program. B = Break merge loop. V = toggle Very Verbose mode, I = program Information. T = Training information. Transforming...');
+    Writeln('** Start training. nVocab = ', nVocab, ' DimVocab = ', DimVocab, ' Seqlen = ', SeqLen, ' Epochs = ', MaxEpochs, ' ModelDim = ', ModelDim, ' Projection = ', Proj);
+    Writeln('** X = Exit program. B = Break out of loop. P = Pause. V = toggle Very Verbose mode,');
+    Writeln('**I = program Information. T = Training information. S = Save. Transforming...');
 
     // Display embeddings.
     Writeln('Display Embeddings.Value prior to Transform.');

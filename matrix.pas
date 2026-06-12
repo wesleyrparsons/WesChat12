@@ -360,7 +360,7 @@ end;
 // cublas.
 procedure CuMatMulFullScaledNT(handle: TcublasHandle; const A, B: PSingle; C: PSingle; M, N, K, lda, ldb, ldc: Integer; Alpha, Beta: Single);
 begin
-  cublasSgemm_v2(handle, 0, 1, N, M, K, @Alpha,
+  cublasSgemm_v2(handle, 1, 0, N, M, K, @Alpha,   //swapped 1 and 0
     B, ldb, A, lda, @Beta, C, ldc);
 end;
 

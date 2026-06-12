@@ -8,7 +8,9 @@ program WesChat;
  Raw                        QueryString
  Bytes   Corpus             QueryCorpus
  Token   TokenizedCorpus    QueryTokenized     QueryOutput }
-
+ {For tokenizining, need corpus.                               CorpusPresent
+  For training, need symbol/merge table(s).                    SMTablePresent
+  For inference, need param model, and symbol/merge table(s).  ModelPresent }
 uses
   Classes,
   CombineTables,
@@ -129,9 +131,35 @@ begin
   Pause;
 end;
 
+// Options file.
+procedure Options;
+begin
+  Writeln('Options:');
+  Writeln('  1: Tokenize an input corpus from a file using WesChat''s byte-level byte-pair encoding, with');
+  Writeln('     deterministic left-to-right longest-prefix matching and greedy longest-match decoding.');
+  Writeln('  2: Tokenize an input set of corpuses listed one per line in a file, to create a concatenated token list,');
+  Writeln('     using WesChat''s tokenization routine.');
+  Writeln('  3: Tokenize bela corpus using WesChat''s tokenization routine.');
+  Writeln('  4: Tokenize an input corpus, based on an input symbol table, using WesChat''s tokenization routine.');
+  Writeln('  5: Tokenize an input corpus using ChatGPT''s symbol and merge tables and WesChat''s');
+  Writeln('     tokenization routine.');
+  Writeln('  6: Input a token list to be used in training.');
+  Writeln('  7: Combine two symbol tables.');
+  Writeln('  8: Tokenize an input set of corpuses listed one per line in a file, to create a concatenated token list,');
+  Writeln('     using an input symbol table and WesChat''s tokenization routine.');
+  Writeln('  9: Create symbol table from input corpus.');
+  Writeln('  10: Save a model.');
+  Writeln('  11: Load a model, but do not run forward.');
+  Writeln('  12: Load a model, and run forward.');
+  Writeln('  13: Load token list and symbol table for dt327.');
+  Writeln('  H: Help.');
+  Writeln('  X: Exit.');
+end;
+
 // Help file.
 procedure Help;
 begin
+  Options;
   Writeln('  VTO: VerboseTokenize := True');
   Writeln('  VV: VeryVerbose := True');
   Writeln('  VTR: VerboseTransform := True');
@@ -197,26 +225,7 @@ begin
 
   Writeln('WesChat, Version 1.2, begun January 19, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wesparsons.com.');
   Writeln;
-  Writeln('Options:');
-  Writeln('  1: Tokenize an input corpus from a file using WesChat''s byte-level byte-pair encoding, with');
-  Writeln('     deterministic left-to-right longest-prefix matching and greedy longest-match decoding.');
-  Writeln('  2: Tokenize an input set of corpuses listed one per line in a file, to create a concatenated token list,');
-  Writeln('     using WesChat''s tokenization routine.');
-  Writeln('  3: Tokenize bela corpus using WesChat''s tokenization routine.');
-  Writeln('  4: Tokenize an input corpus, based on an input symbol table, using WesChat''s tokenization routine.');
-  Writeln('  5: Tokenize an input corpus using ChatGPT''s symbol and merge tables and WesChat''s');
-  Writeln('     tokenization routine.');
-  Writeln('  6: Input a token list to be used in training.');
-  Writeln('  7: Combine two symbol tables.');
-  Writeln('  8: Tokenize an input set of corpuses listed one per line in a file, to create a concatenated token list,');
-  Writeln('     using an input symbol table and WesChat''s tokenization routine.');
-  Writeln('  9: Create symbol table from input corpus.');
-  Writeln('  10: Save a model.');
-  Writeln('  11: Load a model, but do not run forward.');
-  Writeln('  12: Load a model, and run forward.');
-  Writeln('  13: Load token list and symbol table for dt327.');
-  Writeln('  H: Help.');
-  Writeln('  X: Exit.');
+  Options;
   Writeln;
   Writeln('The symbol table and other information, including if desired the token list, will be written to disk.');
   Writeln('After tokenization, WesChat prompts for training the transformer, which consists');

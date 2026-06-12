@@ -142,6 +142,18 @@ begin
         BestTok := j;
       end;
 
+    if (Length(QueryTokenized) > 0) and (BestTok = QueryTokenized[High(QueryTokenized)]) then begin
+      Probs[LastPos, BestTok] := -1.0;
+      BestProb := Probs[LastPos, 0];
+      BestTok := 0;
+
+      for j := 1 to nVocab - 1 do
+        if Probs[LastPos, j] > BestProb then begin
+          BestProb := Probs[LastPos, j];
+          BestTok := j;
+        end;
+    end;
+
     // BestTok is the next predicted token.
     QueryToken := BestTok;
     QueryProb := BestProb;
@@ -221,12 +233,8 @@ begin
 
       if (Length(QueryTokenized) > 0) and (QueryTokenized[High(QueryTokenized)] = EOS) then
         SetLength(QueryTokenized, Length(QueryTokenized) - 1);
-      Writeln('Last token after removal = ',
-              QueryTokenized[High(QueryTokenized)]);
-      Writeln('EOS=', EOS,
-              ' Last=', QueryTokenized[High(QueryTokenized)]);
 
-      Write('Query Tokens, Again, Using TCFull');
+      Write('Query Tokens, Again, Using TCFull: ');
       TCFull(QueryTokenized);
 
       SetLength(QueryOutput, 0);

@@ -85,8 +85,11 @@ begin
   Writeln('Dimensional Projections (Proj): ', Proj);
   Writeln('Heads (nHead): ', nHead);
   Writeln('Blocks (nBlock): ', nBlock);
+  Writeln('Epochs: ', MaxEpochs);
   Writeln('Learning Rate (LearningRate): ', LearningRate: 6: 4);
-  Writeln('Trainable Parameters: Wq, Wk, Wv, W0, W1, b1, W2, b2, gamma1, beta1, beta2, gamma2');
+  Writeln('Temperature: ', Temperature: 6: 4);
+  Writeln('Dropouts for Attention, MLP, Residual: ', ADropout: 2: 2, ' ', MLPDropout: 2: 2, ' ', RDropout: 2: 2);
+  Writeln('Trainable Parameters: Embeddings, Wq, Wk, Wv, W0, W1, b1, W2, b2, gamma1, beta1, gamma2, beta2');
   Writeln('Maximum Vocabulary (MaxVocab): ', DimVocab);
   Writeln('Number of Vocabulary (nVocab): ', nVocab);
 end;
@@ -98,7 +101,7 @@ var
   ch: Char;
 begin
   L := Length(x);
-  SetLength(Result, L);   // Allocate output string
+  SetLength(Result, L);   // Allocate output string.
 
   for j := 1 to L do begin
     ch := x[j];
@@ -180,8 +183,8 @@ begin
       jE := High(X[0]);
     end;
     G: begin
-      vStride := Floor(Length(X) / tStride);
-      hStride := Floor(Length(X[0]) / tStride);
+      vStride := Max(1, Floor(Length(X) / tStride));
+      hStride := Max(1, Floor(Length(X[0]) / tStride));
       iB := 0;
       iE := tStride - 2;
       jB := 0;
@@ -251,8 +254,8 @@ begin
       jE := High(X[0]);
     end;
     G: begin
-      vStride := Floor(Length(X) / tStride);
-      hStride := Floor(Length(X[0]) / tStride);
+      vStride := Max(1, Floor(Length(X) / tStride));
+      hStride := Max(1, Floor(Length(X[0]) / tStride));
       iB := 0;
       iE := tStride - 2;
       jB := 0;
@@ -322,8 +325,8 @@ begin
       jE := High(X[0]);
     end;
     G: begin
-      vStride := Floor(nVocab / tStride);
-      hStride := Floor(Length(X[0]) / tStride);
+      vStride := Max(1, Floor(Length(X) / tStride));
+      hStride := Max(1, Floor(Length(X[0]) / tStride));
       iB := 0;
       iE := tStride - 2;
       jB := 0;
@@ -393,8 +396,8 @@ begin
       jE := High(X[0]);
     end;
     G: begin
-      vStride := Floor(Length(X) / tStride);
-      hStride := Floor(Length(X[0]) / tStride);
+      vStride := Max(1, Floor(Length(X) / tStride));
+      hStride := Max(1, Floor(Length(X[0]) / tStride));
       iB := 0;
       iE := tStride - 2;
       jB := 0;
@@ -465,7 +468,7 @@ begin
     end;
     G: begin
       vStride := Max(1, Floor(Length(X) / tStride));
-      hStride := Floor(Length(X[0]) / tStride);
+      hStride := Max(1, Floor(Length(X[0]) / tStride));
       iB := 0;
       iE := tStride - 2;
       jB := 0;

@@ -142,7 +142,6 @@ begin
         BestTok := j;
       end;
 
-
     if (Length(QueryTokenized) > 0) and (BestTok = QueryTokenized[High(QueryTokenized)]) then begin
       Probs[LastPos, BestTok] := -1.0;
       BestProb := Probs[LastPos, 0];
@@ -154,7 +153,6 @@ begin
           BestTok := j;
         end;
     end;
-
 
     // BestTok is the next predicted token.
     QueryToken := BestTok;
@@ -235,12 +233,8 @@ begin
 
       if (Length(QueryTokenized) > 0) and (QueryTokenized[High(QueryTokenized)] = EOS) then
         SetLength(QueryTokenized, Length(QueryTokenized) - 1);
-      Writeln('Last token after removal = ',
-              QueryTokenized[High(QueryTokenized)]);
-      Writeln('EOS=', EOS,
-              ' Last=', QueryTokenized[High(QueryTokenized)]);
 
-      Write('Query Tokens, Again, Using TCFull');
+      Write('Query Tokens, Again, Using TCFull: ');
       TCFull(QueryTokenized);
 
       SetLength(QueryOutput, 0);
@@ -278,14 +272,14 @@ begin
           Writeln;
         Pause;
 
-        if QueryToken = EOS then Break;
+        // if QueryToken = EOS then Break;  // For debugging, don't stop.
       end;
 
       // Add new token to string QueryOutput.
       if Length(QueryOutput) > 0 then
         QueryToken := QueryOutput[High(QueryOutput)];
 
-      Writeln('Query token output: ');
+      Write('Query token output: ');
       for i := 0 to High(QueryOutput) do
         Write(QueryOutput[i], ' ');
       Writeln;
@@ -298,11 +292,13 @@ begin
             Write(DisplayToken(UTF8Decode(Vocab[QueryOutput[i]])))
           else
             Write('<BADTOKEN:', QueryOutput[i], '>');
+        Writeln;
       end
       else begin
         // WesChat.
         Write('Query decoded token output: ');
         DetokenizeToDisplay(QueryOutput, F);
+        Writeln;
       end;
       Writeln;
     end; // Run query once.

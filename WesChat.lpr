@@ -3,13 +3,14 @@ program WesChat;
 {$mode ObjFPC}{$H+}{$I proprietary.txt}
 
 { WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wesparsons.com }
-{ Note: Edited 6/10/2026 11 am -- working from WesChat12 on OneDrive }
+{ Note: Edited 6/14/2026 9 am -- working from WesChat12 on OneDrive }
 {        Input Train        Input Query        Output
  Raw                        QueryString
  Bytes   Corpus             QueryCorpus
  Token   TokenizedCorpus    QueryTokenized     QueryOutput }
- {For tokenizining, need corpus.                               CorpusPresent
-  For training, need symbol/merge table(s).                    SMTablePresent
+ {For tokenizining, need tokenized corpus.                     CorpusPresent (now TokSuccessful)
+  For training, need symbol table for WesChat.                 SMTablePresent
+    (already have symbol and merge tables for GPT2).
   For inference, need param model, and symbol/merge table(s).  ModelPresent }
 uses
   Classes,
@@ -601,7 +602,7 @@ begin
         Readln(ModelFileName);
         if LoadModel(ModelFileName, WModelParams) then begin
           Writeln('File ', ModelFileName, ' loaded.');
-        end
+        end                     // Need to do   StartCuda(WModelParams, WModelState);
         else
           Writeln('File not loaded.');
         Pause;
@@ -673,10 +674,11 @@ begin
   end;
 
   // Clean up cublas.
-  if CudaAllocated then
+  EndCuda(WModelParams, WModelState);
+  {if CudaAllocated then
     MDeallocateCublas(WModelParams, WModelState);
   if CublasInitialized then
-    cublasDestroy_v2(CuHandle);
+    cublasDestroy_v2(CuHandle);}
 
   // Free Vocab.
   Vocab.Free;

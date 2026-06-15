@@ -27,10 +27,13 @@ const
 
 procedure InitializeCublas;
 procedure CheckCudaError(const Where: string);
+procedure StartCuda(var WModelParams: TWModelParams; var WModelState: TWModelState);
+procedure EndCuda(var WModelParams: TWModelParams; var WModelState: TWModelState);
 procedure PadToSeqMultiple(var TokenVectorToPad: TIVector; const Seq: Integer);
 procedure TC100(const TC: TIVector);
 procedure TCFull(const TC: TIVector);
 function Decode(const x: Integer): UnicodeString;
+function ComputeLoss(const Probs: TSeqVocabMatrix; const TargetTokens: TIDimVector): Double;
 procedure XGUniformW(var W: TWeightMatrix; FanIn, FanOut: Integer);
 procedure XGUniformWHead(var W: TWeightHeadMatrix; FanIn, FanOut: Integer);
 procedure XGUniformW1(var W: TWeightProjMatrix; FanIn, FanOut: Integer);
@@ -64,9 +67,11 @@ procedure LaunchDropout(X: PSingle; N: Integer; DropProb: Single; Seed: UInt64);
   cdecl; external 'WesChatKernel12.dll';
 procedure LaunchDropoutBackward(dX: PSingle; N: Integer; DropProb: Single; Seed: UInt64);
   cdecl; external 'WesChatKernel12.dll';procedure SoftmaxForwardN(const x: PSingle; y: PSingle; const N: Integer);
+procedure LaunchSoftmaxForwardStrided(dIn: PSingle; dOut: PSingle; Rows: Integer; Cols: Integer; RowStride: Integer; Temperature: Single);
+  cdecl; external 'WesChatKernel12.dll';
 procedure LaunchSoftmaxForwardN(X: PSingle; Y: PSingle; Rows: Integer; N: Integer; Temperature: Single);
   cdecl; external 'WesChatKernel12.dll';
-procedure SoftmaxBackward(const y, dy:  TFVector; out dx: array of Single);
+procedure SoftmaxBackward(const y, dy:  TFVector; out dx: TFVector);
 procedure LaunchSoftmaxBackward(Y: PSingle; dY: PSingle; dX: PSingle; Rows: Integer; D: Integer);
   cdecl; external 'WesChatKernel12.dll';
 procedure LaunchLayerNormForward(InX, OutX, Gamma, Beta, LNXhat, LNInvStd: PSingle; SeqLen, ModelDim: Integer);
@@ -79,6 +84,8 @@ procedure LaunchRoPEForward(H: PSingle; InvFreq: PSingle; SeqLen: Integer; Model
 procedure LaunchRoPEBackward(dH: PSingle; InvFreq: PSingle; SeqLen: Integer; ModelDim: Integer);
   cdecl; external 'WesChatKernel12.dll';procedure GradientFromCEProbabilities(var WModelState: TWModelState);
 procedure LaunchCEGradient(Probs: PSingle; TopGradient: PSingle; TargetTokens: PInteger; SeqLen: Integer; nVocab: Integer);
+  cdecl; external 'WesChatKernel12.dll';
+procedure LaunchCEGradientStrided(Probs: PSingle; TopGradient: PSingle; TargetTokens: PInteger; Rows: Integer; VocabSize: Integer; RowStride: Integer);
   cdecl; external 'WesChatKernel12.dll';
 procedure LaunchAddInputEmbeddingGrad(XGrad: PSingle; EmbGrad: PSingle; InputTokens: PInteger; SeqLen: Integer; ModelDim: Integer; nVocab: Integer);
   cdecl; external 'WesChatKernel12.dll';
@@ -132,15 +139,16 @@ end;
 procedure InitializeCublas;
 begin
   CheckAllDLLs;
-  if CublasPresent and (cublasCreate_v2(CuHandle) <> 0) then begin
-    Writeln('cuBLAS initialization required but failed.');
+  if Cublas_Init then
+      Writeln('CuBLAS successfully initiated.')
+  else begin
+    Writeln('Error initiating CuBLAS. Halting....');
     Pause;
     Halt;
   end;
-  CuBlasInitialized := True;
 end;
 
-// Check for a cude error.
+// Check for a cuda error.
 procedure CheckCudaError(const Where: string);
 var
   Err: Integer;
@@ -153,6 +161,25 @@ begin
     Writeln('Location : ', Where,' ', 'Error #  : ', Err, ' ', 'Message  : ', StrPas(cudaGetErrorString(Err)));
     Pause;
   end;
+end;
+
+// Intialize Cuda and Cublas.
+procedure StartCuda(var WModelParams: TWModelParams; var WModelState: TWModelState);
+begin
+  CheckAllDLLs;
+  InitializeCublas;
+  if not CudaAllocated then
+    MAllocCublas(WModelParams, WModelState);
+  CheckCudaError('Start cuda.');
+end;
+
+// End Cuda and Cublas.
+procedure EndCuda(var WModelParams: TWModelParams; var WModelState: TWModelState);
+begin
+  if CudaAllocated then
+    MDeallocateCublas(WModelParams, WModelState);
+  if CuBLAS_Shutdown then
+    Writeln('CuBLAS successfully shut down.')
 end;
 
 // Pad token vector to multiple of SeqLen.
@@ -190,13 +217,13 @@ begin
   Write('Tokenized Corpus (in full length of ', Length(TC), '): ');
   for i := 0 to High(TC) do
     Write(TC[i], ' ');
-  Writeln('Length = ', Length(TC));
-  Pause;
+  Writeln;
 
   Write('Detokenized Corpus (in full length of ', Length(TC) - 1, '): ');
   for i := 0 to High(TC) do
     Write(SymbolTable[TC[i]]);
-  Writeln('Length = ', Length(TC));
+  Writeln;
+  Pause;
 end;
 
 function Decode(const x: Integer): UnicodeString;
@@ -209,7 +236,29 @@ else
   Result := UTF8Decode(Vocab[x]);
 end;
 
-  // Xavier-Glorot initialization on W0 matrix.
+// Compute cross-entropy loss.
+function ComputeLoss(const Probs: TSeqVocabMatrix; const TargetTokens: TIDimVector): Double;
+const
+  Eps = 1.0e-12;
+var
+  i: Integer;
+  P: Double;
+begin
+  Result := 0.0;
+
+  for i := 0 to SeqLen - 1 do begin
+    P := Probs[i, TargetTokens[i]];
+
+    if P < Eps then
+      P := Eps;
+
+    Result := Result - Ln(P);
+  end;
+
+  Result := Result / SeqLen;
+end;
+
+// Xavier-Glorot initialization on W0 matrix.
 procedure XGUniformW(var W: TWeightMatrix; FanIn, FanOut: Integer);
 var
   Limit, r: Single;
@@ -373,89 +422,96 @@ var
 begin
   CudaAllocated := False;
 
-  cudaFree(dInputTokens);
-  cudaFree(dTargetTokens);
+  cudaFree(dInputTokens);  dInputTokens  := nil;
+  cudaFree(dTargetTokens); dTargetTokens := nil;
 
   with WModelParams do begin
-    cudaFree(Embeddings.dValue);
-    cudaFree(Embeddings.dGrad);
+    cudaFree(Embeddings.dValue); Embeddings.dValue := nil;
+    cudaFree(Embeddings.dGrad);  Embeddings.dGrad  := nil;
   end;
+
   with WModelState do begin
-    cudaFree(dInvFreq);
-    cudaFree(dProbs);
-    cudaFree(dTopGradient);
+    cudaFree(dInvFreq);     dInvFreq     := nil;
+    cudaFree(dProbs);       dProbs       := nil;
+    cudaFree(dTopGradient); dTopGradient := nil;
   end;
 
   for k := 0 to nBlock - 1 do begin
     with WModelParams.ParamBlock[k] do begin
-      cudaFree(Wq.dValue);
-      cudaFree(Wq.dGrad);
-      cudaFree(Wk.dValue);
-      cudaFree(Wk.dGrad);
-      cudaFree(Wv.dValue);
-      cudaFree(Wv.dGrad);
-      cudaFree(W0.dValue);
-      cudaFree(W0.dGrad);
-      cudaFree(W1.dValue);
-      cudaFree(W1.dGrad);
-      cudaFree(W2.dValue);
-      cudaFree(W2.dGrad);
-      cudaFree(b1.dValue);
-      cudaFree(b1.dGrad);
-      cudaFree(b2.dValue);
-      cudaFree(b2.dGrad);
-      cudaFree(Gamma1.dValue);
-      cudaFree(Gamma1.dGrad);
-      cudaFree(Beta1.dValue);
-      cudaFree(Beta1.dGrad);
-      cudaFree(Gamma2.dValue);
-      cudaFree(Gamma2.dGrad);
-      cudaFree(Beta2.dValue);
-      cudaFree(Beta2.dGrad);
+      cudaFree(Wq.dValue);     Wq.dValue     := nil;
+      cudaFree(Wq.dGrad);      Wq.dGrad      := nil;
+      cudaFree(Wk.dValue);     Wk.dValue     := nil;
+      cudaFree(Wk.dGrad);      Wk.dGrad      := nil;
+      cudaFree(Wv.dValue);     Wv.dValue     := nil;
+      cudaFree(Wv.dGrad);      Wv.dGrad      := nil;
+      cudaFree(W0.dValue);     W0.dValue     := nil;
+      cudaFree(W0.dGrad);      W0.dGrad      := nil;
+      cudaFree(W1.dValue);     W1.dValue     := nil;
+      cudaFree(W1.dGrad);      W1.dGrad      := nil;
+      cudaFree(W2.dValue);     W2.dValue     := nil;
+      cudaFree(W2.dGrad);      W2.dGrad      := nil;
+      cudaFree(b1.dValue);     b1.dValue     := nil;
+      cudaFree(b1.dGrad);      b1.dGrad      := nil;
+      cudaFree(b2.dValue);     b2.dValue     := nil;
+      cudaFree(b2.dGrad);      b2.dGrad      := nil;
+      cudaFree(Gamma1.dValue); Gamma1.dValue := nil;
+      cudaFree(Gamma1.dGrad);  Gamma1.dGrad  := nil;
+      cudaFree(Beta1.dValue);  Beta1.dValue  := nil;
+      cudaFree(Beta1.dGrad);   Beta1.dGrad   := nil;
+      cudaFree(Gamma2.dValue); Gamma2.dValue := nil;
+      cudaFree(Gamma2.dGrad);  Gamma2.dGrad  := nil;
+      cudaFree(Beta2.dValue);  Beta2.dValue  := nil;
+      cudaFree(Beta2.dGrad);   Beta2.dGrad   := nil;
     end;
+
     with WModelState.StateBlock[k] do begin
-      cudaFree(X.dValue);
-      cudaFree(X.dGrad);
-      cudaFree(X1.dValue);
-      cudaFree(X1.dGrad);
-      cudaFree(X2.dValue);
-      cudaFree(X2.dGrad);
-      cudaFree(X3.dValue);
-      cudaFree(X3.dGrad);
-      cudaFree(X4.dValue);
-      cudaFree(X4.dGrad);
-      cudaFree(X5.dValue);
-      cudaFree(X5.dGrad);
-      cudaFree(X6.dValue);
-      cudaFree(X6.dGrad);
-      cudaFree(X7.dValue);
-      cudaFree(X7.dGrad);
-      cudaFree(X1q.dValue);
-      cudaFree(X1q.dGrad);
-      cudaFree(X1k.dValue);
-      cudaFree(X1k.dGrad);
-      cudaFree(X1v.dValue);
-      cudaFree(X1v.dGrad);
-      cudaFree(Q.dValue);
-      cudaFree(Q.dGrad);
-      cudaFree(K.dValue);
-      cudaFree(K.dGrad);
-      cudaFree(V.dValue);
-      cudaFree(V.dGrad);
+      cudaFree(X.dValue);   X.dValue   := nil;
+      cudaFree(X.dGrad);    X.dGrad    := nil;
+      cudaFree(X1.dValue);  X1.dValue  := nil;
+      cudaFree(X1.dGrad);   X1.dGrad   := nil;
+      cudaFree(X2.dValue);  X2.dValue  := nil;
+      cudaFree(X2.dGrad);   X2.dGrad   := nil;
+      cudaFree(X3.dValue);  X3.dValue  := nil;
+      cudaFree(X3.dGrad);   X3.dGrad   := nil;
+      cudaFree(X4.dValue);  X4.dValue  := nil;
+      cudaFree(X4.dGrad);   X4.dGrad   := nil;
+      cudaFree(X5.dValue);  X5.dValue  := nil;
+      cudaFree(X5.dGrad);   X5.dGrad   := nil;
+      cudaFree(X6.dValue);  X6.dValue  := nil;
+      cudaFree(X6.dGrad);   X6.dGrad   := nil;
+      cudaFree(X7.dValue);  X7.dValue  := nil;
+      cudaFree(X7.dGrad);   X7.dGrad   := nil;
+
+      cudaFree(X1q.dValue); X1q.dValue := nil;
+      cudaFree(X1q.dGrad);  X1q.dGrad  := nil;
+      cudaFree(X1k.dValue); X1k.dValue := nil;
+      cudaFree(X1k.dGrad);  X1k.dGrad  := nil;
+      cudaFree(X1v.dValue); X1v.dValue := nil;
+      cudaFree(X1v.dGrad);  X1v.dGrad  := nil;
+
+      cudaFree(Q.dValue);   Q.dValue   := nil;
+      cudaFree(Q.dGrad);    Q.dGrad    := nil;
+      cudaFree(K.dValue);   K.dValue   := nil;
+      cudaFree(K.dGrad);    K.dGrad    := nil;
+      cudaFree(V.dValue);   V.dValue   := nil;
+      cudaFree(V.dGrad);    V.dGrad    := nil;
+
       for h := 0 to nHead - 1 do begin
-        cudaFree(ScoresHead1[h].dValue);
-        cudaFree(ScoresHead1[h].dGrad);
-        cudaFree(ScoresHead2[h].dValue);
-        cudaFree(ScoresHead2[h].dGrad);
+        cudaFree(ScoresHead1[h].dValue); ScoresHead1[h].dValue := nil;
+        cudaFree(ScoresHead1[h].dGrad);  ScoresHead1[h].dGrad  := nil;
+        cudaFree(ScoresHead2[h].dValue); ScoresHead2[h].dValue := nil;
+        cudaFree(ScoresHead2[h].dGrad);  ScoresHead2[h].dGrad  := nil;
       end;
-      cudaFree(Hidden1.dValue);
-      cudaFree(Hidden1.dGrad);
-      cudaFree(Hidden2.dValue);
-      cudaFree(Hidden2.dGrad);
-      cudaFree(dLNInvStd1);
-      cudaFree(dLNXHat1);
-      cudaFree(dLNInvStd2);
-      cudaFree(dLNXHat2);
+
+      cudaFree(Hidden1.dValue); Hidden1.dValue := nil;
+      cudaFree(Hidden1.dGrad);  Hidden1.dGrad  := nil;
+      cudaFree(Hidden2.dValue); Hidden2.dValue := nil;
+      cudaFree(Hidden2.dGrad);  Hidden2.dGrad  := nil;
+
+      cudaFree(dLNInvStd1); dLNInvStd1 := nil;
+      cudaFree(dLNXHat1);   dLNXHat1   := nil;
+      cudaFree(dLNInvStd2); dLNInvStd2 := nil;
+      cudaFree(dLNXHat2);   dLNXHat2   := nil;
     end;
   end;
 end;
@@ -822,7 +878,7 @@ begin
 end;}
 
 // Softmax procedure backward.
-procedure SoftmaxBackward(const y, dy:  TFVector; out dx: array of Single);
+procedure SoftmaxBackward(const y, dy:  TFVector; out dx: TFVector);
 var
   j, D: Integer;
   dot: Single;

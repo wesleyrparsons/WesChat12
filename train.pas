@@ -27,6 +27,51 @@ implementation
 const
   Scale = Sqrt(ModelDim);         // Optional transformer-style embedding scaling by sqrt(d_model).
 
+// Compute the CE loss.
+function ComputeCELoss(const Probs: TSeqVocabMatrix; const TargetTokens: TIDimVector): Double;
+const
+  Eps = 1.0e-12;
+var
+  i, Tok: Integer;
+  P: Double;
+begin
+  Result := 0.0;
+
+  for i := 0 to SeqLen - 1 do begin
+    Tok := TargetTokens[i];
+    P := Probs[i, Tok];
+
+    if P < Eps then
+      P := Eps;
+
+    Result := Result - Ln(P);
+  end;
+
+  Result := Result / SeqLen;
+end;
+
+procedure CheckFirstValuesFinite(const Name: string; Ptr: PSingle; Count: Integer);
+var
+  Temp: array[0..31] of Single;
+  i, N: Integer;
+begin
+  N := Count;
+  if N > 32 then N := 32;
+
+  cudaMemcpy(@Temp[0], Ptr, N * SizeOf(Single), cudaMemcpyDeviceToHost);
+  CheckCudaError('copy ' + Name);
+
+  for i := 0 to N - 1 do begin
+    if (Temp[i] <> Temp[i]) or
+       (Temp[i] > 1.0e20) or
+       (Temp[i] < -1.0e20) then begin
+      Writeln('BAD VALUE in ', Name, '[', i, '] = ', Temp[i]:12:6);
+      Pause;
+      Halt;
+    end;
+  end;
+end;
+
 // Create the target vector for use in head output.
 procedure BuildTargetVector(var Target: TIDimVector; const TokenizedCorpus: TIVector; const StartIndex, L: Integer);
 var
@@ -49,7 +94,9 @@ end;
 procedure RunTrain(var WModelParams: TWModelParams; var WModelState: TWModelState; const TokenizedCorpus: TIVector);
 var
   i, j, k: Integer;
-  Blk, LastBlk, Epoch, Start, EmbedLoop: Integer;
+  Blk, LastBlk, Epoch, Start, WindowCount: Integer;
+  Loss, EpochLoss: Double;
+  GradScale: Single;
 
   function TrainReadIfKeyPressed: Boolean;
   var
@@ -105,9 +152,9 @@ var
 
 begin
   StopTraining := False;
-  Training := False;
+  Training := True;               // Set False for debugging.
   GlobalSeed := 123456789;        // For debugging.
-  GlobalSeed := GetTickCount64;   // For training.
+  //GlobalSeed := GetTickCount64;   // For training.
   nVocab := nSymbols;             // Need nVocab (second name for variable) for Transform.
 
   // Start training.
@@ -119,14 +166,19 @@ begin
 
   // Initialize state.
   InitializeTransformerState(WModelState);
+
   // Initialize params if new model.
   if NewModel then
     InitializeTransformerParams(WModelParams);
 
-  // Initialize Cublas and cusa.
+  StartCuda(WModelParams, WModelState);
+{  // Initiate Cublas.
+  InitializeCuBLAS;
+
+  // Allocate cuda memory.
   if not CudaAllocated then
     MAllocCublas(WModelParams, WModelState);
-  CheckCudaError('Train -- initialize cuda.');
+  CheckCudaError('Train -- initialize cuda.');}
 
   try
     CopyParamsToDevice(WModelParams);
@@ -135,7 +187,6 @@ begin
     // Initialize epoch/sequence loop.
     Epoch := 0;
     Start := 0;
-    EmbedLoop := 0;
     Writeln('** Start training. nVocab = ', nVocab, ' DimVocab = ', DimVocab, ' Seqlen = ', SeqLen, ' Epochs = ', MaxEpochs, ' ModelDim = ', ModelDim, ' Projection = ', Proj);
     Writeln('** X = Exit program. B = Break out of loop. P = Pause. V = toggle Very Verbose mode,');
     Writeln('** I = program Information. T = Training information. S = Save. Transforming...');
@@ -147,13 +198,16 @@ begin
 
     // Loop through epochs.
     for Epoch := 0 to MaxEpochs - 1 do with WModelState do begin
+      EpochLoss := 0;
+      WindowCount := 0;
       Start := (Epoch * 17) mod Stride;
 
       // Stride loop thru Sequence.
       while ((Start + SeqLen + 1) <= Length(TokenizedCorpus)) and (not StopTraining) do begin
 
         // Display number of loops thru embed loop.
-        Writeln('Epoch is ', Epoch, ' SeqLen stride: start ', Start, ' and stride number ', EmbedLoop);
+        if DisplayWindow then
+          Writeln('Epoch is ', Epoch, ' SeqLen window is from ', Start, ' to ', Start + SeqLen, ' on loop ', WindowCount);
 
         // Build the target vector, one ahead, for the loss stage.
         BuildTargetVector(TargetTokens, TokenizedCorpus, Start, SeqLen);
@@ -214,8 +268,8 @@ begin
           Stage := Blk * 3 + 2;
 
           // 3A. Multiplication/Overwrite. Obtain Probs from X7 and Vocab.
-          if SStage then Writeln('' : Stage, 'Stage  3, Block ', Blk, ',  Transform Forward');
-          if VStage then Writeln('': Stage, '3A. Transform Gradient, Obtain Probs from X7 and Vocab');
+          if DisplayStage then Writeln('' : Stage, 'Stage  3, Block ', Blk, ',  Transform Forward');
+          if DisplaySubstage then Writeln('': Stage, '3A. Transform Gradient, Obtain Probs from X7 and Vocab');
 
           // Multiplication: Input X7, Vocab. Output Probs.
           // Equation: Probs = X7 · Embeddingsᵀ. Probs in R^{L x nVocab}. X in R^{L x D}.  Embeddings in R^{nVocab x D}.
@@ -235,27 +289,33 @@ begin
           end;
 
           // 3B. Softmax. Obtain Probs from Sotmax(Probs).
-          if VStage then Writeln('': Stage, '3B. Transform Forward, Softmax Probs');
+          if DisplaySubstage then Writeln('': Stage, '3B. Transform Forward, Softmax Probs');
 
           // Softmax: Input Probs. Output Probs.
           // Equation: Probs = Softmax(Probs).
           // for i := 0 to SeqLen - 1 do
           //   SoftmaxForwardN(@Probs[i,0], @Probs[i,0], nVocab);
-          LaunchSoftmaxForwardN(dProbs, dProbs, SeqLen, nVocab, Temperature);
+          // LaunchSoftmaxForwardN(dProbs, dProbs, SeqLen, nVocab, Temperature);
+          LaunchSoftmaxForwardStrided(dProbs, dProbs, SeqLen, nVocab, DimVocab, Temperature);
 
           // Display Probs matrix.
-          if VeryVerboseTransform then begin
-            cudaMemcpy(@Probs[0, 0], dProbs, ProbsSize, cudaMemcpyDeviceToHost);
+          cudaMemcpy(@Probs[0, 0], dProbs, ProbsSize, cudaMemcpyDeviceToHost);
+          Loss := ComputeCELoss(Probs, TargetTokens);  //```
+          if VeryVerboseTransform then
             VTPDisplayX('Display Probs, in transform, after softmax.', Probs, B);
-          end;
 
           // 3C. Cross-Entropy Loss. Obtain TopGradient from Probs.
-          if VStage then Writeln('': Stage, '3C. Transform Forward, Obtain TopGradient from Probs');
+          if DisplaySubstage then Writeln('': Stage, '3C. Transform Forward, Obtain TopGradient from Probs');
           // Gradient: Input Probs. Output TopGradient. Also option of CalculateGradient from KLDivergence.
           // Equation: TopGradient in R^{L x nVocab}. Probs in R^{L x nVocab}.
           // GradientFromCEProbabilities(WModelState);  // Using CE.
           // GradientFromKLDivergence(WModelState);   // Not using KL.
-          LaunchCEGradient(dProbs, dTopGradient, dTargetTokens, SeqLen, nVocab);
+          // LaunchCEGradient(dProbs, dTopGradient, dTargetTokens, SeqLen, nVocab); Replaced with strided version.
+          LaunchCEGradientStrided(dProbs, dTopGradient, dTargetTokens, SeqLen, nVocab, DimVocab);
+
+          // Diagnostic helper. ``
+          GradScale := 1.0 / SeqLen;
+          CuScale(CuHandle, ProbsSize div SizeOf(Single), GradScale, dTopGradient);
 
           // Display TopGradient matrix.
           if VeryVerboseTransform then begin
@@ -264,7 +324,7 @@ begin
           end;
 
           // 3D. Backprop TopGradient creates X7 Grad: Input TopGradient, WVocabᵀ. Output X7.Grad.
-          if VStage then Writeln('': Stage, '3D. Transform Backprop, Create X7 from TopGradient');
+          if DisplaySubstage then Writeln('': Stage, '3D. Transform Backprop, Create X7 from TopGradient');
 
           with StateBlock[LastBlk] do begin
             // Equation: X7.Grad = TopGradient · Embeddings.Value. X7.Grad in R^{L x D}. TopGradient in R^{L x nVocab}. Embeddings.Value in R^{nVocab x D}.
@@ -277,10 +337,8 @@ begin
             // MatMulFullAccTN(@TopGradient[0,0], @X7.Value[0,0], @Embeddings.Grad[0,0], nVocab, ModelDim, SeqLen, DimVocab, ModelDim, ModelDim);
             CuMatMulFullAccTN(CuHandle, dTopGradient, X7.dValue, Embeddings.dGrad, nVocab, ModelDim, SeqLen, DimVocab, ModelDim, ModelDim);
 
-            // Backprop Split X7 Grad into X5 and X6: Input X5.Grad, X7.Grad. Output dX.Grad.
-            // Equation: X5.Grad = X5.Grad + X7.Grad. All in R^{L x D}.
             // GradSplit(X7.Grad, X5.Grad, X6.Grad, SeqLen, ModelDim);
-            CuGradSplit(CuHandle, X7.dGrad, X5.dGrad, X6.dGrad, SeqLen, ModelDim);
+            // CuGradSplit(CuHandle, X7.dGrad, X5.dGrad, X6.dGrad, SeqLen, ModelDim); Moved to Backprop.
 
             // Display X7.Grad matrix.
             if VeryVerboseTransform then begin
@@ -289,7 +347,6 @@ begin
             end;
           end;
         end; // End gradient stage.
-
 
         if VerboseTransform then
           Writeln('            Switch from Forward to Backprop');
@@ -314,17 +371,34 @@ begin
         // Apply the total embedding gradient (output-side + input-side).
         UpdateEmbeddings(wModelParams, WModelState);
 
-        // if (EmbedLoop mod 20 = 0) then Pause;
+        // Diagnostic check for excessive embeddings values.
+        CheckFirstValuesFinite('Embeddings', WModelParams.Embeddings.dValue, nVocab * ModelDim);
+        for k := 0 to nBlock - 1 do begin
+          CheckFirstValuesFinite('Wq', WModelParams.ParamBlock[k].Wq.dValue, ModelDim * ModelDim);
+          CheckFirstValuesFinite('W1', WModelParams.ParamBlock[k].W1.dValue, ModelDim * ModelDimProj);
+          CheckFirstValuesFinite('W2', WModelParams.ParamBlock[k].W2.dValue, ModelDimProj * ModelDim);
+          CheckFirstValuesFinite('Gamma1', WModelParams.ParamBlock[k].Gamma1.dValue, ModelDim);
+          CheckFirstValuesFinite('Gamma2', WModelParams.ParamBlock[k].Gamma2.dValue, ModelDim);
+        end;
 
         Start := Start + Stride;
-        Inc(EmbedLoop);
+        EpochLoss := EpochLoss + Loss;
+        Inc(WindowCount);
 
       end;    // End sequence loop.
+      Write('Epoch ', Epoch, ' has ended. Window count = ', WindowCount, ' Epoch mean loss = ');
+      if WindowCount > 0 then
+        Writeln((EpochLoss / WindowCount): 8: 6)
+      else
+        Writeln('0.000000');
+
     end;      // End epoch loop.
   finally
-    // Clean up cublas.
-    // MDeallocateCublas(WModelParams, WModelState);
-    // cublasDestroy_v2(CuHandle);}
+  // Clean up cuda and cublas.
+{    if CudaAllocated then
+      MDeallocateCublas(WModelParams, WModelState);
+    if CuBLAS_Shutdown then
+      Writeln('CuBLAS successfully shut down.')}
   end;
 
   Writeln;

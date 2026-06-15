@@ -339,8 +339,7 @@ begin
     Reset(F, 1);
 
     BlockRead(F, Magic, SizeOf(Magic));
-    if (Magic[0] <> 'W') or (Magic[1] <> 'E') or
-       (Magic[2] <> 'S') or (Magic[3] <> '1') then begin
+    if (Magic[0] <> 'W') or (Magic[1] <> 'E') or (Magic[2] <> 'S') or (Magic[3] <> '1') then begin
       CloseFile(F);
       Exit;
     end;
@@ -354,15 +353,13 @@ begin
 
     if IOModelDim <> ModelDim then begin
       CloseFile(F);
-      Writeln('ModelDim mismatch. File=', IOModelDim,
-              ' Program=', ModelDim);
+      Writeln('ModelDim mismatch. File=', IOModelDim, ' Program=', ModelDim);
       Exit;
     end;
 
     if IONBlock <> nBlock then begin
       CloseFile(F);
-      Writeln('nBlock mismatch. File=', IONBlock,
-              ' Program=', nBlock);
+      Writeln('nBlock mismatch. File=', IONBlock, ' Program=', nBlock);
       Exit;
     end;
 

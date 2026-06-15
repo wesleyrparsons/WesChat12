@@ -65,7 +65,7 @@ begin
     Writeln;
 
   // Display initial Corpus length.
-  Writeln('Read ', Size, ' bytes from ', FileName);
+  Writeln('Read ', Size, ' bytes from ', FileName, '.');
 end;
 
 // Load the symbol table from file. IOHandler.
@@ -117,7 +117,7 @@ begin
 
   Close(F);
   nSymbols := Length(SymbolTable);
-  Writeln('Loaded ', nSymbols, ' symbols from ', FileName);
+  Writeln('Loaded ', nSymbols, ' symbols from ', FileName, '.');
 end;
 
 // Save symbol table.
@@ -339,8 +339,7 @@ begin
     Reset(F, 1);
 
     BlockRead(F, Magic, SizeOf(Magic));
-    if (Magic[0] <> 'W') or (Magic[1] <> 'E') or
-       (Magic[2] <> 'S') or (Magic[3] <> '1') then begin
+    if (Magic[0] <> 'W') or (Magic[1] <> 'E') or (Magic[2] <> 'S') or (Magic[3] <> '1') then begin
       CloseFile(F);
       Exit;
     end;
@@ -361,8 +360,7 @@ begin
 
     if IONBlock <> nBlock then begin
       CloseFile(F);
-      Writeln('nBlock mismatch. File=', IONBlock,
-              ' Program=', nBlock);
+      Writeln('nBlock mismatch. File=', IONBlock, ' Program=', nBlock);
       Exit;
     end;
 

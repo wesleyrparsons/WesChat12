@@ -54,6 +54,22 @@ begin
     // LayerNormForward(X.Value, X1.Value, SeqLen, Gamma1.Value, Beta1.Value, LNXhat1, LNInvStd1);
     LaunchLayerNormForward(X.dValue, X1.dValue, Gamma1.dValue, Beta1.dValue, dLNXhat1, dLNInvStd1, SeqLen, ModelDim);
 
+    {CheckCudaError('LayerNormForward X -> X1'); ```
+
+    cudaMemcpy(@X.Value[0,0], X.dValue, XSize, cudaMemcpyDeviceToHost);
+    cudaMemcpy(@X1.Value[0,0], X1.dValue, XSize, cudaMemcpyDeviceToHost);
+
+    Writeln('Block ', Blk, ' X row 0 before LN:');
+    for h := 0 to 15 do
+      Write(X.Value[0,h]:12:6);
+    Writeln;
+
+    Writeln('Block ', Blk, ' X1 row 0 after LN:');
+    for h := 0 to 15 do
+      Write(X1.Value[0,h]:12:6);
+    Writeln;
+    Pause;}
+
     // Display X1.Value matrix.
     if VeryVerboseTransform then begin
       cudaMemcpy(@X1.Value[0, 0], X1.dValue, XSize, cudaMemcpyDeviceToHost);
@@ -68,7 +84,7 @@ begin
     // Full Size Multiplication/Overwrite: Input X1, Wq. Output Q.
     // Equation: Q = X1 · Wq. Q in R^{L x D}. X1 in R^{L · D}. Wq in R^{D x D}. M=SeqLen N=ModelDim K=ModelDim.
     // MatMulNN(@X1.Value[0, 0], @Wq.Value[0, 0], @Q.Value[0, 0], SeqLen, ModelDim, ModelDim);
-    Writeln('Before Q = x1*Wq');
+    // Writeln('Before Q = x1*Wq');
     CuMatMulNN(cuHandle, X1.dValue, Wq.dValue, Q.dValue, SeqLen, ModelDim, ModelDim);
 
     // Display Q.Value matrix.
@@ -80,7 +96,7 @@ begin
     // Full Size Multiplication/Overwrite: Input X1, Wk. Output K.
     // Equation: K = X1 · Wk. K in R^{L x D}. X1 in R^{L · D}. Wk in R^{D x D}. M=SeqLen N=ModelDim K=ModelDim.
     // MatMulNN(@X1.Value[0, 0], @Wk.Value[0, 0], @K.Value[0, 0], SeqLen, ModelDim, ModelDim);
-    Writeln('Before K = x1*Wk');
+    // Writeln('Before K = x1*Wk');
     CuMatMulNN(cuHandle, X1.dValue, Wk.dValue, K.dValue, SeqLen, ModelDim, ModelDim);
 
     // Display K.Value matrix.
@@ -92,7 +108,7 @@ begin
     // Full Size Multiplication/Overwrite: Input X1, Wv. Output V.
     // Equation: V = X1 · Wv. V in R^{L x D}. X1 in R^{L · D}. Wv in R^{D x D}. M=SeqLen N=ModelDim K=ModelDim.
     // MatMulNN(@X1.Value[0, 0], @Wv.Value[0, 0], @V.Value[0, 0], SeqLen, ModelDim, ModelDim);
-    Writeln('Before V = x1*Wv');
+    // Writeln('Before V = x1*Wv');
     CuMatMulNN(cuHandle, X1.dValue, Wv.dValue, V.dValue, SeqLen, ModelDim, ModelDim);
 
     // 1D. RoPE.
@@ -118,7 +134,7 @@ begin
       // Multiply Q_h (L x H) by K_h^T (H x L), and scale by InvSqrtHeadDim.
       // MatMulFullScaledNT(@Q.Value[0, HeadOffset], @K.Value[0, HeadOffset], @ScoresHead1[h].Value[0, 0],
       //   SeqLen, SeqLen, HeadDim, ModelDim, ModelDim, SeqLen, InvSqrtHeadDim, 0.0);
-        Writeln('Before ScoresHead1 QK');
+        // Writeln('Before ScoresHead1 QK');
         CuMatMulFullScaledNT(CuHandle, PSingle(Q.dValue) + HeadOffset, PSingle(K.dValue) + HeadOffset, ScoresHead1[h].dValue,
         SeqLen, SeqLen, HeadDim, ModelDim, ModelDim, SeqLen, InvSqrtHeadDim, 0.0);
 
@@ -147,7 +163,7 @@ begin
       // Scoring: Input ScoresHead2, VHead. Output: X.
       // Equation: X2 = Scores2 · V. X2 in R^{L · D}. Scores2 in R^{L x L}. V in R^{L x D}. M=SeqLen N=ModelDim K=SeqLen
       // MatMulFullNN(@ScoresHead2[h].Value[0,0], @V.Value[0, HeadOffset], @X2.Value[0, HeadOffset], SeqLen, HeadDim, SeqLen, SeqLen, ModelDim, ModelDim);
-      Writeln('Before ScoresHead2, in 1G');
+      // Writeln('Before ScoresHead2, in 1G');
       CuMatMulFullNN(CuHandle, ScoresHead2[h].dValue, PSingle(V.dValue) + HeadOffset, PSingle(X2.dValue) + HeadOffset,
         SeqLen, HeadDim, SeqLen, SeqLen, ModelDim, ModelDim);
     end;
@@ -166,7 +182,7 @@ begin
     // Weighting: Input X2, W0. Output X3.
     // Equation: X3 = X2 · W0. X3 in R^{L · D}. W0 in R^{D x D}. X2 in R^{L x D}.
     // MatMulNN(@X2.Value[0, 0], @W0.Value[0, 0], @X3.Value[0, 0], SeqLen, ModelDim, ModelDim);
-    Writeln('Before X2, 1H');
+    // Writeln('Before X2, 1H');
     CuMatMulNN(CuHandle, X2.dValue, W0.dValue, X3.dValue, SeqLen, ModelDim, ModelDim);
 
     // Display X3.Value matrix.
@@ -272,7 +288,7 @@ begin
       end;
 
       // 2F. Addition/Merge and residual dropout. Obtain X7 from X5 and X6.
-      if VStage then Writeln('': Stage, '2F. Transform Forwar, Obtain X7 from X5 and X6, and RDropout');
+      if VStage then Writeln('': Stage, '2F. Transform Forward, Obtain X7 from X5 and X6, and RDropout');
 
       // Do residual dropout.
       if Training then

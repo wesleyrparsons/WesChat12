@@ -25,14 +25,31 @@ procedure RunInfer(var WModelParams: TWModelParams; var WModelState: TWModelStat
 
 implementation
 
-// Build the input vector .
-{procedure BuildInputVector(var Input: TIDimVector; const TokenizedCorpus: TIVector; const StartIndex, L: Integer);
+// Sameple the top probs.
+function SampleTopK(const TopTokVector: TIVector; const TopProbVector: TFVector): Integer;
 var
   i: Integer;
+  Total, R, Accum: Double;
 begin
-  for i := 0 to L - 1 do
-    Input[i] := TokenizedCorpus[StartIndex + i];
-end;}
+  Total := 0.0;
+
+  for i := 0 to High(TopProbVector) do
+    Total := Total + TopProbVector[i];
+
+  R := Random * Total;
+
+  Accum := 0.0;
+  for i := 0 to High(TopProbVector) do begin
+    Accum := Accum + TopProbVector[i];
+
+    if R <= Accum then begin
+      Result := TopTokVector[i];
+      Exit;
+    end;
+  end;
+
+  Result := TopTokVector[High(TopTokVector)];
+end;
 
 // Build padded tokenizedquery.
 procedure BuildInferenceInputTokens(var InputTokens: TIDimVector; const QueryTokenized: TIVector; const SeqLen: Integer; out LastPos: Integer);
@@ -64,33 +81,66 @@ procedure InferOneToken(var WModelParams: TWModelParams; var WModelState: TWMode
   const QueryTokenized: TIVector; var QueryToken: Integer; var QueryProb: Single);
 const
   Scale = Sqrt(ModelDim);         // Optional transformer-style embedding scaling by sqrt(d_model).
+  KSample = 10;
 var
-  j, Blk, LastBlk, LastPos: Integer;
-  BestTok: Integer;
+  j, Blk, LastBlk, LastPos,
+    BestTok, TopTok, TopProb: Integer;
+  TopTokVector: array[0..KSample - 1] of Integer;
+  TopProbVector: array[0..KSample - 1] of Single;
   BestProb: Single;
-begin
+  Loss: Double;
+
+  procedure TopKProbs;
+  var
+    t, p, j: Integer;
+  begin
+    // Initialize.
+    for t := 0 to KSample - 1 do begin
+      TopTokVector[t] := -1;
+      TopProbVector[t] := -1.0;
+    end;
+
+    // Find top K.
+    for j := 0 to nVocab - 1 do with WModelState do begin
+      for p := 0 to KSample - 1 do
+        if Probs[LastPos, j] > TopProbVector[p] then begin
+
+          // Shift down.
+          for t := KSample - 1 downto p + 1 do begin
+            TopTokVector[t] := TopTokVector[t - 1];
+            TopProbVector[t] := TopProbVector[t - 1];
+          end;
+
+          TopTokVector[p] := j;
+          TopProbVector[p] := Probs[LastPos, j];
+          Break;
+        end;
+    end;
+  end;
+
+  begin
   // Check for valid query.
   if Length(QueryTokenized) = 0 then begin
     QueryToken := EOS;
     Exit;
   end;
 
-  with WModelParams do
-    if VerboseTransform then begin
-      cudaMemcpy(@Embeddings.Value[0, 0], Embeddings.dValue, EmbeddingsSize, cudaMemcpyDeviceToHost);
-      VTPDisplayX('Display Embeddings.Value prior to Transform.', Embeddings.Value, B);
-    end;
+  if VerboseTransform then with WModelParams do begin
+    cudaMemcpy(@Embeddings.Value[0, 0], Embeddings.dValue, EmbeddingsSize, cudaMemcpyDeviceToHost);
+    VTPDisplayX('Display Embeddings.Value prior to Transform.', Embeddings.Value, B);
+  end;
 
   with WModelState do begin
     // Build the input vector.
     BuildInferenceInputTokens(InputTokens, QueryTokenized, SeqLen, LastPos);
 
-    Writeln('Infer step Length(QueryTokenized)=', Length(QueryTokenized), ' LastPos=', LastPos);
-    Write('Last few InputTokens: ');
-    for j := Max(0, LastPos - 5) to LastPos do
-      Write(InputTokens[j], ' ');
-    Writeln;
-
+    if VerboseTransform then begin
+      Writeln('Infer step Length(QueryTokenized)=', Length(QueryTokenized), ' LastPos=', LastPos);
+      Write('Last 20 InputTokens: ');
+      for j := Max(0, LastPos - 19) to LastPos do
+        Write(InputTokens[j], ' ');
+      Writeln;
+    end;
     cudaMemcpy(dInputTokens, @InputTokens[0], SeqLen * SizeOf(Integer), cudaMemcpyHostToDevice);
 
     for j := 0 to Length(QueryTokenized) - 1 do
@@ -123,24 +173,46 @@ begin
     LastBlk := nBlock - 1;
     CuMatMulFullNT(CuHandle, StateBlock[LastBlk].X7.dValue, WModelParams.Embeddings.dValue, dProbs, SeqLen, nVocab, ModelDim, ModelDim, ModelDim, DimVocab);
 
+    // Check that probs are changing.
+    Write('Before softmax, probs = ');
+    for j := 0 to 9 do
+      Write(Probs[LastPos, j]: 7: 7, '  ');
+    Writeln;
+
     // Softmax Forward.
     LaunchSoftmaxForwardN(dProbs, dProbs, SeqLen, nVocab, Temperature);
     cudaMemcpy(@Probs[0, 0], dProbs, ProbsSize, cudaMemcpyDeviceToHost);
 
-    // Check that probs are changing.
-    for j := 0 to 4 do
-      Write('tok ', j, ' prob ', Probs[LastPos, j]: 6: 6, '   ');
-    Pause;
+    // Set special tokens to zero probability.
+    Probs[LastPos, BOS] := 0.0;
+    Probs[LastPos, PAD] := 0.0;
+    Probs[LastPos, UNK] := 0.0;
+    Probs[LastPos, EOS] := 0.0;
 
-    // If nBlock, then pick the largest probs, and save them.
-    Writeln('Final Inference Stage, pick largest prob');
+    // Compute and report loss.
+    Loss := ComputeLoss(WModelState.Probs, TargetTokens);
+    Writeln('Actual Loss = ', Loss: 10: 6);
+
+    // Check that probs are changing.
+    Write('After softmax, probs = ');
+    for j := 0 to 9 do
+      Write(Probs[LastPos, j]: 7: 7, '  ');
+    Writeln;
+
+    // ArgMax: Pick the largest probs, and save them.
+    {Writeln('Final Inference Stage, pick largest token probability.');
     BestProb := Probs[LastPos, 0];
     BestTok := 0;
     for j := 1 to nVocab - 1 do
       if Probs[LastPos, j] > BestProb then begin
         BestProb := Probs[LastPos, j];
         BestTok := j;
-      end;
+      end;}
+
+    // Top K: sample from among largest K token probabilities.
+    TopKProbs;
+    BestTok := SampleTopK(TopTokVector, TopProbVector);
+    BestProb := Probs[LastPos, BestTok];
 
     if (Length(QueryTokenized) > 0) and (BestTok = QueryTokenized[High(QueryTokenized)]) then begin
       Probs[LastPos, BestTok] := -1.0;
@@ -157,11 +229,6 @@ begin
     // BestTok is the next predicted token.
     QueryToken := BestTok;
     QueryProb := BestProb;
-
-    {Write('All the probs in lastpos: ');
-    for j := 1 to nVocab - 1 do
-      Write(j: 3, ' ', Probs[LastPos, j]: 6: 6,  ' ');
-    Writeln;}
   end;
 end;
 
@@ -188,11 +255,14 @@ begin
   // Initialize transformer state.
   InitializeTransformerState(WModelState);
 
-  // Intialize cublas and cuda and malloc.
-  if not CuBlasInitialized then
-    InitializeCuBlas;
+{  // Initiate Cublas.  This is done in Train or LoadModel.
+  InitializeCuBLAS;
+
+  // Initialize cuda memory.
   if not CudaAllocated then
-    MAllocCublas(WModelParams, WModelState);
+    MAllocCublas(WModelParams, WModelState);}
+
+  Writeln('Beginning of inference.  Expected random loss = ', Ln(nVocab): 10: 6);
 
   try
     // Send params (if new model) and inverse freq to device.
@@ -216,7 +286,7 @@ begin
       for i := 0 to Length(QueryString) - 1 do
         QueryInput[i] := Ord(QueryString[i + 1]);
 
-      Write(Length(QueryInput), ' ', 'Query Tokens (Query String as Tokens): ');
+      Write(Length(QueryInput), ' ', 'Query String as Bytes: ');
       for i := 0 to Length(QueryInput) - 1 do
          Write(QueryInput[i], ' ');
       Writeln;
@@ -234,7 +304,6 @@ begin
       if (Length(QueryTokenized) > 0) and (QueryTokenized[High(QueryTokenized)] = EOS) then
         SetLength(QueryTokenized, Length(QueryTokenized) - 1);
 
-      Write('Query Tokens, Again, Using TCFull: ');
       TCFull(QueryTokenized);
 
       SetLength(QueryOutput, 0);
@@ -250,26 +319,28 @@ begin
         SetLength(WorkTokens, Length(WorkTokens) + 1);
         WorkTokens[High(WorkTokens)] := QueryToken;
 
-        //if Tokenizer = WesTokenizer then
+        if Tokenizer = WesTokenizer then
           // WesTokenizer.
           Writeln('Single Query Token Number = ', QueryToken, ' Probability = ', QueryProb: 6: 6,
-          ' Decoded = ', Decode(QueryToken));
+          ' Decoded = <<', Decode(QueryToken), '>>');
+          Writeln('Inference. nVocab = ', nVocab, ' DimVocab = ', DimVocab, ' Seqlen = ', SeqLen, ' ModelDim = ', ModelDim, ' Projection = ', Proj,
+            '  Epoch = ', MaxEpochs, ' Blocks = ', nBlock, ' Heads = ', nHead);
         //else
-          // GPT2Tokenizer.
+          // GPT2Tokenizer.  Need to add this.
           //Writeln('Single Query Token Number = ', QueryToken, ' Probability = ', WModelState.Probs[SeqLen - 1, QueryToken]: 6: 6,
           //' Decoded = ', DisplayToken(UTF8Decode(Vocab[QueryToken])));
 
-          Write('Cumulative Decode: ');
+          {Write('Cumulative Decode: ');
           for i := 0 to High(QueryOutput) do
             // WesTokenizer.
             // Write(SymbolTable[QueryOutput[i]]);
             Write(Decode(QueryOutput[i]));
-          Writeln;
+          Writeln;}
 
-          Write('New Query Input, WorkTokens: ');
+          Write('WorkTokens: <<');
           for i := 0 to High(WorkTokens) do
             Write(Decode(WorkTokens[i]));
-          Writeln;
+          Writeln('>>');
         Pause;
 
         // if QueryToken = EOS then Break;  // For debugging, don't stop.
@@ -304,8 +375,11 @@ begin
     end; // Run query once.
   finally
     Training := True;
-    // MDeallocateCublas(WModelParams, WModelState);
-    // cublasDestroy_v2(CuHandle);
+    // Clean up cublas.
+    if CudaAllocated then
+      MDeallocateCublas(WModelParams, WModelState);
+    if CuBLAS_Shutdown then
+      Writeln('CuBLAS successfully shut down.')
   end;
 end;
 

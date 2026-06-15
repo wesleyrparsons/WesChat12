@@ -533,6 +533,103 @@ void LaunchReLUBackward(
 
     cudaDeviceSynchronize();  // good for debugging
 }
+// Softmaz Forward Strided, June 13 2026.
+// Softmax Forward, strided.
+#include <math.h>
+#include <float.h>
+
+extern "C" __declspec(dllexport)
+__global__ void SoftmaxForwardStridedKernel2(
+    const float* In,
+    float* Out,
+    int Rows,
+    int Cols,       // logical vocab size: nVocab
+    int RowStride,  // physical row stride: DimVocab
+    float Temperature)
+{
+    int row = blockIdx.x;
+    int tid = threadIdx.x;
+
+    extern __shared__ float shared[];
+
+    if (row >= Rows)
+        return;
+
+    if (Temperature <= 0.0f)
+        Temperature = 1.0f;
+
+    int base = row * RowStride;
+
+    // 1. Find max logit for numerical stability.
+    float localMax = -FLT_MAX;
+
+    for (int col = tid; col < Cols; col += blockDim.x) {
+        float x = In[base + col];
+        if (x > localMax)
+            localMax = x;
+    }
+
+    shared[tid] = localMax;
+    __syncthreads();
+
+    for (int stride = blockDim.x / 2; stride > 0; stride >>= 1) {
+        if (tid < stride) {
+            if (shared[tid + stride] > shared[tid])
+                shared[tid] = shared[tid + stride];
+        }
+        __syncthreads();
+    }
+
+    float maxVal = shared[0];
+
+    // 2. Compute exp sum.
+    float localSum = 0.0f;
+
+    for (int col = tid; col < Cols; col += blockDim.x) {
+        float e = expf((In[base + col] - maxVal) / Temperature);
+        localSum += e;
+    }
+
+    shared[tid] = localSum;
+    __syncthreads();
+
+    for (int stride = blockDim.x / 2; stride > 0; stride >>= 1) {
+        if (tid < stride)
+            shared[tid] += shared[tid + stride];
+
+        __syncthreads();
+    }
+
+    float sumVal = shared[0];
+
+    // 3. Write normalized probabilities.
+    for (int col = tid; col < Cols; col += blockDim.x) {
+        float e = expf((In[base + col] - maxVal) / Temperature);
+        Out[base + col] = e / sumVal;
+    }
+}
+
+extern "C" __declspec(dllexport)
+void LaunchSoftmaxForwardStrided(
+    const float* dIn,
+    float* dOut,
+    int Rows,
+    int Cols,
+    int RowStride,
+    float Temperature)
+{
+    int threads = 256;
+    int blocks = Rows;
+    int sharedBytes = threads * sizeof(float);
+
+    SoftmaxForwardStridedKernel2<<<blocks, threads, sharedBytes>>>(
+        dIn,
+        dOut,
+        Rows,
+        Cols,
+        RowStride,
+        Temperature);
+}
 
 // Softmax Forward, strided.
 #include <cuda_runtime.h>
@@ -681,6 +778,67 @@ void LaunchSoftmaxBackward(
     );
 
     cudaDeviceSynchronize();
+}
+
+// CE Gradient Strided from Probabilities.
+extern "C" __declspec(dllexport)
+__global__ void CEGradientStridedKernel(
+    const float* Probs,
+    float* TopGradient,
+    const int* TargetTokens,
+    int Rows,
+    int VocabSize,
+    int RowStride)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+    int total = Rows * VocabSize;
+    if (idx >= total)
+        return;
+
+    int row = idx / VocabSize;
+    int col = idx % VocabSize;
+
+    int target = TargetTokens[row];
+
+    int offset = row * RowStride + col;
+
+    if (target < 0 || target >= VocabSize) {
+        TopGradient[offset] = 0.0f;
+        return;
+    }
+
+    // Cross-entropy gradient after softmax:
+    // dLogits = Probs
+    // dLogits[target] -= 1
+    float g = Probs[offset];
+
+    if (col == target)
+        g -= 1.0f;
+
+    TopGradient[offset] = g;
+}
+
+extern "C" __declspec(dllexport)
+void LaunchCEGradientStrided(
+    const float* dProbs,
+    float* dTopGradient,
+    const int* dTargetTokens,
+    int Rows,
+    int VocabSize,
+    int RowStride)
+{
+    int threads = 256;
+    int total = Rows * VocabSize;
+    int blocks = (total + threads - 1) / threads;
+
+    CEGradientStridedKernel<<<blocks, threads>>>(
+        dProbs,
+        dTopGradient,
+        dTargetTokens,
+        Rows,
+        VocabSize,
+        RowStride);
 }
 
 // CE Gradient From Probabilities.

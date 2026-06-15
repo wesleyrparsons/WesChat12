@@ -15,6 +15,7 @@ var
   StopTraining: Boolean;
   TrainSuccess: Boolean = False;            // Training successful and proceed to inference.
   DisplayCorpus: Boolean = True;            // One set for real tokenizing and one set for debug.
+  DisplayWindow: Boolean = False;           // Display the SeqLen window.
   VerboseTokenize: Boolean = False;         // Verbose in Tokenize units.
   VerboseTransform: Boolean = False;        // Verbose in Transform units.
   VeryVerboseTokenize: Boolean = False;     // Very verbose in Tokenize units.
@@ -31,15 +32,15 @@ var
 
 const
   // Model constants.
-  MaxEpochs = 6;                 // Number of epochs, loops over tokenized corpus,
+  MaxEpochs = 400;                // Number of epochs, loops over tokenized corpus,
   ModelDim = 64;                  // Number of loadings for a symbol.
   Proj = 4;                       // Projection to Hidden arrays.
   ModelDimProj = ModelDim * Proj; // Dimension of model of projected X matrix.
-  SeqLen = 256;                   // Sequence length for X.
-  Stride = 64;                    // Stride across sequence lengths.
-  nHead = 4;                      // Number of heads for multi-headed attention.
+  SeqLen = 64;                    // Sequence length for X.
+  Stride = 12;                    // Stride across sequence lengths.
+  nHead = 2;                      // Number of heads for multi-headed attention.
   HeadDim = ModelDim div nHead;   // Length of one head.
-  nBlock = 4;                     // Number of blocks in transformer.
+  nBlock = 2;                     // Number of blocks in transformer.
   ADropOut = 0.1;                 // Probability of attention dropout.
   MLPDropOut = 0.1;               // Probability of MLP dropout.
   RDropout = 0.1;                 // Probability of residual dropout.
@@ -169,7 +170,7 @@ var
   // cublas vars.
   CuHandle: TcublasHandle;
   CudaAllocated: Boolean = False;
-  CuBlasInitialized: Boolean = False;
+  // CuBlasInitialized: Boolean = False;
   One: Single = 1.0;
   Zero: Single = 0.0;
   // DLL accessibility vars.
@@ -191,16 +192,17 @@ var
   TargetTokens: TIDimVector;                     // Target tokens. Shifted by  +1.
   dTargetTokens: PInteger;
   // Extra char vars.
-  BOS: Integer = 256;
-  EOS: Integer = 257;
-  PAD: Integer = 258;
-  UNK: Integer = 259;
+  BOS: Integer = 256;                            // Begining of corpus.
+  EOS: Integer = 257;                            // End of corpus.
+  PAD: Integer = 258;                            // Padding to bring up to SeqLen.
+  UNK: Integer = 259;                            // Unknown.
   // Model setings vars.
-  LearningRate: Single = 0.01;                   // LearningRate for Gradient.
+  LearningRate: Single = 0.0001;                 // LearningRate for Gradient.
   Temperature: Single = 1.0;                     // Temperature for softmax.
-  // Staging vars.
-  VStage: Boolean = False;                       // Display progress by stage in train and transform.
-  SStage: Boolean = True;                        // Display progress by stage in train and transform.
+  // Staging and epoch vars.
+  DisplayStage: Boolean = False;                 // Display progress by stage in train and transform.
+  DisplaySubStage: Boolean = False;              // Display progress by stage in train and transform.
+  DisplayEpoch: Boolean = True;                  // Display progress by epoch in train and transform.
   Stage: Integer;                                // Indentation for stage;
   // Utility vars.
   Mt0, Mt1, t0, t1, StopTime: TDateTime;         // For timing.

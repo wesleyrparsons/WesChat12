@@ -1,0 +1,51 @@
+
+--- File Information ---
+Files used in symbol table: 
+locke.txt   339046 bytes   5/20/2026 6:59:06 AM  
+
+--- Time Statistics ---
+Start time: 6/21/2026 12:39:13 PM     End time: 6/21/2026 12:39:29 PM
+Total elapsed time: 0 hours, 0 min 15.9540 sec
+Number of symbols: 2000
+Elapsed time applying merges: 0 hours, 0 min 15.9430 sec
+Original text size (bytes/tokens): 339046
+Tokens per second (total): 21251.4730
+Tokens per second (merging): 21266.1356
+
+--- Symbols Statistics ---
+Number of raw byte symbols: 256
+Number of special symbols: 4
+Number of merged symbols: 1740
+Minimum symbol length: 1
+Maximum symbol length: 22
+
+Histogram of symbol lengths:
+Length  1: 256
+Length  2: 206
+Length  3: 362
+Length  4: 321
+Length  5: 282
+Length  6: 189
+Length  7: 149
+Length  8: 82
+Length  9: 57
+Length 10: 44
+Length 11: 20
+Length 12: 11
+Length 13: 11
+Length 14: 2
+Length 15: 2
+Length 16: 1
+Length 17: 1
+Length 18: 1
+Length 20: 1
+Length 21: 1
+Length 22: 1
+
+Mean symbol length: 4.4505
+Median symbol length: 4.0000
+Mean tokens per symbol (compression): 169.5230
+Longest symbol:
+  Index: 1271
+  Length: 22
+  Value: "in the state of nature"

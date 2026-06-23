@@ -2,7 +2,7 @@ unit Test;
 
 {$mode ObjFPC}{$H+}{$I proprietary.txt}
 
-{ WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wespar.com.}
+{ WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wesparsons.com.}
 
 interface
 
@@ -10,19 +10,19 @@ uses
   Global,
   Matrix;
 
-type
+{type
   SASHLVector = array[0..SeqLen - 1] of Single;
   SASHDDArray = array[0..ModelDim - 1, 0..ModelDim - 1] of Single;
   SASHLDArray = array[0..SeqLen - 1, 0..ModelDim - 1] of Single;
   SASHDLArray = array[0..ModelDim - 1, 0..SeqLen - 1] of Single;
   SASHLLArray = array[0..SeqLen - 1, 0..SeqLen - 1] of Single;
 
-procedure RunTestSGEMM;
-{procedure BlockedMatMulLLLD(const A: SASHLLArray; B: SASHLDArray; out C: SASHLDArray);
+// procedure RunTestSGEMM;
+procedure BlockedMatMulLLLD(const A: SASHLLArray; B: SASHLDArray; out C: SASHLDArray);
 procedure BlockedMatMulLDDL(const A: SASHLDArray; B: SASHDLArray; out C: SASHLLArray);
 procedure BlockedMatMulLDDD(const A: SASHLDArray; B: SASHDDArray; out C: SASHLDArray);
-function TransposeLD(const A: SASHLDArray): SASHDLArray;                              }
-
+function TransposeLD(const A: SASHLDArray): SASHDLArray;
+ }
 implementation
 
 type

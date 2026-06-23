@@ -118,7 +118,7 @@ var
     end;
   end;
 
-  begin
+begin
   // Check for valid query.
   if Length(QueryTokenized) = 0 then begin
     QueryToken := EOS;
@@ -240,7 +240,7 @@ end;
 // QueryToken is the single next token produced by the infer proc.
 procedure RunInfer(var WModelParams: TWModelParams; var WModelState: TWModelState);
 const
-  MaxNewTokens = 100;        // Limit on new tokens produced.
+  MaxNewTokens = 500;        // Limit on new tokens produced.
 var
   i, Step, QueryToken: Integer;
   QueryTokenized, WorkTokens, QueryOutput: TIVector;
@@ -248,21 +248,14 @@ var
   QueryInput: TBVector;
   QueryString: string;
 begin
-  Training := False;
-  nVocab := nSymbols;
+  Training := False;                 // So no dropouts in unit Train.
+  nVocab := nSymbols;                // Same variable.
   VerboseTransform := False;         // Select verbosity during inference.
 
   // Initialize transformer state.
   InitializeTransformerState(WModelState);
 
-{  // Initiate Cublas.  This is done in Train or LoadModel.
-  InitializeCuBLAS;
-
-  // Initialize cuda memory.
-  if not CudaAllocated then
-    MAllocCublas(WModelParams, WModelState);}
-
-  Writeln('Beginning of inference.  Expected random loss = ', Ln(nVocab): 10: 6);
+  Writeln('Beginning of inference.  Expected random loss = ', Ln(nVocab): 10: 8);
 
   try
     // Send params (if new model) and inverse freq to device.
@@ -274,7 +267,7 @@ begin
       // Get a query from user.
       // Write('Enter query: ');
       // Readln(QueryString);
-      QueryString := 'man with';   // Temporary.
+      QueryString := 'The young man smiled. ';   // Temporary.
       Writeln('Query string: ', QueryString);
 
       if QueryString = EmptyStr then begin

@@ -1,0 +1,64 @@
+--- Program Information ---
+WesChat, Version: 1.2
+Author: Wesley R. Parsons
+Date: begun January 10, 2026
+Sequence Length (SeqLen): 64
+Model Dimensions (ModelDim): 64
+Dimensional Projections (Proj): 4
+Heads (nHead): 4
+Blocks (nBlock): 4
+Epochs (MaxEpochs): 100000
+Learning Rate (LearningRate): 0.0000
+Temperature (Temperature): 1.0000
+Dropouts for Attention, MLP, Residual (A, MLP, RDropout): 0.10 0.10 0.10
+Trainable Parameters: Embeddings, Wq, Wk, Wv, W0, W1, b1, W2, b2, gamma1, beta1, gamma2, beta2
+Maximum Vocabulary (MaxVocab): 2000
+Number of Vocabulary (nVocab): 0
+
+--- File Information ---
+Files used in symbol table: 
+damnedthing.txt   18457 bytes   5/20/2026 6:59:04 AM  
+
+--- Time Statistics ---
+Start time: 6/21/2026 7:03:23 PM     End time: 6/21/2026 7:03:23 PM
+Total elapsed time: 0 hours, 0 min 0.0020 sec
+--- BPE Statistics ---
+Original text size (bytes/tokens): 18457
+Encoded text size (bytes/tokens): 18459
+Compression ratio: 0.9999
+Tokens per second: 9228500.0000
+
+--- Token Statistics ---
+Merged token instances: 2
+Unmerged token instances: 18457
+Mean token length: 0.9999
+
+--- Top 30 Most Frequent Merged Tokens ---
+Merged tokens never used: 0
+Merged tokens used only once: 0
+Top 0 merged tokens account for 0 / 0 merged-token instances = 0.00%
+
+
+--- File Information ---
+Files used in symbol table: 
+damnedthing.txt   18457 bytes   5/20/2026 6:59:04 AM  
+
+--- Time Statistics ---
+Start time: 6/21/2026 7:03:23 PM     End time: 6/21/2026 7:03:23 PM
+Total elapsed time: 0 hours, 0 min 0.0020 sec
+--- BPE Statistics ---
+Original text size (bytes/tokens): 18457
+Encoded text size (bytes/tokens): 18459
+Compression ratio: 0.9999
+Tokens per second: 9228500.0000
+
+--- Token Statistics ---
+Merged token instances: 2
+Unmerged token instances: 18457
+Mean token length: 0.9999
+
+--- Top 30 Most Frequent Merged Tokens ---
+Merged tokens never used: 0
+Merged tokens used only once: 0
+Top 0 merged tokens account for 0 / 0 merged-token instances = 0.00%
+

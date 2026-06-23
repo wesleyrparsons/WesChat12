@@ -1,0 +1,41 @@
+
+--- File Information ---
+Files used in symbol table: 
+bela.txt   1036 bytes   5/20/2026 6:59:04 AM  
+
+--- Time Statistics ---
+Start time: 6/22/2026 9:37:11 AM     End time: 6/22/2026 9:37:15 AM
+Total elapsed time: 0 hours, 0 min 4.0960 sec
+Number of symbols: 399
+Elapsed time applying merges: 1108689 hours, 66521377 min 15.8750 sec
+Original text size (bytes/tokens): 1036
+Tokens per second (total): 252.9297
+Tokens per second (merging): 0.0000
+
+--- Symbols Statistics ---
+Number of raw byte symbols: 256
+Number of special symbols: 4
+Number of merged symbols: 139
+Minimum symbol length: 1
+Maximum symbol length: 14
+
+Histogram of symbol lengths:
+Length  1: 256
+Length  2: 57
+Length  3: 38
+Length  4: 15
+Length  5: 13
+Length  6: 5
+Length  7: 5
+Length  8: 5
+Length  9: 2
+Length 11: 2
+Length 14: 1
+
+Mean symbol length: 1.9248
+Median symbol length: 1.0000
+Mean tokens per symbol (compression): 2.5965
+Longest symbol:
+  Index: 398
+  Length: 14
+  Value: "vertical line "

@@ -10,7 +10,8 @@ uses
   Display,
   Global,
   Math,
-  Matrix;
+  Matrix,
+  SysUtils;
 
 const
   WeightSize: Integer = ModelDim * ModelDim * SizeOf(Single);
@@ -25,15 +26,28 @@ const
   InvFreqSize: Integer = (ModelDim div 2) * SizeOf(Single);
   ProbsSize: Integer = SeqLen * DimVocab * SizeOf(Single);
 
+// Cublas and Cuda procedures.
 procedure InitializeCublas;
 procedure CheckCudaError(const Where: string);
 procedure StartCuda(var WModelParams: TWModelParams; var WModelState: TWModelState);
 procedure EndCuda(var WModelParams: TWModelParams; var WModelState: TWModelState);
+// Word procedures and funcitons.
+procedure InitWorkFolders(const Root: string);
+function CleanBaseName(const FileName: string): string;
+function WorkSymbolFile(const BaseName: string): string;
+function WorkTokenFile(const BaseName: string): string;
+function WorkModelFile(const BaseName: string): string;
+function WorkLogFile(const BaseName: string): string;
+function WorkRunFile(const BaseName: string): string;
+// Utility procedures.
 procedure PadToSeqMultiple(var TokenVectorToPad: TIVector; const Seq: Integer);
 procedure TC100(const TC: TIVector);
 procedure TCFull(const TC: TIVector);
 function Decode(const x: Integer): UnicodeString;
+// Transform routines.
 function ComputeLoss(const Probs: TSeqVocabMatrix; const TargetTokens: TIDimVector): Double;
+procedure ScaleAllGradients(var WModelParams: TWModelParams; const S: Single);
+// Initialization and optimization routines.
 procedure XGUniformW(var W: TWeightMatrix; FanIn, FanOut: Integer);
 procedure XGUniformWHead(var W: TWeightHeadMatrix; FanIn, FanOut: Integer);
 procedure XGUniformW1(var W: TWeightProjMatrix; FanIn, FanOut: Integer);
@@ -57,6 +71,8 @@ procedure UpdateEmbeddings(var WModelParams: TWModelParams; var WModelState: TWM
 //   SeqLen: Integer; const Gamma: TSeqVector; var LNXhat: TSeqMatrix; var LNInvStd: TFSVector);
 // procedure GradientFromKLDivergence(var WModelState: TWModelState);
 // procedure BackpropAdd(const dOut: TSeqMatrix; var dA, dB: TSeqMatrix; const L, D: Integer);
+procedure LaunchClipVector(X: PSingle; N: Integer; Limit: Single); cdecl;
+  external 'WesChatKernel12.dll';
 procedure LaunchEmbeddingLookup(Embeddings: PSingle; InputTokens: PInteger; X: PSingle; SeqLen: Integer; ModelDim: Integer);
   cdecl; external 'WesChatKernel12.dll';
 procedure LaunchAutoRegressiveMask(Scores: PSingle; SeqLen: Integer);
@@ -95,16 +111,6 @@ procedure LaunchAddBiasRowsBackward(dX: PSingle; dBias: PSingle; Rows: Integer; 
   cdecl; external 'WesChatKernel12.dll';
 
 implementation
-
-// Test procedure, not used.
-// Initialize test vector.
-procedure InitTestVector(var N: TFSVector);
-var
-  i: Integer;
-begin
-for i := 0 to SeqLen - 1 do
-  N[i] := 0.0;
-end;
 
 // Check existence of any DLL.
 function CheckDLL(const LibName: string): Boolean;
@@ -182,6 +188,59 @@ begin
     Writeln('CuBLAS successfully shut down.')
 end;
 
+// Saving routines.
+procedure InitWorkFolders(const Root: string);
+begin
+  WorkRoot := IncludeTrailingPathDelimiter(ExpandFileName(Root));
+
+  CorpusDir  := WorkRoot + 'corpus'  + DirectorySeparator;
+  SymbolDir  := WorkRoot + 'symbols' + DirectorySeparator;
+  TokenDir   := WorkRoot + 'tokens'  + DirectorySeparator;
+  ModelDir   := WorkRoot + 'models'  + DirectorySeparator;
+  LogDir     := WorkRoot + 'logs'    + DirectorySeparator;
+  RunDir     := WorkRoot + 'runs'    + DirectorySeparator;
+  ScratchDir := WorkRoot + 'scratch' + DirectorySeparator;
+
+  ForceDirectories(WorkRoot);
+  ForceDirectories(CorpusDir);
+  ForceDirectories(SymbolDir);
+  ForceDirectories(TokenDir);
+  ForceDirectories(ModelDir);
+  ForceDirectories(LogDir);
+  ForceDirectories(RunDir);
+  ForceDirectories(ScratchDir);
+end;
+
+function CleanBaseName(const FileName: string): string;
+begin
+  Result := ChangeFileExt(ExtractFileName(FileName), '');
+end;
+
+function WorkSymbolFile(const BaseName: string): string;
+begin
+  Result := SymbolDir + ChangeFileExt(ExtractFileName(BaseName), '.sym');
+end;
+
+function WorkTokenFile(const BaseName: string): string;
+begin
+  Result := TokenDir + ChangeFileExt(ExtractFileName(BaseName), '.tok');
+end;
+
+function WorkModelFile(const BaseName: string): string;
+begin
+  Result := ModelDir + ChangeFileExt(ExtractFileName(BaseName), '.model');
+end;
+
+function WorkLogFile(const BaseName: string): string;
+begin
+  Result := LogDir + ChangeFileExt(ExtractFileName(BaseName), '.log');
+end;
+
+function WorkRunFile(const BaseName: string): string;
+begin
+  Result := RunDir + BaseName + '_' + FormatDateTime('yyyy-mm-dd_hhnnss', Now) + '.run';
+end;
+
 // Pad token vector to multiple of SeqLen.
 procedure PadToSeqMultiple(var TokenVectorToPad: TIVector; const Seq: Integer);
 var
@@ -256,6 +315,33 @@ begin
   end;
 
   Result := Result / SeqLen;
+end;
+
+// Scale all the graidents.
+procedure ScaleAllGradients(var WModelParams: TWModelParams; const S: Single);
+var
+  k: Integer;
+begin
+  for k := 0 to nBlock - 1 do
+    with WModelParams.ParamBlock[k] do begin
+      CuScale(CuHandle, ModelDim * ModelDim, S, Wq.dGrad);
+      CuScale(CuHandle, ModelDim * ModelDim, S, Wk.dGrad);
+      CuScale(CuHandle, ModelDim * ModelDim, S, Wv.dGrad);
+      CuScale(CuHandle, ModelDim * ModelDim, S, W0.dGrad);
+
+      CuScale(CuHandle, ModelDim * ModelDimProj, S, W1.dGrad);
+      CuScale(CuHandle, ModelDimProj * ModelDim, S, W2.dGrad);
+
+      CuScale(CuHandle, ModelDimProj, S, b1.dGrad);
+      CuScale(CuHandle, ModelDim,     S, b2.dGrad);
+
+      CuScale(CuHandle, ModelDim, S, Gamma1.dGrad);
+      CuScale(CuHandle, ModelDim, S, Beta1.dGrad);
+      CuScale(CuHandle, ModelDim, S, Gamma2.dGrad);
+      CuScale(CuHandle, ModelDim, S, Beta2.dGrad);
+    end;
+
+  CuScale(CuHandle, DimVocab * ModelDim, S, WModelParams.Embeddings.dGrad);
 end;
 
 // Xavier-Glorot initialization on W0 matrix.
@@ -411,6 +497,8 @@ begin
       cudaMalloc(@dLNXHat1, XSize);
       cudaMalloc(@dLNInvStd2, SeqSize);
       cudaMalloc(@dLNXHat2, XSize);
+      cudaMalloc(@dX4FromLN2, XSize);
+      cudaMalloc(@dXFromLN1, XSize);
     end;
   end;
 end;
@@ -512,6 +600,11 @@ begin
       cudaFree(dLNXHat1);   dLNXHat1   := nil;
       cudaFree(dLNInvStd2); dLNInvStd2 := nil;
       cudaFree(dLNXHat2);   dLNXHat2   := nil;
+
+      cudaFree(dX4FromLN2);
+      cudaFree(dXFromLN1);
+      dX4FromLN2 := nil;
+      dXFromLN1  := nil;
     end;
   end;
 end;
@@ -712,63 +805,79 @@ begin
   end;
 end;
 
+procedure CuUpdateParamDecay(Handle: TcublasHandle; const N: Integer; const LearningRate: Single; const Grad: PSingle; Param: PSingle);
+var
+  Alpha: Single;
+begin
+  CuScale(Handle, N, DecayScale, Param);
+
+  Alpha := -LearningRate;
+  cublasSaxpy_v2(Handle, N, @Alpha, Grad, 1, Param, 1);
+end;
+
+procedure CuUpdateParamNoDecay(Handle: TcublasHandle; const N: Integer; const LearningRate: Single; const Grad: PSingle; Param: PSingle);
+var
+  Alpha: Single;
+begin
+  Alpha := -LearningRate;
+  cublasSaxpy_v2(Handle, N, @Alpha, Grad, 1, Param, 1);
+end;
+
 procedure CuUpdateParam(Handle: TcublasHandle; const N: Integer; const LearningRate: Single; const Grad: PSingle; Param: PSingle);
 var
   Alpha: Single;
 begin
   Alpha := -LearningRate;
-
   cublasSaxpy_v2(Handle, N, @Alpha, Grad, 1, Param, 1);
 end;
 
-{ Optimization }
 // Update the weights and biases. At some point, eliminate non-cublas updates.
 procedure Optimization(var WModelParams: TWModelParams; const Blk: Integer);
 begin
   with WModelParams.ParamBlock[Blk] do begin
     // W weights: main attention output.
     // UpdateParam(ModelDim * ModelDim, LearningRate, @W0.Grad[0,0], @W0.Value[0,0]);
-    CuUpdateParam(CuHandle, ModelDim * ModelDim, LearningRate, W0.dGrad, W0.dValue);
+    CuUpdateParamDecay(CuHandle, ModelDim * ModelDim, LearningRate, W0.dGrad, W0.dValue);
     // cblas_saxpy(ModelDim * ModelDim, -LearningRate, @W0.Grad[0, 0], 1, @W0.Value[0, 0], 1);
 
     // Wq, Wk, Wv weights: Q, K, V.
     // UpdateParam(ModelDim * ModelDim, LearningRate, @Wq.Grad[0,0], @Wq.Value[0,0]);
-    CuUpdateParam(CuHandle, ModelDim * ModelDim, LearningRate, Wq.dGrad, Wq.dValue);
+    CuUpdateParamDecay(CuHandle, ModelDim * ModelDim, LearningRate, Wq.dGrad, Wq.dValue);
     // cblas_saxpy(ModelDim * ModelDim, -LearningRate, @Wq.Grad[0, 0], 1, @Wq.Value[0, 0], 1);
     // UpdateParam(ModelDim * ModelDim, LearningRate, @Wk.Grad[0,0], @Wk.Value[0,0]);
-    CuUpdateParam(CuHandle, ModelDim * ModelDim, LearningRate, Wk.dGrad, Wk.dValue);
+    CuUpdateParamDecay(CuHandle, ModelDim * ModelDim, LearningRate, Wk.dGrad, Wk.dValue);
     // cblas_saxpy(ModelDim * ModelDim, -LearningRate, @Wk.Grad[0, 0], 1, @Wk.Value[0, 0], 1);
     // UpdateParam(ModelDim * ModelDim, LearningRate, @Wv.Grad[0,0], @Wv.Value[0,0]);
-    CuUpdateParam(CuHandle, ModelDim * ModelDim, LearningRate, Wv.dGrad, Wv.dValue);
+    CuUpdateParamDecay(CuHandle, ModelDim * ModelDim, LearningRate, Wv.dGrad, Wv.dValue);
     // cblas_saxpy(ModelDim * ModelDim, -LearningRate, @Wv.Grad[0, 0], 1, @Wv.Value[0, 0], 1);
 
     // UpdateParam(ModelDim * ModelDimProj, LearningRate, @W1.Grad[0,0], @W1.Value[0,0]);
-    CuUpdateParam(CuHandle, ModelDim * ModelDimProj, LearningRate, W1.dGrad, W1.dValue);
+    CuUpdateParamDecay(CuHandle, ModelDim * ModelDimProj, LearningRate, W1.dGrad, W1.dValue);
     // cblas_saxpy(ModelDim * ModelDimProj, -LearningRate, @W1.Grad[0, 0], 1, @W1.Value[0, 0], 1);
     // UpdateParam(ModelDimProj * ModelDim, LearningRate, @W2.Grad[0,0], @W2.Value[0,0]);
-    CuUpdateParam(CuHandle, ModelDimProj * ModelDim, LearningRate, W2.dGrad, W2.dValue);
+    CuUpdateParamDecay(CuHandle, ModelDimProj * ModelDim, LearningRate, W2.dGrad, W2.dValue);
     // cblas_saxpy(ModelDimProj * ModelDim, -LearningRate, @W2.Grad[0, 0], 1, @W2.Value[0, 0], 1);
 
     // b1, b2: biases.
     // UpdateParam(ModelDimProj, LearningRate, @b1.Grad[0], @b1.Value[0]);
-    CuUpdateParam(CuHandle, ModelDimProj, LearningRate, b1.dGrad, b1.dValue);
+    CuUpdateParamDecay(CuHandle, ModelDimProj, LearningRate, b1.dGrad, b1.dValue);
     // cblas_saxpy(ModelDimProj, -LearningRate, @b1.Grad[0], 1, @b1.Value[0], 1);
     // UpdateParam(ModelDim, LearningRate, @b2.Grad[0], @b2.Value[0]);
-    CuUpdateParam(CuHandle, ModelDim,     LearningRate, b2.dGrad, b2.dValue);
+    CuUpdateParamDecay(CuHandle, ModelDim,     LearningRate, b2.dGrad, b2.dValue);
     // cblas_saxpy(ModelDim, -LearningRate, @b2.Grad[0], 1, @b2.Value[0], 1);
 
     // Gamma1, Gamm2, Beta1, Beta2: Layer-Norm parameters.
     // UpdateParam(ModelDim, LearningRate, @Gamma1.Grad[0], @Gamma1.Value[0]);
-    CuUpdateParam(CuHandle, ModelDim, LearningRate, Gamma1.dGrad, Gamma1.dValue);
+    CuUpdateParamNoDecay(CuHandle, ModelDim, LearningRate, Gamma1.dGrad, Gamma1.dValue);
     // cblas_saxpy(ModelDim, -LearningRate, @Gamma1.Grad[0], 1, @Gamma1.Value[0], 1);
     // UpdateParam(ModelDim, LearningRate, @Gamma2.Grad[0], @Gamma2.Value[0]);
-    CuUpdateParam(CuHandle, ModelDim, LearningRate, Gamma2.dGrad, Gamma2.dValue);
+    CuUpdateParamNoDecay(CuHandle, ModelDim, LearningRate, Gamma2.dGrad, Gamma2.dValue);
     // cblas_saxpy(ModelDim, -LearningRate, @Gamma2.Grad[0], 1, @Gamma2.Value[0], 1);
     // UpdateParam(ModelDim, LearningRate, @Beta1.Grad[0], @Beta1.Value[0]);
-    CuUpdateParam(CuHandle, ModelDim, LearningRate, Beta1.dGrad, Beta1.dValue);
+    CuUpdateParamNoDecay(CuHandle, ModelDim, LearningRate, Beta1.dGrad, Beta1.dValue);
     // cblas_saxpy(ModelDim, -LearningRate, @Beta1.Grad[0], 1, @Beta1.Value[0], 1);
     // UpdateParam(ModelDim, LearningRate, @Beta2.Grad[0], @Beta2.Value[0]);
-    CuUpdateParam(CuHandle, ModelDim, LearningRate, Beta2.dGrad, Beta2.dValue);
+    CuUpdateParamNoDecay(CuHandle, ModelDim, LearningRate, Beta2.dGrad, Beta2.dValue);
     // cblas_saxpy(ModelDim, -LearningRate, @Beta2.Grad[0], 1, @Beta2.Value[0], 1);
 
   end;

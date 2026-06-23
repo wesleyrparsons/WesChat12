@@ -8,8 +8,9 @@
       <Unit>
         <Filename Value="WesChat.lpr"/>
         <IsPartOfProject Value="True"/>
-        <TopLine Value="587"/>
-        <CursorPos X="107" Y="597"/>
+        <IsVisibleTab Value="True"/>
+        <TopLine Value="184"/>
+        <CursorPos Y="216"/>
         <UsageCount Value="233"/>
         <Loaded Value="True"/>
       </Unit>
@@ -17,9 +18,9 @@
         <Filename Value="matrix.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="Matrix"/>
-        <EditorIndex Value="13"/>
-        <TopLine Value="31"/>
-        <CursorPos X="29" Y="40"/>
+        <EditorIndex Value="12"/>
+        <TopLine Value="69"/>
+        <CursorPos X="79" Y="73"/>
         <UsageCount Value="205"/>
         <Loaded Value="True"/>
       </Unit>
@@ -27,8 +28,8 @@
         <Filename Value="test.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="Test"/>
-        <EditorIndex Value="17"/>
-        <CursorPos X="106" Y="5"/>
+        <EditorIndex Value="16"/>
+        <CursorPos X="10"/>
         <UsageCount Value="213"/>
         <Loaded Value="True"/>
       </Unit>
@@ -44,9 +45,9 @@
         <Filename Value="train.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="Train"/>
-        <EditorIndex Value="10"/>
-        <TopLine Value="293"/>
-        <CursorPos X="26" Y="313"/>
+        <EditorIndex Value="9"/>
+        <TopLine Value="137"/>
+        <CursorPos X="49" Y="167"/>
         <UsageCount Value="210"/>
         <Loaded Value="True"/>
       </Unit>
@@ -54,24 +55,26 @@
         <Filename Value="notes.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="Notes"/>
-        <EditorIndex Value="16"/>
-        <TopLine Value="17"/>
-        <CursorPos Y="46"/>
+        <EditorIndex Value="15"/>
+        <TopLine Value="15"/>
+        <CursorPos X="21" Y="31"/>
         <UsageCount Value="209"/>
         <Loaded Value="True"/>
       </Unit>
       <Unit>
         <Filename Value="Extras.pas"/>
         <IsPartOfProject Value="True"/>
-        <EditorIndex Value="18"/>
-        <CursorPos X="53" Y="2"/>
+        <EditorIndex Value="17"/>
+        <TopLine Value="303"/>
+        <CursorPos X="19" Y="330"/>
         <UsageCount Value="313"/>
         <Loaded Value="True"/>
       </Unit>
       <Unit>
         <Filename Value="Display.pas"/>
         <IsPartOfProject Value="True"/>
-        <EditorIndex Value="15"/>
+        <EditorIndex Value="14"/>
+        <CursorPos X="113" Y="5"/>
         <UsageCount Value="218"/>
         <Loaded Value="True"/>
       </Unit>
@@ -79,18 +82,17 @@
         <Filename Value="transform.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="Transform"/>
-        <EditorIndex Value="3"/>
+        <EditorIndex Value="-1"/>
         <CursorPos X="28" Y="6"/>
         <UsageCount Value="211"/>
-        <Loaded Value="True"/>
       </Unit>
       <Unit>
         <Filename Value="gpt2tokenize.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="GPT2Tokenize"/>
-        <EditorIndex Value="8"/>
-        <TopLine Value="665"/>
-        <CursorPos X="22" Y="681"/>
+        <EditorIndex Value="7"/>
+        <TopLine Value="31"/>
+        <CursorPos X="13" Y="48"/>
         <UsageCount Value="215"/>
         <Loaded Value="True"/>
       </Unit>
@@ -106,9 +108,9 @@
         <Filename Value="combinetables.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="CombineTables"/>
-        <EditorIndex Value="4"/>
-        <TopLine Value="76"/>
-        <CursorPos X="18" Y="88"/>
+        <EditorIndex Value="3"/>
+        <TopLine Value="77"/>
+        <CursorPos X="63" Y="88"/>
         <UsageCount Value="206"/>
         <Loaded Value="True"/>
       </Unit>
@@ -116,9 +118,9 @@
         <Filename Value="symbolize.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="Symbolize"/>
-        <EditorIndex Value="6"/>
-        <TopLine Value="426"/>
-        <CursorPos X="23" Y="444"/>
+        <EditorIndex Value="5"/>
+        <TopLine Value="490"/>
+        <CursorPos Y="515"/>
         <UsageCount Value="218"/>
         <Loaded Value="True"/>
       </Unit>
@@ -126,9 +128,9 @@
         <Filename Value="westokenize.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="WesTokenize"/>
-        <EditorIndex Value="5"/>
-        <TopLine Value="371"/>
-        <CursorPos X="48" Y="33"/>
+        <EditorIndex Value="4"/>
+        <TopLine Value="447"/>
+        <CursorPos X="18" Y="457"/>
         <UsageCount Value="218"/>
         <Loaded Value="True"/>
       </Unit>
@@ -136,9 +138,9 @@
         <Filename Value="iohandler.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="IOHandler"/>
-        <EditorIndex Value="7"/>
-        <TopLine Value="351"/>
-        <CursorPos X="55" Y="383"/>
+        <EditorIndex Value="6"/>
+        <TopLine Value="114"/>
+        <CursorPos X="23" Y="76"/>
         <UsageCount Value="218"/>
         <Loaded Value="True"/>
       </Unit>
@@ -146,10 +148,9 @@
         <Filename Value="util.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="Util"/>
-        <IsVisibleTab Value="True"/>
-        <EditorIndex Value="14"/>
-        <TopLine Value="879"/>
-        <CursorPos X="29" Y="899"/>
+        <EditorIndex Value="13"/>
+        <TopLine Value="76"/>
+        <CursorPos X="11" Y="14"/>
         <UsageCount Value="229"/>
         <Loaded Value="True"/>
       </Unit>
@@ -158,8 +159,7 @@
         <IsPartOfProject Value="True"/>
         <UnitName Value="TransformForward"/>
         <EditorIndex Value="2"/>
-        <TopLine Value="209"/>
-        <CursorPos X="24" Y="216"/>
+        <CursorPos Y="16"/>
         <UsageCount Value="251"/>
         <Loaded Value="True"/>
       </Unit>
@@ -167,9 +167,8 @@
         <Filename Value="transformbackprop.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="TransformBackprop"/>
-        <EditorIndex Value="12"/>
-        <TopLine Value="105"/>
-        <CursorPos X="15" Y="121"/>
+        <EditorIndex Value="11"/>
+        <CursorPos Y="15"/>
         <UsageCount Value="213"/>
         <Loaded Value="True"/>
       </Unit>
@@ -178,6 +177,8 @@
         <IsPartOfProject Value="True"/>
         <UnitName Value="FlowChart"/>
         <EditorIndex Value="1"/>
+        <TopLine Value="102"/>
+        <CursorPos X="36" Y="131"/>
         <UsageCount Value="203"/>
         <Loaded Value="True"/>
       </Unit>
@@ -185,145 +186,138 @@
         <Filename Value="infer.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="Infer"/>
-        <EditorIndex Value="11"/>
-        <TopLine Value="314"/>
-        <CursorPos X="101" Y="341"/>
+        <EditorIndex Value="10"/>
+        <TopLine Value="271"/>
+        <CursorPos X="132" Y="240"/>
         <UsageCount Value="203"/>
         <Loaded Value="True"/>
       </Unit>
       <Unit>
         <Filename Value="Global.pas"/>
-        <EditorIndex Value="9"/>
-        <TopLine Value="169"/>
-        <CursorPos X="35" Y="192"/>
+        <EditorIndex Value="8"/>
+        <TopLine Value="208"/>
+        <CursorPos X="3" Y="235"/>
         <UsageCount Value="118"/>
         <Loaded Value="True"/>
-      </Unit>
-      <Unit>
-        <Filename Value="TNotes.txt"/>
-        <EditorIndex Value="-1"/>
-        <CursorPos X="57" Y="21"/>
-        <UsageCount Value="12"/>
-        <DefaultSyntaxHighlighter Value="Text"/>
       </Unit>
     </Units>
     <JumpHistory HistoryIndex="29">
       <Position>
+        <Filename Value="WesChat.lpr"/>
+        <Caret Line="104" Column="13" TopLine="101"/>
+      </Position>
+      <Position>
+        <Filename Value="WesChat.lpr"/>
+        <Caret Line="410" TopLine="382"/>
+      </Position>
+      <Position>
+        <Filename Value="WesChat.lpr"/>
+        <Caret Line="718" TopLine="691"/>
+      </Position>
+      <Position>
+        <Filename Value="WesChat.lpr"/>
+        <Caret Line="719" Column="9" TopLine="692"/>
+      </Position>
+      <Position>
+        <Filename Value="WesChat.lpr"/>
+        <Caret Line="1302" Column="15" TopLine="1274"/>
+      </Position>
+      <Position>
+        <Filename Value="WesChat.lpr"/>
+        <Caret Line="1306" Column="15" TopLine="1278"/>
+      </Position>
+      <Position>
+        <Filename Value="WesChat.lpr"/>
+        <Caret Line="1340" Column="15" TopLine="1312"/>
+      </Position>
+      <Position>
+        <Filename Value="WesChat.lpr"/>
+        <Caret Line="1364" Column="57" TopLine="1343"/>
+      </Position>
+      <Position>
+        <Filename Value="train.pas"/>
+        <Caret Line="532" Column="52" TopLine="494"/>
+      </Position>
+      <Position>
+        <Filename Value="train.pas"/>
+        <Caret Line="174" Column="49" TopLine="150"/>
+      </Position>
+      <Position>
+        <Filename Value="train.pas"/>
+        <Caret Line="167" Column="36" TopLine="150"/>
+      </Position>
+      <Position>
+        <Filename Value="train.pas"/>
+        <Caret Line="520" Column="45" TopLine="493"/>
+      </Position>
+      <Position>
+        <Filename Value="train.pas"/>
+        <Caret Line="167" Column="49" TopLine="137"/>
+      </Position>
+      <Position>
+        <Filename Value="WesChat.lpr"/>
+        <Caret Line="1369" Column="43" TopLine="1343"/>
+      </Position>
+      <Position>
+        <Filename Value="WesChat.lpr"/>
+        <Caret Line="893" Column="39" TopLine="878"/>
+      </Position>
+      <Position>
         <Filename Value="util.pas"/>
-        <Caret Line="167" Column="20" TopLine="140"/>
+        <Caret Line="180" TopLine="102"/>
       </Position>
       <Position>
         <Filename Value="util.pas"/>
-        <Caret Line="31" Column="83"/>
+        <Caret Line="232" TopLine="211"/>
       </Position>
       <Position>
-        <Filename Value="train.pas"/>
-        <Caret Line="174" Column="38" TopLine="158"/>
+        <Filename Value="util.pas"/>
+        <Caret Line="57" Column="36" TopLine="36"/>
       </Position>
       <Position>
-        <Filename Value="train.pas"/>
-        <Caret Line="36" Column="70" TopLine="30"/>
+        <Filename Value="util.pas"/>
+        <Caret Line="213" Column="18" TopLine="189"/>
       </Position>
       <Position>
-        <Filename Value="train.pas"/>
-        <Caret Line="144" Column="52" TopLine="119"/>
+        <Filename Value="WesChat.lpr"/>
+        <Caret Line="907" Column="34" TopLine="885"/>
       </Position>
       <Position>
-        <Filename Value="train.pas"/>
-        <Caret Line="163" Column="17" TopLine="137"/>
+        <Filename Value="WesChat.lpr"/>
       </Position>
       <Position>
-        <Filename Value="train.pas"/>
-        <Caret Line="402" Column="30" TopLine="376"/>
+        <Filename Value="WesChat.lpr"/>
+        <Caret Line="361" Column="14" TopLine="333"/>
       </Position>
       <Position>
-        <Filename Value="infer.pas"/>
-        <Caret Line="155" Column="19" TopLine="141"/>
+        <Filename Value="WesChat.lpr"/>
+        <Caret Line="425" Column="12" TopLine="396"/>
       </Position>
       <Position>
-        <Filename Value="infer.pas"/>
-        <Caret Line="247" Column="72" TopLine="240"/>
+        <Filename Value="WesChat.lpr"/>
+        <Caret Line="644" Column="16" TopLine="615"/>
       </Position>
       <Position>
-        <Filename Value="infer.pas"/>
-        <Caret Line="179" Column="56" TopLine="170"/>
+        <Filename Value="WesChat.lpr"/>
+        <Caret Line="679" Column="12" TopLine="650"/>
       </Position>
       <Position>
-        <Filename Value="train.pas"/>
-        <Caret Line="170" Column="70" TopLine="166"/>
+        <Filename Value="WesChat.lpr"/>
+        <Caret Line="1235" Column="22" TopLine="1223"/>
       </Position>
       <Position>
-        <Filename Value="Global.pas"/>
-        <Caret Line="200" Column="40" TopLine="178"/>
+        <Filename Value="WesChat.lpr"/>
       </Position>
       <Position>
-        <Filename Value="infer.pas"/>
-        <Caret Line="226" Column="36" TopLine="197"/>
+        <Filename Value="WesChat.lpr"/>
+        <Caret Line="297" Column="23" TopLine="266"/>
       </Position>
       <Position>
-        <Filename Value="infer.pas"/>
+        <Filename Value="WesChat.lpr"/>
       </Position>
       <Position>
-        <Filename Value="infer.pas"/>
-        <Caret Line="190" Column="27" TopLine="169"/>
-      </Position>
-      <Position>
-        <Filename Value="infer.pas"/>
-        <Caret Line="321" Column="50" TopLine="299"/>
-      </Position>
-      <Position>
-        <Filename Value="infer.pas"/>
-        <Caret Line="331" Column="47" TopLine="312"/>
-      </Position>
-      <Position>
-        <Filename Value="infer.pas"/>
-      </Position>
-      <Position>
-        <Filename Value="infer.pas"/>
-        <Caret Line="311" Column="68" TopLine="304"/>
-      </Position>
-      <Position>
-        <Filename Value="infer.pas"/>
-        <Caret Line="161" Column="44" TopLine="145"/>
-      </Position>
-      <Position>
-        <Filename Value="infer.pas"/>
-        <Caret Line="194" Column="91" TopLine="196"/>
-      </Position>
-      <Position>
-        <Filename Value="infer.pas"/>
-      </Position>
-      <Position>
-        <Filename Value="infer.pas"/>
-        <Caret Line="21" Column="43"/>
-      </Position>
-      <Position>
-        <Filename Value="infer.pas"/>
-        <Caret Line="79" Column="18" TopLine="52"/>
-      </Position>
-      <Position>
-        <Filename Value="infer.pas"/>
-        <Caret Line="82" Column="81" TopLine="54"/>
-      </Position>
-      <Position>
-        <Filename Value="infer.pas"/>
-        <Caret Line="90" Column="49" TopLine="62"/>
-      </Position>
-      <Position>
-        <Filename Value="infer.pas"/>
-        <Caret Line="241" Column="28" TopLine="213"/>
-      </Position>
-      <Position>
-        <Filename Value="infer.pas"/>
-        <Caret Line="248" Column="20" TopLine="220"/>
-      </Position>
-      <Position>
-        <Filename Value="infer.pas"/>
-        <Caret Line="324" Column="51" TopLine="309"/>
-      </Position>
-      <Position>
-        <Filename Value="Global.pas"/>
-        <Caret Line="192" Column="35" TopLine="169"/>
+        <Filename Value="WesChat.lpr"/>
+        <Caret Line="98" TopLine="91"/>
       </Position>
     </JumpHistory>
     <RunParams>

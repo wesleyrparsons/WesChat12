@@ -118,7 +118,7 @@ var
     end;
   end;
 
-  begin
+begin
   // Check for valid query.
   if Length(QueryTokenized) = 0 then begin
     QueryToken := EOS;
@@ -248,21 +248,14 @@ var
   QueryInput: TBVector;
   QueryString: string;
 begin
-  Training := False;
-  nVocab := nSymbols;
+  Training := False;                 // So no dropouts in unit Train.
+  nVocab := nSymbols;                // Same variable.
   VerboseTransform := False;         // Select verbosity during inference.
 
   // Initialize transformer state.
   InitializeTransformerState(WModelState);
 
-{  // Initiate Cublas.  This is done in Train or LoadModel.
-  InitializeCuBLAS;
-
-  // Initialize cuda memory.
-  if not CudaAllocated then
-    MAllocCublas(WModelParams, WModelState);}
-
-  Writeln('Beginning of inference.  Expected random loss = ', Ln(nVocab): 10: 6);
+  Writeln('Beginning of inference.  Expected random loss = ', Ln(nVocab): 10: 8);
 
   try
     // Send params (if new model) and inverse freq to device.
@@ -274,7 +267,7 @@ begin
       // Get a query from user.
       // Write('Enter query: ');
       // Readln(QueryString);
-      QueryString := 'man with';   // Temporary.
+      QueryString := 'The young man smiled. ';   // Temporary.
       Writeln('Query string: ', QueryString);
 
       if QueryString = EmptyStr then begin
@@ -322,7 +315,7 @@ begin
         if Tokenizer = WesTokenizer then
           // WesTokenizer.
           Writeln('Single Query Token Number = ', QueryToken, ' Probability = ', QueryProb: 6: 6,
-          ' Decoded = "', Decode(QueryToken), '"');
+          ' Decoded = <<', Decode(QueryToken), '>>');
           Writeln('Inference. nVocab = ', nVocab, ' DimVocab = ', DimVocab, ' Seqlen = ', SeqLen, ' ModelDim = ', ModelDim, ' Projection = ', Proj,
             '  Epoch = ', MaxEpochs, ' Blocks = ', nBlock, ' Heads = ', nHead);
         //else
@@ -337,10 +330,10 @@ begin
             Write(Decode(QueryOutput[i]));
           Writeln;}
 
-          Write('WorkTokens: "');
+          Write('WorkTokens: <<');
           for i := 0 to High(WorkTokens) do
             Write(Decode(WorkTokens[i]));
-          Writeln('"');
+          Writeln('>>');
         Pause;
 
         // if QueryToken = EOS then Break;  // For debugging, don't stop.

@@ -12,12 +12,6 @@ uses
   Matrix,
   Util;
 
-const
-  InvSqrtHeadDim: Single = 1 / Sqrt(HeadDim);         // Used in softmax.
-  RowMajor = 101;       // Row Major.
-  NoTrans  = 111;       // No transposition.
-  Trans    = 112;       // Transposition.
-
 procedure RunTransformBackprop(var WModelParams: TWModelParams; var WModelState: TWModelState; const Blk: Integer);
 
 implementation
@@ -32,7 +26,7 @@ begin
 
     Stage := Blk * 2 + 4;
     // Display X6.Value matrix. X6.Value is in cublas.
-    if VeryVerboseTransform then begin
+    if VerboseTransform then begin
       cudaMemcpy(@X6.Value[0, 0], X6.dValue, XSize, cudaMemcpyDeviceToHost);
       VTPDisplayX('Display X6.Value in transform, before any action.', X6.Value, G);
     end;
@@ -43,10 +37,10 @@ begin
       if DisplayStage then Writeln('' : Stage, 'Stage  2, Block ', Blk, ',  Transform Backprop');
       if DisplaySubstage then Writeln('': Stage, '2E. Transform Backprop, Split, Residual Dropout');
 
-      // Backprop Split X7 Grad into X5 and X6: Input X5.Grad, X7.Grad. Output dX.Grad.
-      // Equation: X5.Grad = X5.Grad + X7.Grad. All in R^{L x D}.
-      // X7 = X5 + X6. X5.Grad += X7.Grad. X6.Grad += X7.Grad.
-      CuGradSplit(CuHandle, X7.dGrad, X5.dGrad, X6.dGrad, SeqLen, ModelDim);
+      // Backprop Split X7 Grad into X4 and X6: Input X4.Grad, X7.Grad. Output dX.Grad.
+      // Equation: X7.Grad = X4.Grad + X6.Grad. All in R^{L x D}.
+      // X7 = X4 + X6. X4.Grad += X7.Grad.
+      CuGradSplit(CuHandle, X7.dGrad, X4.dGrad, X6.dGrad, SeqLen, ModelDim);
 
       // Dropout Backward.
       if Training then
@@ -124,10 +118,11 @@ begin
     // Equation: X4.Grad, Gamma2.Grad, Beta2.Grad = LayerNorm(X5.Grad, Gamma2.Value, Beta2.Value).
     // X4.Grad, X5.Grad, LNXHat2 in R^{L x D}. Gamma2.Grad, Beta2.Grad in R^{D}.
     // LayerNormBackward(X5.Grad, X4.Grad, Gamma2.Grad, Beta2.Grad, SeqLen, Gamma2.Value, LNXHat2, LNInvStd2);
-    LaunchLayerNormBackward(X5.dGrad, X4.dGrad, Gamma2.dValue, dLNXHat2, dLNInvStd2, Gamma2.dGrad, Beta2.dGrad, SeqLen, ModelDim);
+    LaunchLayerNormBackward(X5.dGrad, dX4FromLN2, Gamma2.dValue, dLNXHat2, dLNInvStd2, Gamma2.dGrad, Beta2.dGrad, SeqLen, ModelDim);
+    CuAccumulateGrad(CuHandle, dX4FromLN2, X4.dGrad, SeqLen, ModelDim);
 
     // Display X4.Grad matrix.
-    if VeryVerboseTransform then begin
+    if VerboseTransform then begin
       cudaMemcpy(@X4.Grad[0, 0], X4.dGrad, XSize, cudaMemcpyDeviceToHost);
       VTPDisplayX('Display X4.Grad, in transform, after stage 1J, layer-norm.', X4.Grad, G);
     end;
@@ -135,9 +130,9 @@ begin
     // 1I. Backprop Split. Input: X1.Grad. Output: X3.Grad. Output X4.Grad,
     if DisplaySubstage then Writeln('': Stage, '1I. Transform Backprop Stage 1I, Split X4 = X1 + X3');
 
-    // Equation: X4 = X1 + X3, so dX1 += dX4 and dX3 += dX4. All in R^{L x D}.
-    // GradSplit(X4.Grad, X1.Grad, X3.Grad, SeqLen, ModelDim);
-    cuGradSplit(cuHandle, X4.dGrad, X1.dGrad, X3.dGrad, SeqLen, ModelDim);
+    // Equation: X4 = X + X3, so dX += dX4 and dX3 += dX4. All in R^{L x D}.
+    // GradSplit(X4.Grad, X.Grad, X3.Grad, SeqLen, ModelDim);
+    cuGradSplit(cuHandle, X4.dGrad, X.dGrad, X3.dGrad, SeqLen, ModelDim);
 
     // Guide: To find the change for the weights: dW0 = X6ᵀ ·  dX7.
     //        To find the error for the input: dX6 = dX7  · W0ᵀ.
@@ -157,7 +152,7 @@ begin
     CuMatMulNT(CuHandle, X3.dGrad, W0.dValue, X2.dGrad, SeqLen, ModelDim, ModelDim);
 
     // Display X3.Grad matrix. X3.Grad already in cblas.
-    if VeryVerboseTransform then begin
+    if VerboseTransform then begin
       cudaMemcpy(@X3.Grad[0, 0], X3.dGrad, XSize, cudaMemcpyDeviceToHost);
       VTPDisplayX('Display X3.Grad, in transform, before stage 1G.', X3.Grad, G);
     end;
@@ -223,7 +218,7 @@ begin
     end; // h loop.
 
     // Display ScoresHead.Grad matrix.
-    if VeryVerboseTransform then begin
+    if VerboseTransform then begin
       cudaMemcpy(@ScoresHead1[0].Grad[0, 0], ScoresHead1[0].dGrad, ScoresSize, cudaMemcpyDeviceToHost);
       VTPDisplayX('ScoresHead1[0].Grad, transform, before stage 1E, Q and K-transform.', ScoresHead1[0].Grad, G);
     end;
@@ -300,7 +295,7 @@ begin
     CuAccumulateGrad(CuHandle, X1v.dGrad, X1.dGrad, SeqLen, ModelDim);
 
     // Display X1.Grad matrix.
-    if VeryVerboseTransform then begin
+    if VerboseTransform then begin
       cudaMemcpy(@X1.Grad[0, 0], X1.dGrad, XSize, cudaMemcpyDeviceToHost);
       VTPDisplayX('Display X1.Grad, in transform, after concatenation.', X1.Grad, G);
     end;
@@ -310,11 +305,11 @@ begin
 
     // Equation: X.Grad, Gamma1.Grad, Beta1.Grad = LayerNorm(X1.Value, X1.Grad, Gamma1.Value, Beta1.Value). X.Grad, X1.Grad in R^{L x D}. Gamma1.Grad, Beta1.Grad in R^{D}.
     // LayerNormBackward(X1.Grad, X.Grad, Gamma1.Grad, Beta1.Grad, SeqLen, Gamma1.Value, LNXhat1, LNInvStd1);
-    LaunchLayerNormBackward(X1.dGrad, X.dGrad, Gamma1.dValue, dLNXHat1, dLNInvStd1,
-      Gamma1.dGrad, Beta1.dGrad, SeqLen, ModelDim);
+    LaunchLayerNormBackward(X1.dGrad, dXFromLN1, Gamma1.dValue, dLNXHat1, dLNInvStd1, Gamma1.dGrad, Beta1.dGrad, SeqLen, ModelDim);
+    CuAccumulateGrad(CuHandle, dXFromLN1, X.dGrad, SeqLen, ModelDim);
 
     // Display X.Grad matrix.
-    if VeryVerboseTransform then begin
+    if VerboseTransform then begin
       cudaMemcpy(@X.Grad[0, 0], X.dGrad, XSize, cudaMemcpyDeviceToHost);
       VTPDisplayX('Display X.Grad, in transform, at end.', X.Grad, G);
     end;

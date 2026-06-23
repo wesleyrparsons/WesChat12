@@ -183,7 +183,7 @@ begin
     Writeln;
   end;
 
-  Writeln('Created ', nTokenizedCorpus, ' tokens from ', TextFileName, '.');
+  Writeln('Created ', nTokenizedCorpus, ' tokens.');
 
   if VerboseTokenize then Begin
     Write('First 50 token of tokenized corpus: ');
@@ -563,7 +563,7 @@ begin
   // Timing.
   t1 := Now;
 
-  if ShowTokenWork and VerboseTokenize then begin
+  if DisplayTokenWork and VerboseTokenize then begin
     Writeln('---  Token Frequencies ---');
     CountSymbols(TokenizedCorpus);
   end;
@@ -575,7 +575,7 @@ begin
     ReportStatistics(TokenizedCorpus);
 
   // Save TokenizedCorpus and other data.
-  if SaveFiles then begin
+  if SaveFiles and SaveTokenizationFiles then begin
     ChDir(WorkingDir);
     SaveTokenList(TokenizedCorpus, WorkingName + '.tok');
 
@@ -596,7 +596,7 @@ begin
   end;
 
   // Verify by reconstructing.
-  if ShowVerification and VerboseTokenize and DisplayCorpus then begin
+  if DisplayVerification and VerboseTokenize and DisplayCorpus then begin
     Writeln('--- Reconstructed Corpus, Beginning ---');
     Writeln('Length = ', Length(TokenizedCorpus));
     DetokenizeToDisplay(TokenizedCorpus, B);

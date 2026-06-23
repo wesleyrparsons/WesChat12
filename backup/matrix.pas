@@ -17,9 +17,6 @@ type
   pcint = ^cint;             // "
 
 const
-  RowMajor = 101;                 // Row Major.
-  NoTrans  = 111;                 // No transposition.
-  Trans    = 112;                 // Transposition.
   cublasDLL = 'cublas64_13.dll';
   cudartDLL = 'cudart64_13.dll';
   copenblasDLL = 'libopenblas.dll';
@@ -37,7 +34,7 @@ const
   CUBLAS_STATUS_INTERNAL_ERROR  = 14;
 
 // cublas functions.
-function cublasCreate_v2(out handle: TcublasHandle): Integer; cdecl; external cublasDLL;
+function cublasCreate_v2(var handle: TcublasHandle): Integer; cdecl; external cublasDLL;
 function cublasDestroy_v2(handle: TcublasHandle): Integer; cdecl; external cublasDLL;
 function cublasGetVersion(handle: TcublasHandle; version: pcint): cublasStatus_t; cdecl; external cublasDLL;
 function CuBLAS_Init: Boolean;

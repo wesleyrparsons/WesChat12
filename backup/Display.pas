@@ -10,7 +10,7 @@ uses
   Global;
 
 // Pause procedures.
-procedure HardPause;
+//procedure HardPause;
 procedure Pause;
 
 // Interrupt procedures.
@@ -85,10 +85,10 @@ begin
   Writeln('Dimensional Projections (Proj): ', Proj);
   Writeln('Heads (nHead): ', nHead);
   Writeln('Blocks (nBlock): ', nBlock);
-  Writeln('Epochs: ', MaxEpochs);
+  Writeln('Epochs (MaxEpochs): ', MaxEpochs);
   Writeln('Learning Rate (LearningRate): ', LearningRate: 6: 4);
-  Writeln('Temperature: ', Temperature: 6: 4);
-  Writeln('Dropouts for Attention, MLP, Residual: ', ADropout: 2: 2, ' ', MLPDropout: 2: 2, ' ', RDropout: 2: 2);
+  Writeln('Temperature (Temperature): ', Temperature: 6: 4);
+  Writeln('Dropouts for Attention, MLP, Residual (A, MLP, RDropout): ', ADropout: 2: 2, ' ', MLPDropout: 2: 2, ' ', RDropout: 2: 2);
   Writeln('Trainable Parameters: Embeddings, Wq, Wk, Wv, W0, W1, b1, W2, b2, gamma1, beta1, gamma2, beta2');
   Writeln('Maximum Vocabulary (MaxVocab): ', DimVocab);
   Writeln('Number of Vocabulary (nVocab): ', nVocab);

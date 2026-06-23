@@ -92,27 +92,27 @@ begin
   SetLength(OneCorpus, Size);
 
   // Write the Corpus as it is read.
-  if VeryVerboseTokenize then
+  if VerboseTokenize then
     Writeln('--- Original Corpus ---');
   for i := 0 to Size - 1 do begin
     BlockRead(F, B, 1);
     OneCorpus[i] := B;
 
-    if VeryVerboseTokenize then
-      if ShowEachByteRead then
+    if VerboseTokenize then
+      if DisplayEachByteRead then
         if B < 32 then
           Write('<', B, '>')
         else
           Write(Chr(B));
   end;
   CloseFile(F);
-  if VeryVerboseTokenize then begin
+  if VerboseTokenize then begin
     Writeln('ReadByteFile: ');
     for i := 0 to 150 do
       Write(OneCorpus[i], ' ');
     Pause;
   end;
-  if VeryVerboseTokenize then
+  if VerboseTokenize then
     Writeln;
 
   // Display initial Corpus length.
@@ -407,7 +407,9 @@ end;
 { Apply the BPE encoder }
 // Main training loop, traverse the merges.
 procedure TrainBPEHash(var Head, Tail: PTokenNode; MaxMerges: Integer;
-  var MergeCount, StartSymbol: Integer);
+  MaxSymbols: Integer; var MergeCount, StartSymbol: Integer);
+//procedure TrainBPEHash(var Head, Tail: PTokenNode; MaxMerges: Integer;
+  //var MergeCount, StartSymbol: Integer);
 var
   m, BestCount, A, B: Integer;
   f: string;
@@ -433,8 +435,8 @@ var
         end;
       'v', 'V':
         begin
-          VeryVerboseTokenize := not VeryVerboseTokenize;
-          Writeln('Very verbose tokenize mode: ', VeryVerboseTokenize);
+          VerboseTokenize := not VerboseTokenize;
+          Writeln('Verbose tokenize mode: ', VerboseTokenize);
           Pause;
         end;
       'w', 'W':
@@ -450,8 +452,8 @@ var
       'm', 'M':
         begin
           Writeln;
-          Writeln('Maximum symbols = ', nVocab, '. Maximum merges = ', MaxMerges,
-            '. Hash capacity = ', H.Capacity, '. Used slots = ', H.Used, '. Best count = ', BestCount, '.');
+          Writeln('Maximum symbols = ', MaxSymbols, '. Current symbols = ', Length(SymbolTable),
+            '. Maximum merges = ', MaxMerges, '. Hash capacity = ', H.Capacity, '. Used slots = ', H.Used, '. Best count = ', BestCount, '.');
           Write(DateTimeToStr(Now), '  X = Exit program. B = Break out of merge loop. V = toggle Verbose mode. P = Pause.');
           Writeln('  W = WesChat Information. M = Merging information. S = Save. Merging...');
           Pause;
@@ -475,7 +477,7 @@ begin
   Writeln('  P = Program information. M = Merging information. Merging...');
   Writeln;
 
-  if ShowMergeWork then
+  if DisplayMergeWork then
     Writeln('--- List of Merges (Hash) ---');
 
   for m := 1 to MaxMerges do begin
@@ -495,27 +497,31 @@ begin
       end;
 
     // Stop if hash table got too full.
-    if H.Used > MaxPairCount then begin
+    if Length(SymbolTable) >= MaxSymbols then begin
+      Writeln;
+      Writeln('Stopping: symbol table reached ', MaxSymbols, ' entries.');
+      Break;
+    end;
+    {if H.Used > MaxPairCount then begin
       Writeln;
       Writeln('Stopping: pair table exceeded ', MaxPairCount, ' entries.');
       Break;
-    end;
+    end;}
 
     BestCount := FindBestPairHash(H, A, B);
 
     // Stop if no useful merges remain.
     if BestCount < 2 then begin
-      Writeln;
       Writeln('Stopping: no more valid merges at iteration ', m, '.');
       Break;
     end;
 
     // Stop if symbol table is full.
-    if Length(SymbolTable) >= nVocab then begin
+    {if Length(SymbolTable) >= nVocab then begin
       Writeln;
       Writeln('Stopping: symbol table reached ', nVocab, ' entries.');
       Break;
-    end;
+    end;}
 
     // Perform merge.
     MergeAllPairsHash(Head, Tail, A, B, StartSymbol, H);
@@ -526,7 +532,7 @@ begin
     Inc(MergeCount);
     Inc(StartSymbol);
 
-    if ShowMergeWork then begin
+    if DisplayMergeWork then begin
       Write(MergeCount, ' Merged (', A:5, ',', B:5, ') -> (', StartSymbol - 1:5, ') #', BestCount);
       if (MergeCount mod 4) = 0 then
         Writeln
@@ -813,12 +819,59 @@ end;
 
 // Run the tokenizer.
 procedure RunSymbolize(const Corpus: TBVector);
+var
+  MaxSymbols: Integer;
 begin
+  MaxSymbols := DimVocab;
+  // Reset for new run.
+  MergeCount := 0;
+  SetLength(Merges, 0);
+  StartSymbol := 260;
+
   // Timing.
   t0 := Now;       // Start of timing for entire tokenization;
   StopTime := 0;   // Time to subtract from timing.
 
-  // Create the TokenList.
+  BuildTokenListFromCorpus(Corpus);
+  nCorpus := Length(Corpus);
+
+  // Initialize base byte symbols plus BOS/EOS/PAD/UNK.
+  InitSymbolTable;
+  StartSymbol := Length(SymbolTable);
+  nSymbols := Length(SymbolTable);
+
+  MaxSymbols := DimVocab;
+
+  Writeln('Maximum symbols = ', MaxSymbols,
+          '. Base symbols = ', nSymbols,
+          '. Maximum merges = ', MaxMerges,
+          '. Maximum pair counts = ', MaxPairCount, '.');
+
+  TrainBPEHash(Head, Tail, MaxMerges, MaxSymbols, MergeCount, StartSymbol);
+
+  nSymbols := Length(SymbolTable);
+  nVocab := nSymbols;
+  {InitSymbolTable;
+
+  // First merge symbol is after the base symbols.
+  StartSymbol := Length(SymbolTable);
+  nSymbols := Length(SymbolTable);
+
+  // During symbolization, nVocab is the maximum allowed table size.
+  nVocab := DimVocab;
+
+  Writeln('Maximum symbols = ', nVocab,
+          '. Base symbols = ', nSymbols,
+          '. Maximum merges = ', MaxMerges,
+          '. Maximum pair counts = ', MaxPairCount, '.');
+
+  Writeln('X = Exit program. B = Break out of merge loop. V = toggle Verbose mode. P = Program information. M = Merging information. Merging...');
+
+  // Run BPE.
+  Mt0 := Now;
+  TrainBPEHash(Head, Tail, MaxMerges, MergeCount, StartSymbol);}
+
+  {// Create the TokenList.
   Writeln('Maximum symbols = ', nVocab, '. Maximum merges = ', MaxMerges, '. Maximum pair counts = ', MaxPairCount, '.');
   Writeln('X = Exit program. B = Break out of merge loop. V = toggle Verbose mode. P = Program information. M = Merging information. Merging...');
   BuildTokenListFromCorpus(Corpus);
@@ -830,13 +883,14 @@ begin
 
   // Run BPE.
   Mt0 := Now;
-  TrainBPEHash(Head, Tail, MaxMerges, MergeCount, StartSymbol);
+  TrainBPEHash(Head, Tail, MaxMerges, MergeCount, StartSymbol);}
+
   Mt1 := Now;
 
   // Timing.
   t1 := Now;
 
-  nSymbols := Length(SymbolTable);
+  //nSymbols := Length(SymbolTable);
   // Display symbol table.
   if VerboseTokenize then
     DisplayByteSymbolTable(SymbolTable);

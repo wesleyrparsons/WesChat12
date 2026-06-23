@@ -12,19 +12,19 @@ var
 { Place all verbosity and control options at start }
   DoNotPause: Boolean = False;              // Pause disabled.
   PauseIfKeyPressed: Boolean = True;        // Pause if a key is pressed.
-  StopTraining: Boolean;
+  StopTraining: Boolean;                    // Happens if KeyPressed, to perform options.
   TrainSuccess: Boolean = False;            // Training successful and proceed to inference.
-  DisplayCorpus: Boolean = True;            // One set for real tokenizing and one set for debug.
+  DisplayCorpus: Boolean = False;            // One set for real tokenizing and one set for debug.
   DisplayWindow: Boolean = False;           // Display the SeqLen window.
   VerboseTokenize: Boolean = False;         // Verbose in Tokenize units.
-  VerboseTransform: Boolean = False;        // Verbose in Transform units.
+  VerboseTransform: Boolean = False;        // Displays X, Q, ScoresHead1, etc. in Transform units.
   VeryVerboseTokenize: Boolean = False;     // Very verbose in Tokenize units.
-  VeryVerboseTransform: Boolean = False;    // Displays X, Q, ScoresHead1, etc. in Transform units.
-  ShowTokenWork: Boolean = True;            // Show token work in Tokenize units.
-  ShowMergeWork: Boolean = True;            // Show merge work in Tokenize units.
-  ShowVerification: Boolean = True;         // Do verification by rebyulding corpus in Tokenize units.
-  ShowEachByteRead: Boolean = False;        // Verify reading of bytes.
-  SaveFiles: Boolean = False;               // Save various files, otherwise not saved.
+  DisplayTokenWork: Boolean = False;            // Show token work in Tokenize units.
+  DisplayMergeWork: Boolean = False;            // Show merge work in Tokenize units.
+  DisplayVerification: Boolean = False;         // Do verification by rebuilding corpus in Tokenize units.
+  DisplayEachByteRead: Boolean = False;        // Verify reading of bytes.
+  SaveFiles: Boolean = True;                // Save various files, otherwise not saved.
+  SaveTokenizationFiles: Boolean = True;    // Fave tokenization files (false for inference).
   MaxMerges: Integer = 20000;               // Maximum number of merges.
   MaxPairCount: Integer = 400000;           // Maximum number of pair in BPE.
   SavePartialSymbolTable: Boolean = False;  // Save intermediate symbol tables.
@@ -32,19 +32,25 @@ var
 
 const
   // Model constants.
-  MaxEpochs = 400;                // Number of epochs, loops over tokenized corpus,
+  MaxEpochs = 100000;             // Number of epochs, loops over tokenized corpus,
   ModelDim = 64;                  // Number of loadings for a symbol.
   Proj = 4;                       // Projection to Hidden arrays.
   ModelDimProj = ModelDim * Proj; // Dimension of model of projected X matrix.
   SeqLen = 64;                    // Sequence length for X.
   Stride = 12;                    // Stride across sequence lengths.
-  nHead = 2;                      // Number of heads for multi-headed attention.
+  nHead = 4;                      // Number of heads for multi-headed attention.
   HeadDim = ModelDim div nHead;   // Length of one head.
-  nBlock = 2;                     // Number of blocks in transformer.
+  nBlock = 4;                     // Number of blocks in transformer.
   ADropOut = 0.1;                 // Probability of attention dropout.
   MLPDropOut = 0.1;               // Probability of MLP dropout.
   RDropout = 0.1;                 // Probability of residual dropout.
-  DimVocab = 2000;                // Need maximum of vocab symbols to dimension array. Needed for Embeddings.
+  DimVocab = 12000;                // Need maximum of vocab symbols to dimension array. Needed for Embeddings.
+  // Transform constants.
+  InvSqrtHeadDim: Single = 1 / Sqrt(HeadDim);         // Used in softmax.
+  RowMajor = 101;                 // Row Major.
+  NoTrans  = 111;                 // No transposition.
+  Trans    = 112;                 // Transposition.
+
 
 type                                                                           // SeqLen = L, ModelDim = D, ModelDim/nHead = H, DB is Proj*D, DV is DimVocab.
   // cublas type.
@@ -154,9 +160,11 @@ type                                                                           /
     LNXhat2:    TSeqMatrix;                                // Cache for Xhat in LayerNorm.
     dLNXhat2:   PSingle;
     // Dropout seeds.
-    ADropoutSeed: UInt64;                                  // Seeds for dropouts.
+    ADropoutSeed:         UInt64;                          // Seeds for dropouts.
     MLPDropoutSeed:       UInt64;
-    RDropoutSeed:  UInt64;
+    RDropoutSeed:         UInt64;
+    dX4FromLN2:           PSingle;
+    dXFromLN1:            PSingle;
   end;
   TWModelState = record                                         // Model of non-trainable parameters.
     StateBlock:                     TStateBlock;
@@ -197,13 +205,30 @@ var
   PAD: Integer = 258;                            // Padding to bring up to SeqLen.
   UNK: Integer = 259;                            // Unknown.
   // Model setings vars.
-  LearningRate: Single = 0.0001;                 // LearningRate for Gradient.
-  Temperature: Single = 1.0;                     // Temperature for softmax.
+  BaseLearningRate:  Double = 0.01000;           // Base learning rate for Gradient.
+  FloorLearningRate: Double = 0.00050;           // Floor learning rate for Gradient.
+  OverrideLearningRate: Double = -1.0;           // Override learning rate for Gradient.
+  RollOff:           Double = 0.99990;           // Reduction in learning rate.
+  WeightDecay:       Double = 0.00010;           // Decay (multiplicative) for learning rate.
+  LearningRate: Double;                          // Derived learningRate for Gradient.
+  GlobalStep: Integer;                           // Increments once per window.
+  DecayScale: Double;                            // 1.0 - LearningRate * WeightDecay.
+  Temperature: Double = 1.0;                     // Temperature for softmax.
+  ClipLimit: Double = 1.0;                       // Clips gradients.
   // Staging and epoch vars.
   DisplayStage: Boolean = False;                 // Display progress by stage in train and transform.
-  DisplaySubStage: Boolean = False;              // Display progress by stage in train and transform.
+  DisplaySubstage: Boolean = False;              // Display progress by stage in train and transform.
   DisplayEpoch: Boolean = True;                  // Display progress by epoch in train and transform.
   Stage: Integer;                                // Indentation for stage;
+  // Saving vars.
+  WorkRoot: string = '';
+  CorpusDir: string = '';
+  SymbolDir: string = '';
+  TokenDir: string = '';
+  ModelDir: string = '';
+  LogDir: string = '';
+  RunDir: string = '';
+  ScratchDir: string = '';
   // Utility vars.
   Mt0, Mt1, t0, t1, StopTime: TDateTime;         // For timing.
   Version: shortstring = '1.2';                  // Version 1.2.
@@ -216,8 +241,12 @@ var
   Tokenizer: TTokenizer;                         // WesChat or GPT2Chat tokenizer;
   NewModel: Boolean = True;                      // If new model, initialize params.
   ParamsNeedCopyToDevice: Boolean = False;       // Start of infer.
-  // Other.
-  TestVector: TFSVector;                         // Vector for testing. [0..SeqLen] of Single.
+  CorpusPresent: Boolean = False;                 // Parts of program present;
+  SymbolTablePresent: Boolean = False;
+  MergeTablePresent: Boolean = False;
+  TokenizedCorpusPresent: Boolean = False;
+  ModelPresent: Boolean = False;
+  QueryPresent: Boolean = False;
 
 implementation
 

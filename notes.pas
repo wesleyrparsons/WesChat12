@@ -15,8 +15,6 @@ MAllocCublas(...);
 CopyParamsToDevice(WModelParams);   // yes
 
 // After training, same run:
-RunTrain(...);
-RunInfer(...);                      // no CopyParamsToDevice
 
 Good flag names:
 
@@ -41,7 +39,10 @@ ParamsOnDevice := False;
 General
 1. Replace nSymbols with nVocab.
 
-1a. If VVerbose, then also Verbose.
+1a. If displaysubstageVVerbose, also displaystage.
+add displayepoch to menus
+
+2. Fix GPT2 in infer unit.
 
 3. Test SaveModel and LoadModel procedures.
 

@@ -17,12 +17,10 @@ type
   pcint = ^cint;             // "
 
 const
-  RowMajor = 101;                 // Row Major.
-  NoTrans  = 111;                 // No transposition.
-  Trans    = 112;                 // Transposition.
   cublasDLL = 'cublas64_13.dll';
   cudartDLL = 'cudart64_13.dll';
   copenblasDLL = 'libopenblas.dll';
+  WesChatKernelDLL = 'weschatkernel12.dll';
   cudaMemcpyHostToHost   = 0;
   cudaMemcpyHostToDevice = 1;
   cudaMemcpyDeviceToHost = 2;
@@ -93,9 +91,9 @@ procedure CuMatMulAccNN(handle: TcublasHandle; const A, B: PSingle; C: PSingle; 
 // ReLU procedure.
 // procedure ReLUMaskForward(const A: THiddenMatrix; var B: THiddenMatrix);
 procedure LaunchReLUForward(A: PSingle; B: PSingle; Rows: Integer; Cols: Integer);
-  cdecl; external 'WesChatKernel12.dll';
+  cdecl; external WesChatKernelDLL;
 procedure LaunchReLUBackward(Hidden1: PSingle; GradOut: PSingle; GradIn: PSingle; Rows: Integer; Cols: Integer);
-  cdecl; external 'WesChatKernel12.dll';
+  cdecl; external WesChatKernelDLL;
 
 // Copy matrix procedure.
 // procedure CopyXTensor(const A: TSeqTensor; var B: TSeqTensor);

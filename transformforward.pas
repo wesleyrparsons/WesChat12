@@ -13,12 +13,6 @@ uses
   SysUtils,
   Util;
 
-const
-  InvSqrtHeadDim: Single = 1 / Sqrt(HeadDim);         // Used in softmax.
-  RowMajor = 101;       // Row Major.
-  NoTrans  = 111;       // No transposition.
-  Trans    = 112;       // Transposition.
-
 procedure RunTransformForward(var WModelParams: TWModelParams; var WModelState: TWModelState; const Blk, Start: Integer);
 
 implementation
@@ -38,7 +32,7 @@ begin
     end;
 
     // Display X.Value matrix.
-    if VeryVerboseTransform then begin
+    if VerboseTransform then begin
       cudaMemcpy(@X.Value[0, 0], X.dValue, XSize, cudaMemcpyDeviceToHost);
       VTPDisplayX('Display X.Value in transform, before any action.', X.Value, G);
     end;
@@ -71,7 +65,7 @@ begin
     Pause;}
 
     // Display X1.Value matrix.
-    if VeryVerboseTransform then begin
+    if VerboseTransform then begin
       cudaMemcpy(@X1.Value[0, 0], X1.dValue, XSize, cudaMemcpyDeviceToHost);
       VTPDisplayX('Display X1.Value after layer-norming.', X1.Value, B);
     end;
@@ -88,7 +82,7 @@ begin
     CuMatMulNN(cuHandle, X1.dValue, Wq.dValue, Q.dValue, SeqLen, ModelDim, ModelDim);
 
     // Display Q.Value matrix.
-    if VeryVerboseTransform then begin
+    if VerboseTransform then begin
       cudaMemcpy(@Q.Value[0, 0], Q.dValue, XSize, cudaMemcpyDeviceToHost);
       VTPDisplayX('Display Q in transform.', Q.Value, G);
     end;
@@ -100,7 +94,7 @@ begin
     CuMatMulNN(cuHandle, X1.dValue, Wk.dValue, K.dValue, SeqLen, ModelDim, ModelDim);
 
     // Display K.Value matrix.
-    if VeryVerboseTransform then begin
+    if VerboseTransform then begin
       cudaMemcpy(@K.Value[0, 0], K.dValue, XSize, cudaMemcpyDeviceToHost);
       VTPDisplayX('Display K, end, in transform.', K.Value, E);
     end;
@@ -169,7 +163,7 @@ begin
     end;
 
     // Display ScoresHead[0].Value, Scores1Head2[1].Value, X2.Value matrix.
-    if VeryVerboseTransform then begin
+    if VerboseTransform then begin
       cudaMemcpy(@ScoresHead2[0].Value[0, 0], ScoresHead2[0].dValue, ScoresSize, cudaMemcpyDeviceToHost);
       VTPDisplayX('Display ScoresHead2[0] after softmax, in transform, before any action.', ScoresHead2[0].Value, G);
       cudaMemcpy(@X2.Value[0, 0], X2.dValue, XSize, cudaMemcpyDeviceToHost);
@@ -186,21 +180,21 @@ begin
     CuMatMulNN(CuHandle, X2.dValue, W0.dValue, X3.dValue, SeqLen, ModelDim, ModelDim);
 
     // Display X3.Value matrix.
-    if VeryVerboseTransform then begin
+    if VerboseTransform then begin
       cudaMemcpy(@X3.Value[0, 0], X3.dValue, XSize, cudaMemcpyDeviceToHost);
       VTPDisplayX('Display X3, in transform.', X3.Value, B);
     end;
 
-    // 1I. Merge. Obtain X4 from X1 and X3.
-    if DisplaySubstage then Writeln('': Stage, '1I. Transform Forward, Obtain X4 from X1 and X3');
+    // 1I. Merge. Obtain X4 from X and X3.
+    if DisplaySubstage then Writeln('': Stage, '1I. Transform Forward, Obtain X4 from X and X3');
 
-    // Merge Addition: Input X1, X3. Output X4.
-    // Equation: X4 = X1 + X3. X4 in R^{L · D}. X1 in R^{L · D}. X2 in R^(L x D}.
-    // MatAdd(X1.Value, X3.Value, X4.Value, SeqLen, ModelDim);
-    CuMatAdd(CuHandle, X1.dValue, X3.dValue, X4.dValue, SeqLen, ModelDim);     // No need to transfer X4.
+    // Merge Addition: Input X, X3. Output X4.
+    // Equation: X4 = X + X3. X4 in R^{L · D}. X in R^{L · D}. X2 in R^(L x D}.
+    // MatAdd(X.Value, X3.Value, X4.Value, SeqLen, ModelDim);
+    CuMatAdd(CuHandle, X.dValue, X3.dValue, X4.dValue, SeqLen, ModelDim);     // No need to transfer X4.
 
     // Display X4.Value matrix.
-    if VeryVerboseTransform then begin
+    if VerboseTransform then begin
       cudaMemcpy(@X4.Value[0, 0], X4.dValue, XSize, cudaMemcpyDeviceToHost);
       VTPDisplayX('Display X4.Value, in transform, after residual added to X3.', X4.Value, G);
     end;
@@ -214,7 +208,7 @@ begin
     LaunchLayerNormForward(X4.dValue, X5.dValue, Gamma2.dValue, Beta2.dValue, dLNXhat2, dLNInvStd2, SeqLen, ModelDim);
 
     // Display X5.Value matrix.
-    if VeryVerboseTransform then begin
+    if VerboseTransform then begin
       cudaMemcpy(@X5.Value[0, 0], X5.dValue, XSize, cudaMemcpyDeviceToHost);
       VTPDisplayX('Display X5.Value, in transform, before FFN.', X5.Value, G);
     end;
@@ -241,7 +235,7 @@ begin
       LaunchAddBiasRows(Hidden1.dValue, b1.dValue, SeqLen, ModelDimProj);
 
       // Display Hidden1.Value matrix.
-      if VeryVerboseTransform then begin
+      if VerboseTransform then begin
         cudaMemcpy(@Hidden1.Value[0, 0], Hidden1.dValue, HiddenSize, cudaMemcpyDeviceToHost);
         VTPDisplayX('Display Hidden1.Value, in transform,  after adding b1, and before ReLU.', Hidden1.Value, G);
       end;
@@ -282,7 +276,7 @@ begin
       LaunchAddBiasRows(X6.dValue, b2.dValue, SeqLen, ModelDim);
 
       // Display X6.Value matrix.
-      if VeryVerboseTransform then begin
+      if VerboseTransform then begin
         cudaMemcpy(@X6.Value[0, 0], X6.dValue, XSize, cudaMemcpyDeviceToHost);
         VTPDisplayX('Display X6, in transform, after contraction.', X6.Value, B);
       end;
@@ -299,13 +293,13 @@ begin
         //      X6.Value[i, j] := X6.Value[i, j] / (1.0 - RDropOut);
         LaunchDropout(X6.dValue, SeqLen * ModelDim, RDropout, RDropoutSeed);
 
-      // Residual merge: Input X5, X6. Output X7.
-      // Equation: X7 = X5 + X6. X7 in R^{L · D}. X5 in R^{L · D}. X6 in R^{L x D}.
-      // MatAdd(X5.Value, X6.Value, X7.Value, SeqLen, ModelDim);
-      CuMatAdd(CuHandle, X5.dValue, X6.dValue, X7.dValue, SeqLen, ModelDim);
+      // Residual merge: Input X4, X6. Output X7.
+      // Equation: X7 = X4 + X6. X7 in R^{L · D}. X4 in R^{L · D}. X6 in R^{L x D}.
+      // MatAdd(X4.Value, X6.Value, X7.Value, SeqLen, ModelDim);
+      CuMatAdd(CuHandle, X4.dValue, X6.dValue, X7.dValue, SeqLen, ModelDim);
 
       // Display X7.Value matrix.
-      if VeryVerboseTransform then begin
+      if VerboseTransform then begin
         cudaMemcpy(@X7.Value[0, 0], X7.dValue, XSize, cudaMemcpyDeviceToHost);
         VTPDisplayX('Display X7.Value, in transform, after residual added to X6.', X7.Value, B);
       end;

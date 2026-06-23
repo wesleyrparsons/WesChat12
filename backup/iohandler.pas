@@ -47,7 +47,7 @@ begin
     OneCorpus[i] := B;
 
     if VeryVerboseTokenize then
-      if ShowEachByteRead then
+      if DisplayEachByteRead then
         if B < 32 then
           Write('<', B, '>')
         else
@@ -74,7 +74,7 @@ var
   F: file;
   Magic: array[0..3] of Char;
   S: string;
-  i, Len: Integer;
+  i, Len, OldVersion: Integer;
 begin
   BOS := 256;
   EOS := 257;
@@ -93,8 +93,10 @@ begin
     Exit;
   end;
 
-  // Version.
+  // New version, 16 bytes.
   BlockRead(F, Version, 16);
+  // Old Churchill, 4 bytes.
+  // BlockRead(F, OldVersion, SizeOf(OldVersion));
 
   // Symbol count.
   BlockRead(F, nSymbols, SizeOf(nSymbols));
@@ -288,30 +290,37 @@ function SaveModel(const FileName: string; var Model: TWModelParams): Boolean;
 var
   F: file;
   Magic: array[0..3] of Char = ('W', 'E', 'S', '1');
-  IOModelDim, IONVocab, IONBlock, IOSeqLen: Integer;
+  IOModelDim, IONVocab, IONBlock, IOSeqLen,
+    IODimVocab, IOModelDimProj, IOProj, IONHead: Integer;
 begin
   Result := False;
 
   if CudaAllocated then
     CopyParamsToHost(Model);
 
-  IOModelDim := ModelDim;
-  IONVocab   := nVocab;
-  IONBlock   := nBlock;
-  IOSeqLen   := SeqLen;
+  IOModelDim     := ModelDim;
+  IOModelDimProj := ModelDimProj;
+  IOProj         := Proj;
+  IONVocab       := nVocab;
+  IODimVocab     := DimVocab;
+  IONBlock       := nBlock;
+  IONHead        := nHead;
+  IOSeqLen       := SeqLen;
 
   AssignFile(F, FileName);
   try
     Rewrite(F, 1);
 
     BlockWrite(F, Magic, SizeOf(Magic));
-    BlockWrite(F, Version, 16);
-
-    BlockWrite(F, IOModelDim, SizeOf(IOModelDim));
-    BlockWrite(F, IONVocab,   SizeOf(IONVocab));
-    BlockWrite(F, IONBlock,   SizeOf(IONBlock));
-    BlockWrite(F, IOSeqLen,   SizeOf(IOSeqLen));
-
+    BlockWrite(F, Version, SizeOf(Version));
+    BlockWrite(F, IOModelDim,     SizeOf(IOModelDim));
+    BlockWrite(F, IOModelDimProj, SizeOf(IOModelDimProj));
+    BlockWrite(F, IOProj,         SizeOf(IOProj));
+    BlockWrite(F, IONVocab,       SizeOf(IONVocab));
+    BlockWrite(F, IODimVocab,     SizeOf(IODimVocab));
+    BlockWrite(F, IONBlock,       SizeOf(IONBlock));
+    BlockWrite(F, IONHead,        SizeOf(IONHead));
+    BlockWrite(F, IOSeqLen,       SizeOf(IOSeqLen));
     BlockWrite(F, Model, SizeOf(Model));
 
     CloseFile(F);
@@ -330,7 +339,8 @@ function LoadModel(const FileName: string; var Model: TWModelParams): Boolean;
 var
   F: file;
   Magic: array[0..3] of Char;
-  IOModelDim, IONVocab, IONBlock, IOSeqLen: Integer;
+  IOModelDim, IONVocab, IONBlock, IOSeqLen,
+    IODimVocab, IOModelDimProj, IOProj, IONHead: Integer;
 begin
   Result := False;
 
@@ -344,17 +354,19 @@ begin
       Exit;
     end;
 
-    BlockRead(F, Version, 16);
-
-    BlockRead(F, IOModelDim, SizeOf(IOModelDim));
-    BlockRead(F, IONVocab,   SizeOf(IONVocab));
-    BlockRead(F, IONBlock,   SizeOf(IONBlock));
-    BlockRead(F, IOSeqLen,   SizeOf(IOSeqLen));
+    BlockRead(F, Version, SizeOf(Version));
+    BlockRead(F, IOModelDim,     SizeOf(IOModelDim));
+    BlockRead(F, IOModelDimProj, SizeOf(IOModelDimProj));
+    BlockRead(F, IOProj,         SizeOf(IOProj));
+    BlockRead(F, IONVocab,       SizeOf(IONVocab));
+    BlockRead(F, IODimVocab,     SizeOf(IODimVocab));
+    BlockRead(F, IONBlock,       SizeOf(IONBlock));
+    BlockRead(F, IONHead,        SizeOf(IONHead));
+    BlockRead(F, IOSeqLen,       SizeOf(IOSeqLen));
 
     if IOModelDim <> ModelDim then begin
       CloseFile(F);
-      Writeln('ModelDim mismatch. File=', IOModelDim,
-              ' Program=', ModelDim);
+      Writeln('ModelDim mismatch. File=', IOModelDim, ' Program=', ModelDim);
       Exit;
     end;
 
@@ -364,13 +376,48 @@ begin
       Exit;
     end;
 
-    BlockRead(F, Model, SizeOf(Model));
+    if IOModelDimProj <> ModelDimProj then begin
+      Writeln('ModelDimProj mismatch. File=', IOModelDimProj, ' Program=', ModelDimProj);
+      CloseFile(F);
+      Exit;
+    end;
 
+    if IOProj <> Proj then begin
+      Writeln('Proj mismatch. File=', IOProj, ' Program=', Proj);
+      CloseFile(F);
+      Exit;
+    end;
+
+    if IODimVocab <> DimVocab then begin
+      Writeln('DimVocab mismatch. File=', IODimVocab, ' Program=', DimVocab);
+      CloseFile(F);
+      Exit;
+    end;
+
+    if IONVocab > DimVocab then begin
+      Writeln('nVocab in file exceeds DimVocab. File=', IONVocab, ' Program DimVocab=', DimVocab);
+      CloseFile(F);
+      Exit;
+    end;
+
+    if IONHead <> nHead then begin
+      Writeln('nHead mismatch. File=', IONHead, ' Program=', nHead);
+      CloseFile(F);
+      Exit;
+    end;
+
+    if IOSeqLen <> SeqLen then begin
+      Writeln('SeqLen mismatch. File=', IOSeqLen, ' Program=', SeqLen);
+      CloseFile(F);
+      Exit;
+    end;
+
+    BlockRead(F, Model, SizeOf(Model));
     CloseFile(F);
 
     nVocab := IONVocab;
     ClearDevicePointers(Model);
-
+    NewModel := False;
     Result := True;
   except
     try

@@ -4,14 +4,44 @@ unit Notes;
 
 { WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wesparsons.com.}
 
+// After LoadModel:
+LoadModel(...);
+MAllocCublas(...);
+CopyParamsToDevice(WModelParams);   // yes
+
+// After InitializeTransformerParams:
+InitializeTransformerParams(...);
+MAllocCublas(...);
+CopyParamsToDevice(WModelParams);   // yes
+
+// After training, same run:
+RunTrain(...);
+RunInfer(...);                      // no CopyParamsToDevice
+
+Good flag names:
+
+ParamsOnDevice: Boolean = False;
+HostParamsChanged: Boolean = False;
+
+Simpler for now:
+
+if not ParamsOnDevice then begin
+  CopyParamsToDevice(WModelParams);
+  ParamsOnDevice := True;
+end;
+
+After training updates GPU params, keep:
+
+ParamsOnDevice := True;
+
+After loading model:
+
+ParamsOnDevice := False;
+
 General
-1. Replace nStmbols with nVocab.
+1. Replace nSymbols with nVocab.
 
 1a. If VVerbose, then also Verbose.
-
-2. Where do I use scale, invfreq? Need?
-
-Init state, init grads and probs
 
 3. Test SaveModel and LoadModel procedures.
 

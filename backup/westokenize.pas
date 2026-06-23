@@ -40,9 +40,7 @@ type
   TMergedTokenStats = array of TMergedTokenStat;
 var
   StartSymbol: Integer = 260;                    // UTF-8 0.255, BOS, EOS, PAD, UNK is 259.
-  //TokenizedCorpus: TIVector;
   nCorpus: Integer;
-  //BOS, EOS, PAD, UNK: Integer;                   // Extra symbols for control.
   ElapsedMS: Int64;                              // For timing.
   Hours, Mins: Int64;                            // For timing.
   Secs, MSecs: Double;                           // For timing.
@@ -565,7 +563,7 @@ begin
   // Timing.
   t1 := Now;
 
-  if ShowTokenWork and VerboseTokenize then begin
+  if DisplayTokenWork and VerboseTokenize then begin
     Writeln('---  Token Frequencies ---');
     CountSymbols(TokenizedCorpus);
   end;
@@ -598,7 +596,7 @@ begin
   end;
 
   // Verify by reconstructing.
-  if ShowVerification and VerboseTokenize and DisplayCorpus then begin
+  if DisplayVerification and VerboseTokenize and DisplayCorpus then begin
     Writeln('--- Reconstructed Corpus, Beginning ---');
     Writeln('Length = ', Length(TokenizedCorpus));
     DetokenizeToDisplay(TokenizedCorpus, B);

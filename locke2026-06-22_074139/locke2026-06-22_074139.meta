@@ -1,0 +1,87 @@
+
+--- File Information ---
+Files used in symbol table: 
+locke.txt   339046 bytes   5/20/2026 6:59:06 AM  
+
+--- Time Statistics ---
+Start time: 6/22/2026 7:41:46 AM     End time: 6/22/2026 7:42:28 AM
+Total elapsed time: 0 hours, 0 min 41.8680 sec
+Number of symbols: 11374
+Elapsed time applying merges: 1108687 hours, 66521262 min 28.1800 sec
+Original text size (bytes/tokens): 339046
+Tokens per second (total): 8097.9746
+Tokens per second (merging): 0.0001
+
+--- Symbols Statistics ---
+Number of raw byte symbols: 256
+Number of special symbols: 4
+Number of merged symbols: 11114
+Minimum symbol length: 1
+Maximum symbol length: 72
+
+Histogram of symbol lengths:
+Length  1: 256
+Length  2: 366
+Length  3: 809
+Length  4: 1023
+Length  5: 1098
+Length  6: 1086
+Length  7: 1065
+Length  8: 1007
+Length  9: 880
+Length 10: 791
+Length 11: 671
+Length 12: 497
+Length 13: 388
+Length 14: 271
+Length 15: 253
+Length 16: 187
+Length 17: 141
+Length 18: 104
+Length 19: 86
+Length 20: 65
+Length 21: 52
+Length 22: 43
+Length 23: 38
+Length 24: 30
+Length 25: 25
+Length 26: 21
+Length 27: 7
+Length 28: 11
+Length 29: 12
+Length 30: 7
+Length 31: 6
+Length 32: 12
+Length 33: 6
+Length 34: 2
+Length 35: 5
+Length 36: 6
+Length 37: 6
+Length 38: 8
+Length 39: 4
+Length 40: 3
+Length 42: 2
+Length 43: 2
+Length 44: 1
+Length 45: 3
+Length 46: 4
+Length 47: 1
+Length 48: 2
+Length 50: 2
+Length 52: 1
+Length 53: 2
+Length 56: 1
+Length 61: 1
+Length 64: 1
+Length 68: 1
+Length 69: 1
+Length 72: 1
+
+Mean symbol length: 8.4612
+Median symbol length: 7.0000
+Mean tokens per symbol (compression): 29.8089
+Longest symbol:
+  Index: 11152
+  Length: 72
+  Value: "whatsoever. You may copy it, give it away or re-use it under the terms
+"

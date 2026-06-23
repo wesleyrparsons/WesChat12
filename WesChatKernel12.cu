@@ -1047,3 +1047,31 @@ void LaunchAddBiasRowsBackward(
 
     cudaDeviceSynchronize();
 }
+
+// Clip Vector.
+extern "C" __declspec(dllexport)
+__global__ void ClipVectorKernel(float* X, int N, float Limit)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (idx >= N)
+        return;
+
+    float v = X[idx];
+
+    if (v > Limit)
+        v = Limit;
+    else if (v < -Limit)
+        v = -Limit;
+
+    X[idx] = v;
+}
+
+extern "C" __declspec(dllexport)
+void LaunchClipVector(float* X, int N, float Limit)
+{
+    int threads = 256;
+    int blocks = (N + threads - 1) / threads;
+
+    ClipVectorKernel<<<blocks, threads>>>(X, N, Limit);
+}

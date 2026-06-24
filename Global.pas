@@ -27,8 +27,8 @@ var
   SaveTokenizationFiles: Boolean = True;    // Fave tokenization files (false for inference).
   MaxMerges: Integer = 20000;               // Maximum number of merges.
   MaxPairCount: Integer = 400000;           // Maximum number of pair in BPE.
-  SavePartialSymbolTable: Boolean = False;  // Save intermediate symbol tables.
-  PartialSymbolTableTrigger: Integer = 5000;// Trigger to save symbol tables.
+  // SavePartialSymbolTable: Boolean = False;  // Save intermediate symbol tables.
+  // PartialSymbolTableTrigger: Integer = 5000;// Trigger to save symbol tables.
 
 const
   // Model constants.

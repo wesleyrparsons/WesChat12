@@ -15,7 +15,8 @@ uses
   Global,
   IOHandler,
   Math,
-  SysUtils;
+  SysUtils,
+  Util;
 
 type
   TTokenCount = record                 // Records count of tokens.
@@ -576,23 +577,25 @@ begin
 
   // Save TokenizedCorpus and other data.
   if SaveFiles and SaveTokenizationFiles then begin
-    ChDir(WorkingDir);
-    SaveTokenList(TokenizedCorpus, WorkingName + '.tok');
+    // Save token list.
+    SaveTokenList(TokenizedCorpus, TokenDir + WorkingName + '.tok');
 
     // Save current Output.
     SaveOut := Output;
 
-    // Redirect Output to F.
-    Assign(Output, WorkingName + '.log');
-    Append(Output);
+    // Redirect Output to log file.
+    Assign(Output, LogDir + WorkingName + '.log');
+
+    if FileExists(LogDir + WorkingName + '.log') then
+      Append(Output)
+    else
+      Rewrite(Output);
 
     ReportStatistics(TokenizedCorpus);
 
     // Restore Output to console.
     Close(Output);
     Output := SaveOut;
-
-    ChDir('..');
   end;
 
   // Verify by reconstructing.

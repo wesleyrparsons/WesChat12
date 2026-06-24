@@ -240,7 +240,7 @@ end;
 // QueryToken is the single next token produced by the infer proc.
 procedure RunInfer(var WModelParams: TWModelParams; var WModelState: TWModelState);
 const
-  MaxNewTokens = 100;        // Limit on new tokens produced.
+  MaxNewTokens = 500;        // Limit on new tokens produced.
 var
   i, Step, QueryToken: Integer;
   QueryTokenized, WorkTokens, QueryOutput: TIVector;
@@ -251,6 +251,7 @@ begin
   Training := False;                 // So no dropouts in unit Train.
   nVocab := nSymbols;                // Same variable.
   VerboseTransform := False;         // Select verbosity during inference.
+  SaveTokenizationFiles := False;    // Don't save files when go to Tokenize.
 
   // Initialize transformer state.
   InitializeTransformerState(WModelState);
@@ -265,9 +266,10 @@ begin
 
     begin // Run one query. (Later, repeat loop.)
       // Get a query from user.
-      // Write('Enter query: ');
-      // Readln(QueryString);
-      QueryString := 'The young man smiled. ';   // Temporary.
+      Write('Enter query: ');
+      Readln(QueryString);
+      // Test query.
+      QueryString := 'political power';   // Temporary.
       Writeln('Query string: ', QueryString);
 
       if QueryString = EmptyStr then begin

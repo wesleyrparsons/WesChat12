@@ -220,6 +220,15 @@ var
   DisplaySubstage: Boolean = False;              // Display progress by stage in train and transform.
   DisplayEpoch: Boolean = True;                  // Display progress by epoch in train and transform.
   Stage: Integer;                                // Indentation for stage;
+  // Saving vars.
+  WorkRoot: string = '';
+  CorpusDir: string = '';
+  SymbolDir: string = '';
+  TokenDir: string = '';
+  ModelDir: string = '';
+  LogDir: string = '';
+  RunDir: string = '';
+  ScratchDir: string = '';
   // Utility vars.
   Mt0, Mt1, t0, t1, StopTime: TDateTime;         // For timing.
   Version: shortstring = '1.2';                  // Version 1.2.

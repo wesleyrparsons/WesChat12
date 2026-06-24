@@ -678,7 +678,7 @@ begin
     Assign(Output, WorkingName + '.log');
     Append(Output);
 
-    ReportStatistics;
+    ReportStatistics(TokenizedCorpus);
 
     // Restore Output to console.
     Close(Output);

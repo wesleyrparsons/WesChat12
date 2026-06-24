@@ -408,8 +408,6 @@ end;
 // Main training loop, traverse the merges.
 procedure TrainBPEHash(var Head, Tail: PTokenNode; MaxMerges: Integer;
   MaxSymbols: Integer; var MergeCount, StartSymbol: Integer);
-//procedure TrainBPEHash(var Head, Tail: PTokenNode; MaxMerges: Integer;
-  //var MergeCount, StartSymbol: Integer);
 var
   m, BestCount, A, B: Integer;
   f: string;
@@ -460,10 +458,12 @@ var
         end;
       's', 'S':
         begin
-          ChDir(WorkingDir);
-          f := WorkingDir + FormatDateTime('yyyy-mm-dd_hhnnss' + '.sym', Now);
+          if WorkingName = '' then
+            WorkingName := 'symboltable';
+
+          f :=SymbolDir + WorkingName + '_' + FormatDateTime('yyyy-mm-dd_hhnnss', Now) + '.sym';
+          ForceDirectories(SymbolDir);
           SaveSymbolTable(f, SymbolTable);
-          ChDir('..');
           Writeln('File ', f, ' successfully saved.');
           Pause;
         end;
@@ -488,41 +488,20 @@ begin
     InitPairHash(H, MaxPairCount * 2 + 1024);
     InitPairHashFromList(Head, H);
 
-    // Optional: save partial symbol table.
-    if SavePartialSymbolTable then
-      if (Length(SymbolTable) mod PartialSymbolTableTrigger) = 0 then begin
-        ChDir(WorkingDir);
-        SaveSymbolTable(WorkingDir + FormatDateTime('yyyy-mm-dd_hhnnss' + '.sym', Now), SymbolTable);
-        ChDir('..');
-      end;
-
     // Stop if hash table got too full.
     if Length(SymbolTable) >= MaxSymbols then begin
       Writeln;
       Writeln('Stopping: symbol table reached ', MaxSymbols, ' entries.');
       Break;
     end;
-    {if H.Used > MaxPairCount then begin
-      Writeln;
-      Writeln('Stopping: pair table exceeded ', MaxPairCount, ' entries.');
-      Break;
-    end;}
 
     BestCount := FindBestPairHash(H, A, B);
 
     // Stop if no useful merges remain.
     if BestCount < 2 then begin
-      Writeln;
       Writeln('Stopping: no more valid merges at iteration ', m, '.');
       Break;
     end;
-
-    // Stop if symbol table is full.
-    {if Length(SymbolTable) >= nVocab then begin
-      Writeln;
-      Writeln('Stopping: symbol table reached ', nVocab, ' entries.');
-      Break;
-    end;}
 
     // Perform merge.
     MergeAllPairsHash(Head, Tail, A, B, StartSymbol, H);
@@ -902,12 +881,11 @@ begin
 
   // Save various files.
   if SaveFiles then begin
-    ChDir(WorkingDir);
-    Writeln('--- Saving Files ---');
-    SaveSymbolTable(WorkingName + '.sym', SymbolTable);
-    SaveMergeTable(Merges, WorkingName + '.mer');
-    SaveMetaData(WorkingName + '.meta');
-    ChDir('..');
+    Writeln('--- Saving Symbolization Files ---');
+
+    SaveSymbolTable(SymbolDir + WorkingName + '.sym', SymbolTable);
+    SaveMergeTable(Merges, SymbolDir + WorkingName + '.mer');
+    SaveMetaData(LogDir + WorkingName + '.meta');
   end;
 
   Writeln('End of symbolization procedure.');

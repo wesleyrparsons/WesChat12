@@ -149,7 +149,7 @@ var
         Result := True;
       end;
       'n', 'N': begin
-        Writeln('Stopping training. Going to Inference.');
+        Writeln('Stopping training.');
         TrainSuccess := True;
         Result := True;
       end;
@@ -170,13 +170,30 @@ var
         Pause;
       end;
       's', 'S': begin
-        ChDir(WorkingDir);   // Save model.
-        Write('Enter filename: ');
+        Write('Enter model filename, blank for automatic checkpoint: ');
         Readln(ModelFileName);
+
+        ModelFileName := Trim(ModelFileName);
+
+        if ModelFileName = '' then begin
+          ModelFileName := ModelDir + WorkingName + '_epoch' + IntToStr(Epoch) +
+            '_step' + IntToStr(GlobalStep) + '_' + FormatDateTime('yyyy-mm-dd_hhnnss', Now) + '.model';
+        end
+        else begin
+          // If user typed only a bare filename, save it in ModelDir.
+          if ExtractFilePath(ModelFileName) = '' then
+            ModelFileName := ModelDir + ModelFileName;
+
+          // Add extension if missing.
+          if ExtractFileExt(ModelFileName) = '' then
+            ModelFileName := ModelFileName + '.model';
+        end;
+
         if SaveModel(ModelFileName, WModelParams) then
           Writeln('File ', ModelFileName, ' successfully saved.')
         else
           Writeln('File not saved.');
+
         Pause;
       end;
 
@@ -513,7 +530,8 @@ begin
       if Epoch = 0 then
         StartLoss := MEL;
       if (Epoch mod 20) = 0 then begin
-        Writeln('>> nVocab = ', nVocab, ' DimVocab = ', DimVocab, ' Seqlen = ', SeqLen, ' ModelDim = ', ModelDim, ' nHead = ', nHead, ' Proj = ', Proj);
+        Writeln('>> nTC = ', Length(TokenizedCorpus), ' nVocab = ', nVocab, ' DimVocab = ', DimVocab, ' Seqlen = ', SeqLen,
+          ' ModelDim = ', ModelDim, ' nHead = ', nHead, ' Proj = ', Proj);
         Writeln('>> Learning rate = ', LearningRate:10:8, ' Floor LR = ', FloorLearningRate:10:8, ' Base LR = ', BaseLearningRate:10:8,
           ' LR rolloff = ', RollOff:10:8, ' Weight decay = ', WeightDecay:10:8, ' Decay scale = ', DecayScale:10:8);
         Writeln('>> Training = ', Training, ' Temperature = ', Temperature: 10: 8, ' Clip limit = ', ClipLimit: 10: 8, ' Global step = ', GlobalStep);
@@ -522,7 +540,7 @@ begin
         Write('^^')
       else
         Write('--');
-      Write('Epoch ', Epoch, ' has ended. Window count = ', WindowCount, '. Mean loss: Start = ', StartLoss:10:8, ' ; Minimum = ',
+      Write('Epoch ', Epoch, ' has ended. Window count = ', WindowCount, '. Mean loss: Start = ', StartLoss:10:8, '; Minimum = ',
         MinLoss:10:8, ' in epoch ', MinLossEpoch, '; Current = ', MEL:10:8);
 
       if RecentLossCount = 10 then

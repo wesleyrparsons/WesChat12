@@ -15,7 +15,8 @@ uses
   Global,
   IOHandler,
   Math,
-  SysUtils;
+  SysUtils,
+  Util;
 
 type
   TTokenCount = record                 // Records count of tokens.
@@ -183,7 +184,7 @@ begin
     Writeln;
   end;
 
-  Writeln('Created ', nTokenizedCorpus, ' tokens from ', TextFileName, '.');
+  Writeln('Created ', nTokenizedCorpus, ' tokens.');
 
   if VerboseTokenize then Begin
     Write('First 50 token of tokenized corpus: ');
@@ -575,24 +576,26 @@ begin
     ReportStatistics(TokenizedCorpus);
 
   // Save TokenizedCorpus and other data.
-  if SaveFiles then begin
-    ChDir(WorkingDir);
-    SaveTokenList(TokenizedCorpus, WorkingName + '.tok');
+  if SaveFiles and SaveTokenizationFiles then begin
+    // Save token list.
+    SaveTokenList(TokenizedCorpus, TokenDir + WorkingName + '.tok');
 
     // Save current Output.
     SaveOut := Output;
 
-    // Redirect Output to F.
-    Assign(Output, WorkingName + '.log');
-    Append(Output);
+    // Redirect Output to log file.
+    Assign(Output, LogDir + WorkingName + '.log');
+
+    if FileExists(LogDir + WorkingName + '.log') then
+      Append(Output)
+    else
+      Rewrite(Output);
 
     ReportStatistics(TokenizedCorpus);
 
     // Restore Output to console.
     Close(Output);
     Output := SaveOut;
-
-    ChDir('..');
   end;
 
   // Verify by reconstructing.
@@ -610,7 +613,7 @@ begin
     Writeln;
     Pause;
   end;
-
+  TCFull(TokenizedCorpus); Pause;
   Writeln('End of tokenization procedure in WesTokenize.');
 
 end;

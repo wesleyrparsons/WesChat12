@@ -410,7 +410,7 @@ procedure TrainBPEHash(var Head, Tail: PTokenNode; MaxMerges: Integer;
   MaxSymbols: Integer; var MergeCount, StartSymbol: Integer);
 var
   m, BestCount, A, B: Integer;
-  f: string;
+  f, BaseName: string;
   H: TPairHash;
 
   procedure ReadMergeIfKeyPressed;
@@ -458,14 +458,46 @@ var
         end;
       's', 'S':
         begin
-          if WorkingName = '' then
-            WorkingName := 'symboltable';
+          try
+            if Trim(WorkingName) = '' then
+              BaseName := 'symboltable'
+            else
+              BaseName := ChangeFileExt(ExtractFileName(WorkingName), '');
 
-          f :=SymbolDir + WorkingName + '_' + FormatDateTime('yyyy-mm-dd_hhnnss', Now) + '.sym';
-          ForceDirectories(SymbolDir);
-          SaveSymbolTable(f, SymbolTable);
-          Writeln('File ', f, ' successfully saved.');
-          Pause;
+            if Trim(BaseName) = '' then
+              BaseName := 'symboltable';
+
+            if Trim(SymbolDir) = '' then begin // Symboldir now seems to work.
+              SymbolDir := IncludeTrailingPathDelimiter(GetCurrentDir) +
+                'WesChatWork' + DirectorySeparator + 'symbols' + DirectorySeparator;
+              ForceDirectories(SymbolDir);
+            end;
+            // Make sure the directory name is clean.
+            SymbolDir := IncludeTrailingPathDelimiter(SymbolDir);
+
+            if not DirectoryExists(SymbolDir) then begin
+              Writeln('Creating symbol directory: ', SymbolDir);
+              ForceDirectories(SymbolDir);
+            end;
+
+            f := SymbolDir + BaseName + '_' + FormatDateTime('yyyy-mm-dd_hhnnss', Now) + '.sym';
+
+            Writeln('Saving symbol table to: ', f);
+
+            SaveSymbolTable(f, SymbolTable);
+
+            // Writeln('File ', f, ' successfully saved.');
+            Pause;
+          except
+            on E: Exception do begin
+              Writeln('Error saving symbol table: ', E.ClassName, ' ', E.Message);
+              Writeln('SymbolDir = "', SymbolDir, '"');
+              Writeln('WorkingName = "', WorkingName, '"');
+              Writeln('BaseName = "', BaseName, '"');
+              Writeln('Target file = "', f, '"');
+              Pause;
+            end;
+          end;
         end;
     end;
   end;
@@ -758,10 +790,7 @@ begin
 
   MaxSymbols := DimVocab;
 
-  Writeln('Maximum symbols = ', MaxSymbols,
-          '. Base symbols = ', nSymbols,
-          '. Maximum merges = ', MaxMerges,
-          '. Maximum pair counts = ', MaxPairCount, '.');
+  Writeln('Maximum symbols = ', MaxSymbols, '. Base symbols = ', nSymbols, '. Maximum merges = ', MaxMerges, '. Maximum pair counts = ', MaxPairCount, '.');
 
   TrainBPEHash(Head, Tail, MaxMerges, MaxSymbols, MergeCount, StartSymbol);
 

@@ -14,7 +14,7 @@ implementation
 
 begin
 
-  // SGEMM call, OpenBLAS 3.30
+  // SGEMM call, OpenBLAS 3.30.
   cblas_sgemm(
     101,               // Layout
     111,               // A not transposed

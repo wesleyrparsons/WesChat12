@@ -3,31 +3,21 @@ program WesChat;
 {$mode ObjFPC}{$H+}{$I proprietary.txt}
 
 { WesChat, Version 1.2.
-{ Note: Edited 6/23/2026 5 pm -- working from WesChat12 on OneDrive }
+{ Note: Edited 6/24/2026 9 am -- working from WesChat12 on OneDrive }
 {        Input Train        Input Query        Output
  Raw                        QueryString
  Bytes   Corpus             QueryCorpus
  Token   TokenizedCorpus    QueryTokenized     QueryOutput }
- {For tokenizining, need tokenized corpus.                     CorpusPresent (now TokSuccessful)
-  For training, need symbol table for WesChat.                 SMTablePresent
-    (already have symbol and merge tables for GPT2).
-    and token list.                                            TokenizedCorpusPresent
-  For inference, need param model, and symbol/merge table(s).  ModelPresent }
-
-  Folder layout:
+ Folder layout:
     WorkRoot\
       corpus\
       symbols\
       tokens\
       models\
       logs\
+      runs\
       lists\
-      scratch\
-
-  Main rule:
-    Do not ChDir during normal work.
-    Always pass full paths to Save/Load routines.}
-
+      scratch\ }
 uses
   Classes,
   CombineTables,
@@ -58,16 +48,6 @@ var
   // File names.
   CorpusFileName, SymbolFileName, TokenFileName,
     ModelFileName, ListFile: string;
-
-  // Work folder paths.
-  WorkRoot: string = '';
-  CorpusDir: string = '';
-  SymbolDir: string = '';
-  TokenDir: string = '';
-  ModelDir: string = '';
-  LogDir: string = '';
-  ListDir: string = '';
-  ScratchDir: string = '';
 
   // Current base name for default output filenames.
   CurrentBaseName: string = 'weschat';
@@ -466,14 +446,14 @@ begin
   SaveTokenList(TokenizedCorpus, TokenFileName);
 end;
 
-procedure SaveCurrentSymbolTableDefault;
+{procedure SaveCurrentSymbolTableDefault;
 begin
   if Length(SymbolTable) = 0 then
     Exit;
 
   SymbolFileName := DefaultSymbolFile(CurrentBaseName);
   SaveSymbolTable(SymbolFileName, SymbolTable);
-end;
+end;}
 
 procedure MaybeSaveTokenList;
 var
@@ -1012,7 +992,7 @@ begin
   Writeln('  ', ListDir,    '   file lists');
   Writeln;
 
-  Writeln('Debug / display toggles still available:');
+  Writeln('Debug / display toggles available:');
   Writeln('  VTO / NVTO: VerboseTokenize on/off');
   Writeln('  DC / NDC:   DisplayCorpus on/off');
   Writeln('  DTW / NDTW: DisplayTokenWork on/off');

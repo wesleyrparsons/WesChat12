@@ -126,7 +126,7 @@ var
   Blk, LastBlk, Epoch, Start, WindowCount, MinLossEpoch: Integer;
   Loss, MinLoss, DiffLoss, LastLoss, EpochLoss, MEL, StartLoss,
     MeanRunningLoss, RecentLossSum, GradScale: Double;
-  RecentLosses: array[0..9] of Double;
+  RecentLosses: array[0..RecentCount] of Double;
   RecentLossIndex, RecentLossCount: Integer;
   // PreUpdateLoss, PostUpdateLoss: Double;
 
@@ -514,14 +514,14 @@ begin
       LastLoss := MEL;
 
       // Rolling mean over last 10 epoch mean losses.
-      if RecentLossCount < 10 then begin
+      if RecentLossCount < RecentCount then begin
         Inc(RecentLossCount);
       end else begin
         RecentLossSum := RecentLossSum - RecentLosses[RecentLossIndex];
       end;
       RecentLosses[RecentLossIndex] := MEL;
       RecentLossSum := RecentLossSum + MEL;
-      RecentLossIndex := (RecentLossIndex + 1) mod 10;
+      RecentLossIndex := (RecentLossIndex + 1) mod RecentCount;
       MeanRunningLoss := RecentLossSum / RecentLossCount;
 
       if StopTraining then Exit;
@@ -530,8 +530,8 @@ begin
       if Epoch = 0 then
         StartLoss := MEL;
       if (Epoch mod 20) = 0 then begin
-        Writeln('>> nTC = ', Length(TokenizedCorpus), ' nVocab = ', nVocab, ' DimVocab = ', DimVocab, ' Seqlen = ', SeqLen,
-          ' ModelDim = ', ModelDim, ' nHead = ', nHead, ' Proj = ', Proj);
+        Writeln('>> nTC = ', Length(TokenizedCorpus), ' nVocab = ', nVocab, ' DimVocab = ', DimVocab, ' Seqlen = ', SeqLen, ' Stride = ', Stride,
+          ' ModelDim = ', ModelDim, ' nHead = ', nHead, ' nBlock = ', nBlock, ' Proj = ', Proj);
         Writeln('>> Learning rate = ', LearningRate:10:8, ' Floor LR = ', FloorLearningRate:10:8, ' Base LR = ', BaseLearningRate:10:8,
           ' LR rolloff = ', RollOff:10:8, ' Weight decay = ', WeightDecay:10:8, ' Decay scale = ', DecayScale:10:8);
         Writeln('>> Training = ', Training, ' Temperature = ', Temperature: 10: 8, ' Clip limit = ', ClipLimit: 10: 8, ' Global step = ', GlobalStep);
@@ -543,14 +543,14 @@ begin
       Write('Epoch ', Epoch, ' has ended. Window count = ', WindowCount, '. Mean loss: Start = ', StartLoss:10:8, '; Minimum = ',
         MinLoss:10:8, ' in epoch ', MinLossEpoch, '; Current = ', MEL:10:8);
 
-      if RecentLossCount = 10 then
+      {if RecentLossCount = 10 then
         Write('; Rolling10 = ', MeanRunningLoss:10:8)
-      else
+      else}
         Write('; Rolling', RecentLossCount, ' = ', MeanRunningLoss:10:8);
 
       if Epoch > 0 then begin
         if DiffLoss > 0 then
-          Write('; Improved by ', DiffLoss:10:8)
+          Write('; Better by ', DiffLoss:10:8)
         else
           Write('; Worse by ', -DiffLoss:10:8);
       end;

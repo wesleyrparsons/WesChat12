@@ -1,3 +1,0 @@
-franklin1.txt
-franklin2.txt
-franklin3.txt

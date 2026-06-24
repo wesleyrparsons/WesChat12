@@ -10,7 +10,6 @@ uses
   Global;
 
 // Pause procedures.
-// procedure HardPause;
 procedure Pause;
 
 // Interrupt procedures.

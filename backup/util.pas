@@ -10,7 +10,8 @@ uses
   Display,
   Global,
   Math,
-  Matrix;
+  Matrix,
+  SysUtils;
 
 const
   WeightSize: Integer = ModelDim * ModelDim * SizeOf(Single);
@@ -30,7 +31,7 @@ procedure InitializeCublas;
 procedure CheckCudaError(const Where: string);
 procedure StartCuda(var WModelParams: TWModelParams; var WModelState: TWModelState);
 procedure EndCuda(var WModelParams: TWModelParams; var WModelState: TWModelState);
-// Word procedures and funcitons.
+// Word procedures and functions.
 procedure InitWorkFolders(const Root: string);
 function CleanBaseName(const FileName: string): string;
 function WorkSymbolFile(const BaseName: string): string;
@@ -46,7 +47,7 @@ function Decode(const x: Integer): UnicodeString;
 // Transform routines.
 function ComputeLoss(const Probs: TSeqVocabMatrix; const TargetTokens: TIDimVector): Double;
 procedure ScaleAllGradients(var WModelParams: TWModelParams; const S: Single);
-// Initialization and optimization routines.
+// Initialization routines.
 procedure XGUniformW(var W: TWeightMatrix; FanIn, FanOut: Integer);
 procedure XGUniformWHead(var W: TWeightHeadMatrix; FanIn, FanOut: Integer);
 procedure XGUniformW1(var W: TWeightProjMatrix; FanIn, FanOut: Integer);
@@ -59,17 +60,11 @@ procedure MAllocCublas(var WModelParams: TWModelParams; var WModelState: TWModel
 procedure MDeallocateCublas(var WModelParams: TWModelParams; var WModelState: TWModelState);
 procedure CopyInvFreqToDevice(var WModelState: TWModelState);
 procedure ZeroGradients(var WModelParams: TWModelParams; var WModelState: TWModelState; const Blk: Integer);
-procedure CuUpdateParam(Handle: TcublasHandle; const N: Integer; const LearningRate: Single; const Grad: PSingle; Param: PSingle);
+// Optimization routines.
+//procedure CuUpdateParam(Handle: TcublasHandle; const N: Integer; const LearningRate: Single; const Grad: PSingle; Param: PSingle);
 procedure Optimization(var WModelParams: TWModelParams; const Blk: Integer);
 procedure UpdateEmbeddings(var WModelParams: TWModelParams; var WModelState: TWModelState);
-// procedure ApplyRoPE(var H: TSeqMatrix;  const InvFreq: TFVector; SeqLen, ModelDim: Integer);
-// procedure ApplyAutoRegressiveMask(var ScoresHead: TScoresMatrix; const L: Integer);
-// procedure LayerNormForward(const InX: TSeqMatrix; var OutX: TSeqMatrix; SeqLen: Integer;
-//   const Gamma, Beta: TSeqVector; var LNXhat: TSeqMatrix; var LNInvStd: TFSVector);
-// procedure LayerNormBackward(const dY: TSeqMatrix; var dX: TSeqMatrix; var dGamma, dBeta: TSeqVector;
-//   SeqLen: Integer; const Gamma: TSeqVector; var LNXhat: TSeqMatrix; var LNInvStd: TFSVector);
-// procedure GradientFromKLDivergence(var WModelState: TWModelState);
-// procedure BackpropAdd(const dOut: TSeqMatrix; var dA, dB: TSeqMatrix; const L, D: Integer);
+// DLL transform routines.
 procedure LaunchClipVector(X: PSingle; N: Integer; Limit: Single); cdecl;
   external 'WesChatKernel12.dll';
 procedure LaunchEmbeddingLookup(Embeddings: PSingle; InputTokens: PInteger; X: PSingle; SeqLen: Integer; ModelDim: Integer);
@@ -86,18 +81,16 @@ procedure LaunchSoftmaxForwardStrided(dIn: PSingle; dOut: PSingle; Rows: Integer
   cdecl; external 'WesChatKernel12.dll';
 procedure LaunchSoftmaxForwardN(X: PSingle; Y: PSingle; Rows: Integer; N: Integer; Temperature: Single);
   cdecl; external 'WesChatKernel12.dll';
-procedure SoftmaxBackward(const y, dy:  TFVector; out dx: TFVector);
 procedure LaunchSoftmaxBackward(Y: PSingle; dY: PSingle; dX: PSingle; Rows: Integer; D: Integer);
   cdecl; external 'WesChatKernel12.dll';
 procedure LaunchLayerNormForward(InX, OutX, Gamma, Beta, LNXhat, LNInvStd: PSingle; SeqLen, ModelDim: Integer);
   cdecl; external 'WesChatKernel12.dll';
-procedure LaunchLayerNormBackward(dY: PSingle; dX: PSingle; Gamma: PSingle; LNXhat: PSingle; LNInvStd: PSingle;
-  dGamma: PSingle; dBeta: PSingle; SeqLen: Integer; ModelDim: Integer);
+procedure LaunchLayerNormBackward(dY, dX, Gamma, LNXhat, LNInvStd, dGamma, dBeta: PSingle; SeqLen, ModelDim: Integer);
   cdecl; external 'WesChatKernel12.dll';
 procedure LaunchRoPEForward(H: PSingle; InvFreq: PSingle; SeqLen: Integer; ModelDim: Integer);
   cdecl; external 'WesChatKernel12.dll';
 procedure LaunchRoPEBackward(dH: PSingle; InvFreq: PSingle; SeqLen: Integer; ModelDim: Integer);
-  cdecl; external 'WesChatKernel12.dll';procedure GradientFromCEProbabilities(var WModelState: TWModelState);
+  cdecl; external 'WesChatKernel12.dll';
 procedure LaunchCEGradient(Probs: PSingle; TopGradient: PSingle; TargetTokens: PInteger; SeqLen: Integer; nVocab: Integer);
   cdecl; external 'WesChatKernel12.dll';
 procedure LaunchCEGradientStrided(Probs: PSingle; TopGradient: PSingle; TargetTokens: PInteger; Rows: Integer; VocabSize: Integer; RowStride: Integer);
@@ -254,6 +247,7 @@ begin
     TokenVectorToPad[i] := PAD;
 end;
 
+// Display first 100 tokens of tokenized corpus and detokenized form.
 procedure TC100(const TC: TIVector);
 var
   i: Integer;
@@ -268,6 +262,7 @@ begin
   Writeln;
 end;
 
+// Display tokenized corpus tokens and detokenized corpus (as check).
 procedure TCFull(const TC: TIVector);
 var
   i: Integer;
@@ -284,6 +279,7 @@ begin
   Pause;
 end;
 
+// Decode using symbol table one token.
 function Decode(const x: Integer): UnicodeString;
 begin
   if Tokenizer = WesTokenizer then
@@ -316,7 +312,7 @@ begin
   Result := Result / SeqLen;
 end;
 
-// Scale all the graidents.
+// Scale all the gradients.
 procedure ScaleAllGradients(var WModelParams: TWModelParams; const S: Single);
 var
   k: Integer;
@@ -403,7 +399,8 @@ begin
     end;
 end;
 
-// Allocate cublas memory.       Separate for State and Params?
+// Allocate cublas memory.
+// Separate for State and Params? Not necessary.
 procedure MAllocCublas(var WModelParams: TWModelParams; var WModelState: TWModelState);
 var
   h, k: Integer;
@@ -741,20 +738,6 @@ end;
 procedure ZeroGradients(var WModelParams: TWModelParams; var WModelState: TWModelState; const Blk: Integer);
 begin
   with WModelState.StateBlock[Blk] do begin
-    {FillChar(X.Grad, XSize, 0);
-    FillChar(X1.Grad, XSize, 0);
-    FillChar(X2.Grad, XSize, 0);
-    FillChar(X3.Grad, XSize, 0);
-    FillChar(X4.Grad, XSize, 0);
-    FillChar(X5.Grad, XSize, 0);
-    FillChar(X6.Grad, XSize, 0);
-    FillChar(X7.Grad, XSize, 0);
-    FillChar(X1k.Grad, XSize, 0);
-    FillChar(X1q.Grad, XSize, 0);
-    FillChar(X1v.Grad, XSize, 0);
-    FillChar(K.Grad, XSize, 0);
-    FillChar(Q.Grad, XSize, 0);
-    FillChar(V.Grad, XSize, 0);         }
     FillChar(Hidden1.Grad, HiddenSize, 0);
     FillChar(Hidden2.Grad, HiddenSize, 0);
     cudaMemset(X.dGrad, 0, XSize);
@@ -777,18 +760,6 @@ begin
   if Blk = 0 then
     cudaMemset(WModelParams.Embeddings.dGrad, 0, EmbeddingsSize);
   with WModelParams.ParamBlock[Blk] do begin
-    {FillChar(Wk.Grad, WeightSize, 0);
-    FillChar(Wq.Grad, WeightSize, 0);
-    FillChar(Wv.Grad, WeightSize, 0);
-    FillChar(W0.Grad, WeightSize, 0);
-    FillChar(W1.Grad, WeightProjectedSize, 0);
-    FillChar(W2.Grad, WeightProjectedSize, 0);
-    FillChar(b1.Grad, ProjectedSize, 0);
-    FillChar(b2.Grad, ModelSize, 0);
-    FillChar(Gamma1.Grad, ModelSize, 0);
-    FillChar(Gamma2.Grad, ModelSize, 0);
-    FillChar(Beta1.Grad, ModelSize, 0);
-    FillChar(Beta2.Grad, ModelSize, 0);}
     cudaMemset(Wk.dGrad, 0, WeightSize);
     cudaMemset(Wq.dGrad, 0, WeightSize);
     cudaMemset(Wv.dGrad, 0, WeightSize);
@@ -804,16 +775,17 @@ begin
   end;
 end;
 
+// Procedures for updating the parameters. Herw, with decay.
 procedure CuUpdateParamDecay(Handle: TcublasHandle; const N: Integer; const LearningRate: Single; const Grad: PSingle; Param: PSingle);
 var
   Alpha: Single;
 begin
   CuScale(Handle, N, DecayScale, Param);
-
   Alpha := -LearningRate;
   cublasSaxpy_v2(Handle, N, @Alpha, Grad, 1, Param, 1);
 end;
 
+// Procedures for updating the parameters. Herw, without decay.
 procedure CuUpdateParamNoDecay(Handle: TcublasHandle; const N: Integer; const LearningRate: Single; const Grad: PSingle; Param: PSingle);
 var
   Alpha: Single;
@@ -822,13 +794,14 @@ begin
   cublasSaxpy_v2(Handle, N, @Alpha, Grad, 1, Param, 1);
 end;
 
+{Same as NoDecay
 procedure CuUpdateParam(Handle: TcublasHandle; const N: Integer; const LearningRate: Single; const Grad: PSingle; Param: PSingle);
 var
   Alpha: Single;
 begin
   Alpha := -LearningRate;
   cublasSaxpy_v2(Handle, N, @Alpha, Grad, 1, Param, 1);
-end;
+end;}
 
 // Update the weights and biases. At some point, eliminate non-cublas updates.
 procedure Optimization(var WModelParams: TWModelParams; const Blk: Integer);
@@ -890,10 +863,10 @@ begin
   LaunchAddInputEmbeddingGrad(WModelState.StateBlock[0].X.dGrad, WModelParams.Embeddings.dGrad, dInputTokens, SeqLen, ModelDim, nVocab);
 
   // Apply total embedding gradient.
-  CuUpdateParam(CuHandle, nVocab * ModelDim, LearningRate, WModelParams.Embeddings.dGrad, WModelParams.Embeddings.dValue);
+  CuUpdateParamNoDecay(CuHandle, nVocab * ModelDim, LearningRate, WModelParams.Embeddings.dGrad, WModelParams.Embeddings.dValue);
 end;
 
-// Rotary positional encoding.
+// Rotary positional encoding. No longer used.
 // Apply RoPE to both Q and K, [0..SeqLen - 1, 0..ModelDim - 1]
 // Apply before head-splitting, immediately after computing Q and K.
 procedure ApplyRoPE(var H: TSeqMatrix;  const InvFreq: TFVector; SeqLen, ModelDim: Integer);
@@ -917,7 +890,7 @@ begin
     end;
 end;
 
-// Simple autoregressive masking.
+// Simple autoregressive masking. No longer used.
 procedure ApplyAutoregressiveMask(var ScoresHead: TScoresMatrix; const L: Integer);
 var
   i, j: Integer;
@@ -929,6 +902,7 @@ begin
       ScoresHead[i, j] := NEG_INF;
 end;
 
+// Softmax ForwardN. No longer used.
 procedure SoftmaxForwardN(const x: PSingle; y: PSingle; const N: Integer);
 var
   i: Integer;
@@ -959,33 +933,7 @@ begin
   end;
 end;
 
-// Softmax procedure forward.
-{procedure SoftmaxForward(const x: TFVector; out y: array of Single);
-var
-  i: Integer;
-  MaxVal, SumVal, InvT: Single;
-begin
-  // Find max for numerical stability.
-  InvT := 1.0 / Temperature;
-  MaxVal := x[0] * InvT;
-  for i := 1 to High(x) do
-    if (x[i] * InvT) > MaxVal then
-      MaxVal := x[i] * InvT;
-
-  // Compute exp(x - max).
-  SumVal := 0;
-  for i := 0 to High(x) do begin
-    y[i] := Exp((x[i] * InvT) - MaxVal);
-    SumVal := SumVal + y[i];
-  end;
-
-  // Normalize.
-  SumVal := 1.0 / SumVal;
-  for i := 0 to High(x) do
-    y[i] := y[i] * SumVal;
-end;}
-
-// Softmax procedure backward.
+// Softmax procedure backward. No longer used.
 procedure SoftmaxBackward(const y, dy:  TFVector; out dx: TFVector);
 var
   j, D: Integer;
@@ -1004,7 +952,7 @@ begin
     dx[j] := y[j] * (dy[j] - dot);
 end;
 
-// Layer-Norm matrix.
+// Layer-Norm matrix. No longer used.
 procedure LayerNormForward(const InX: TSeqMatrix; var OutX: TSeqMatrix; SeqLen: Integer;
   const Gamma, Beta: TSeqVector; var LNXhat: TSeqMatrix; var LNInvStd: TFSVector);
 var
@@ -1035,7 +983,7 @@ begin
 end;
 
 // Layer-Norm matrix on back propagation. dY is upstream gradient. dX is output gradient.
-// dGamma, dBeta are accumulated over all rows.
+// dGamma, dBeta are accumulated over all rows. No longer used.
 procedure LayerNormBackward(const dY: TSeqMatrix; var dX: TSeqMatrix; var dGamma, dBeta: TSeqVector;
   SeqLen: Integer; const Gamma: TSeqVector; var LNXhat: TSeqMatrix; var LNInvStd: TFSVector);
 var
@@ -1066,7 +1014,7 @@ begin
   end;
 end;
 
-// Calculate cross-entropy gradient from probabilities and target, one-hot.
+// Calculate cross-entropy gradient from probabilities and target, one-hot. No longer used.
 procedure GradientFromCEProbabilities(var WModelState: TWModelState);
 var
   i, s: Integer;
@@ -1081,7 +1029,7 @@ begin
     end;
 end;
 
-// Calculate gradient for KL divergence with one-hot targets: dL/dProbs = Q - P.
+// Calculate gradient for KL divergence with one-hot targets: dL/dProbs = Q - P. No longer used.
 procedure GradientFromKLDivergence(var WModelState: TWModelState);
 var
   i, s: Integer;
@@ -1095,7 +1043,7 @@ begin
           TopGradient[i, s] := Probs[i, s] - 0.0;  // Q - 0.
 end;
 
-// Back propagation addition.
+// Back propagation addition. No longer used.
 procedure BackpropAdd(const dOut: TSeqMatrix; var dA, dB: TSeqMatrix; const L, D: Integer);
 var
   i, j: Integer;

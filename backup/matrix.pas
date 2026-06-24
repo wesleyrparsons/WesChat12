@@ -20,6 +20,7 @@ const
   cublasDLL = 'cublas64_13.dll';
   cudartDLL = 'cudart64_13.dll';
   copenblasDLL = 'libopenblas.dll';
+  WesChatKernelDLL = 'weschatkernel12.dll';
   cudaMemcpyHostToHost   = 0;
   cudaMemcpyHostToDevice = 1;
   cudaMemcpyDeviceToHost = 2;
@@ -90,9 +91,9 @@ procedure CuMatMulAccNN(handle: TcublasHandle; const A, B: PSingle; C: PSingle; 
 // ReLU procedure.
 // procedure ReLUMaskForward(const A: THiddenMatrix; var B: THiddenMatrix);
 procedure LaunchReLUForward(A: PSingle; B: PSingle; Rows: Integer; Cols: Integer);
-  cdecl; external 'WesChatKernel12.dll';
+  cdecl; external WesChatKernelDLL;
 procedure LaunchReLUBackward(Hidden1: PSingle; GradOut: PSingle; GradIn: PSingle; Rows: Integer; Cols: Integer);
-  cdecl; external 'WesChatKernel12.dll';
+  cdecl; external WesChatKernelDLL;
 
 // Copy matrix procedure.
 // procedure CopyXTensor(const A: TSeqTensor; var B: TSeqTensor);
@@ -326,6 +327,7 @@ var
 begin
   alpha := 1.0;
   beta  := 0.0;
+
   cublasSgemm_v2(Handle, 0, 1, N, M, K, @alpha,  // Swapped 0 and 1.
     B, ldb, A, lda, @beta, C, ldc);
 end;
@@ -345,7 +347,7 @@ var
   alpha, beta: Single;
 begin
   alpha := 1.0;
-  beta  := 1.0;   // accumulate into C.
+  beta  := 1.0;   // Accumulate into C.
 
   cublasSgemm_v2(handle, 0, 0, N, M, K, @alpha,
     B, ldb, A, lda, @beta, C, ldc);

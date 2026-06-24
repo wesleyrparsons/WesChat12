@@ -410,7 +410,7 @@ procedure TrainBPEHash(var Head, Tail: PTokenNode; MaxMerges: Integer;
   MaxSymbols: Integer; var MergeCount, StartSymbol: Integer);
 var
   m, BestCount, A, B: Integer;
-  f: string;
+  f, BaseName: string;
   H: TPairHash;
 
   procedure ReadMergeIfKeyPressed;
@@ -458,14 +458,46 @@ var
         end;
       's', 'S':
         begin
-          if WorkingName = '' then
-            WorkingName := 'symboltable';
+          try
+            if Trim(WorkingName) = '' then
+              BaseName := 'symboltable'
+            else
+              BaseName := ChangeFileExt(ExtractFileName(WorkingName), '');
 
-          f :=SymbolDir + WorkingName + '_' + FormatDateTime('yyyy-mm-dd_hhnnss', Now) + '.sym';
-          ForceDirectories(SymbolDir);
-          SaveSymbolTable(f, SymbolTable);
-          Writeln('File ', f, ' successfully saved.');
-          Pause;
+            if Trim(BaseName) = '' then
+              BaseName := 'symboltable';
+
+            if Trim(SymbolDir) = '' then begin // Why do I get a blank symboldir?
+              SymbolDir := IncludeTrailingPathDelimiter(GetCurrentDir) +
+                'WesChatWork' + DirectorySeparator + 'symbols' + DirectorySeparator;
+              ForceDirectories(SymbolDir);
+            end;
+            // Make sure the directory name is clean.
+            SymbolDir := IncludeTrailingPathDelimiter(SymbolDir);
+
+            if not DirectoryExists(SymbolDir) then begin
+              Writeln('Creating symbol directory: ', SymbolDir);
+              ForceDirectories(SymbolDir);
+            end;
+
+            f := SymbolDir + BaseName + '_' + FormatDateTime('yyyy-mm-dd_hhnnss', Now) + '.sym';
+
+            Writeln('Saving symbol table to: ', f);
+
+            SaveSymbolTable(f, SymbolTable);
+
+            // Writeln('File ', f, ' successfully saved.');
+            Pause;
+          except
+            on E: Exception do begin
+              Writeln('Error saving symbol table: ', E.ClassName, ' ', E.Message);
+              Writeln('SymbolDir = "', SymbolDir, '"');
+              Writeln('WorkingName = "', WorkingName, '"');
+              Writeln('BaseName = "', BaseName, '"');
+              Writeln('Target file = "', f, '"');
+              Pause;
+            end;
+          end;
         end;
     end;
   end;
@@ -524,69 +556,6 @@ begin
   Writeln('Hash tokenization complete. Total merges: ', MergeCount, '.');
   Pause;
 end;
-
-{ Display routines }
-// Display all symbols in the Corpus with their frequency.
-{procedure DisplayAllTokenFrequencies(const Corpus: TBVector);
-var
-  Counts: array of Integer;
-  TST: String;
-  i, j, k, S, LS, MaxSymbol: Integer;
-  TokenList: TTokenCounts;
-  Temp: TTokenCount;
-begin
-
-  // Find the maximum symbol value.
-  MaxSymbol := 0;
-  for i := 0 to High(Corpus) do
-    if Corpus[i] > MaxSymbol then MaxSymbol := Corpus[i];
-
-  // Initialize counts array.
-  SetLength(Counts, MaxSymbol + 1);
-  for i := 0 to MaxSymbol do
-    Counts[i] := 0;
-
-  // Count occurrences of each symbol.
-  for i := 0 to High(Corpus) do
-    Counts[Corpus[i]] := Counts[Corpus[i]] + 1;
-
-  // Build list of tokens with count > 0.
-  SetLength(TokenList, 0);
-  for i := 0 to MaxSymbol do
-    if Counts[i] > 0 then begin
-      SetLength(TokenList, Length(TokenList) + 1);
-      TokenList[High(TokenList)].Symbol := i;
-      TokenList[High(TokenList)].Count := Counts[i];
-    end;
-
-  // Sort descending by count.
-  for i := 0 to High(TokenList) - 1 do
-    for j := i + 1 to High(TokenList) do
-      if TokenList[i].Count < TokenList[j].Count then begin
-        Temp := TokenList[i];
-        TokenList[i] := TokenList[j];
-        TokenList[j] := Temp;
-      end;
-
-  // Print all symbols with frequency.
-  for i := 0 to High(TokenList) do begin
-      Writeln(i: 4, '  ', SymbolTable[TokenList[i].Symbol], '   ', TokenList[i].Count);
-  {  S := TokenList[i].Symbol;
-    LS := Length(SymbolTable[S]);
-    TST := SymbolTable[S];        // TST is temporary SymbolTable character.
-    for j := 1 to LS do begin     // Used for displaying below.
-      k := Ord(TST[j]);
-      // Unknown character is a hex, not a dot, also char 183, for display.
-      if (k >= 32) and (k <= 126) then
-        Write(Chr(k))
-      else
-        Write('\x', IntToHex(k, 2));
-      // if (k < 32) or (k > 126) then TST[j] := Chr(183);
-    end;
-    Write(i: 5, S: 5, ' ': (10 - LS), '*', TST, '*', TokenList[i].Count: 5, '          ');
-    if (i mod 4 = 3) then Writeln;}
-  end;
-end;}
 
 { Computations and reports }
 // Calculate time statistics.
@@ -659,8 +628,7 @@ begin
     if Histogram[i] > 0 then
       WriteLn('Length ', i: 2, ': ', Histogram[i]);
 
-  // --- Median ---
-  // Sort the Lengths array
+  // Median: Sort the Lengths array.
   for i := 1 to n - 1 do begin
     L := Lengths[i];
     j := i - 1;
@@ -822,48 +790,12 @@ begin
 
   MaxSymbols := DimVocab;
 
-  Writeln('Maximum symbols = ', MaxSymbols,
-          '. Base symbols = ', nSymbols,
-          '. Maximum merges = ', MaxMerges,
-          '. Maximum pair counts = ', MaxPairCount, '.');
+  Writeln('Maximum symbols = ', MaxSymbols, '. Base symbols = ', nSymbols, '. Maximum merges = ', MaxMerges, '. Maximum pair counts = ', MaxPairCount, '.');
 
   TrainBPEHash(Head, Tail, MaxMerges, MaxSymbols, MergeCount, StartSymbol);
 
   nSymbols := Length(SymbolTable);
   nVocab := nSymbols;
-  {InitSymbolTable;
-
-  // First merge symbol is after the base symbols.
-  StartSymbol := Length(SymbolTable);
-  nSymbols := Length(SymbolTable);
-
-  // During symbolization, nVocab is the maximum allowed table size.
-  nVocab := DimVocab;
-
-  Writeln('Maximum symbols = ', nVocab,
-          '. Base symbols = ', nSymbols,
-          '. Maximum merges = ', MaxMerges,
-          '. Maximum pair counts = ', MaxPairCount, '.');
-
-  Writeln('X = Exit program. B = Break out of merge loop. V = toggle Verbose mode. P = Program information. M = Merging information. Merging...');
-
-  // Run BPE.
-  Mt0 := Now;
-  TrainBPEHash(Head, Tail, MaxMerges, MergeCount, StartSymbol);}
-
-  {// Create the TokenList.
-  Writeln('Maximum symbols = ', nVocab, '. Maximum merges = ', MaxMerges, '. Maximum pair counts = ', MaxPairCount, '.');
-  Writeln('X = Exit program. B = Break out of merge loop. V = toggle Verbose mode. P = Program information. M = Merging information. Merging...');
-  BuildTokenListFromCorpus(Corpus);
-
-  nCorpus := Length(Corpus);
-
-  // First merge symbol is StartSymbol, 260.
-  InitSymbolTable;
-
-  // Run BPE.
-  Mt0 := Now;
-  TrainBPEHash(Head, Tail, MaxMerges, MergeCount, StartSymbol);}
 
   Mt1 := Now;
 

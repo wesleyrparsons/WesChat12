@@ -1,4 +1,0 @@
-bela.txt
-peter.txt
-bela.txt
-peter.txt

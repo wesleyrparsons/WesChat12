@@ -8,8 +8,8 @@
       <Unit>
         <Filename Value="WesChat.lpr"/>
         <IsPartOfProject Value="True"/>
-        <TopLine Value="433"/>
-        <CursorPos X="6" Y="456"/>
+        <TopLine Value="893"/>
+        <CursorPos X="43" Y="902"/>
         <UsageCount Value="233"/>
         <Loaded Value="True"/>
       </Unit>
@@ -45,9 +45,10 @@
         <Filename Value="train.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="Train"/>
+        <IsVisibleTab Value="True"/>
         <EditorIndex Value="9"/>
-        <TopLine Value="527"/>
-        <CursorPos X="59" Y="538"/>
+        <TopLine Value="539"/>
+        <CursorPos Y="571"/>
         <UsageCount Value="210"/>
         <Loaded Value="True"/>
       </Unit>
@@ -146,10 +147,9 @@
         <Filename Value="util.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="Util"/>
-        <IsVisibleTab Value="True"/>
         <EditorIndex Value="13"/>
-        <TopLine Value="773"/>
-        <CursorPos X="69" Y="782"/>
+        <TopLine Value="785"/>
+        <CursorPos X="37" Y="787"/>
         <UsageCount Value="229"/>
         <Loaded Value="True"/>
       </Unit>
@@ -176,7 +176,7 @@
         <IsPartOfProject Value="True"/>
         <UnitName Value="FlowChart"/>
         <EditorIndex Value="1"/>
-        <TopLine Value="102"/>
+        <TopLine Value="19"/>
         <CursorPos X="36" Y="131"/>
         <UsageCount Value="203"/>
         <Loaded Value="True"/>
@@ -195,43 +195,12 @@
         <Filename Value="Global.pas"/>
         <EditorIndex Value="8"/>
         <TopLine Value="221"/>
-        <CursorPos X="73" Y="233"/>
+        <CursorPos X="30" Y="238"/>
         <UsageCount Value="118"/>
         <Loaded Value="True"/>
       </Unit>
     </Units>
     <JumpHistory HistoryIndex="29">
-      <Position>
-        <Filename Value="Display.pas"/>
-        <Caret Line="264" TopLine="233"/>
-      </Position>
-      <Position>
-        <Filename Value="matrix.pas"/>
-        <Caret Line="573" Column="179" TopLine="524"/>
-      </Position>
-      <Position>
-        <Filename Value="util.pas"/>
-        <Caret Line="74" Column="69" TopLine="70"/>
-      </Position>
-      <Position>
-        <Filename Value="Global.pas"/>
-        <Caret Line="233" Column="73" TopLine="221"/>
-      </Position>
-      <Position>
-        <Filename Value="util.pas"/>
-        <Caret Line="88" Column="66" TopLine="72"/>
-      </Position>
-      <Position>
-        <Filename Value="util.pas"/>
-        <Caret Line="797" TopLine="781"/>
-      </Position>
-      <Position>
-        <Filename Value="util.pas"/>
-      </Position>
-      <Position>
-        <Filename Value="util.pas"/>
-        <Caret Line="64" Column="20" TopLine="37"/>
-      </Position>
       <Position>
         <Filename Value="util.pas"/>
         <Caret Line="787" Column="6" TopLine="761"/>
@@ -318,6 +287,38 @@
       <Position>
         <Filename Value="util.pas"/>
         <Caret Line="797" Column="105" TopLine="773"/>
+      </Position>
+      <Position>
+        <Filename Value="WesChat.lpr"/>
+        <Caret Line="443" Column="33" TopLine="433"/>
+      </Position>
+      <Position>
+        <Filename Value="WesChat.lpr"/>
+        <Caret Line="1151" Column="14" TopLine="1132"/>
+      </Position>
+      <Position>
+        <Filename Value="WesChat.lpr"/>
+        <Caret Line="905" Column="30" TopLine="889"/>
+      </Position>
+      <Position>
+        <Filename Value="WesChat.lpr"/>
+        <Caret Line="1170" Column="5" TopLine="1141"/>
+      </Position>
+      <Position>
+        <Filename Value="train.pas"/>
+        <Caret Line="535" Column="52" TopLine="527"/>
+      </Position>
+      <Position>
+        <Filename Value="train.pas"/>
+        <Caret Line="131" Column="19" TopLine="109"/>
+      </Position>
+      <Position>
+        <Filename Value="train.pas"/>
+        <Caret Line="368" Column="27" TopLine="342"/>
+      </Position>
+      <Position>
+        <Filename Value="train.pas"/>
+        <Caret Line="477" Column="53" TopLine="451"/>
       </Position>
     </JumpHistory>
     <RunParams>

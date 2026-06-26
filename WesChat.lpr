@@ -194,7 +194,7 @@ begin
   Writeln('Log written: ', LogName);
 end;
 
-// General helpers
+// General helpers.
 function AskYesNo(const Prompt: string; DefaultYes: Boolean = True): Boolean;
 var
   S: string;
@@ -845,6 +845,12 @@ begin
   Writeln;
   Writeln('--- Bela test ---');
 
+  WorkingDir := 'bela';
+  InitWorkFolders(WorkingDir);
+  CurrentBaseName := 'bela';
+  WorkingName := 'bela';
+  Writeln('Using Bela work folder: ', WorkRoot);
+
   CorpusFileName := ResolveInputFile('bela.txt', CorpusDir);
   SymbolFileName := ResolveInputFile('bela.sym', SymbolDir);
   CurrentBaseName := 'bela';
@@ -898,6 +904,12 @@ procedure DoDamnedThingTest;
 begin
   Writeln;
   Writeln('--- Damned Thing test ---');
+
+  WorkingDir := 'dt327';
+  InitWorkFolders(WorkingDir);
+  CurrentBaseName := 'dt327';
+  WorkingName := 'dt327';
+  Writeln('Using Damned Thing work folder: ', WorkRoot);
 
   TokenFileName := ResolveInputFile('dt327.tok', TokenDir);
   SymbolFileName := ResolveInputFile('dt327.sym', SymbolDir);

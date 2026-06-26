@@ -340,7 +340,7 @@ begin
     DisplayVocab(0, 9);
     DisplayVocab(120, 130);
     DisplayVocab(288, 301);
-    Readln;
+    Pause;
   end;
 end;
 

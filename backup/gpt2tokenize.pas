@@ -667,24 +667,26 @@ begin
     ReportStatistics(TokenizedCorpus);
 
   // Save TokenizedCorpus and other data.
-  if SaveFiles then begin
-    ChDir(WorkingDir);
-    SaveTokenList(TokenizedCorpus, WorkingName + '.tok');
+  if SaveFiles and SaveTokenizationFiles then begin
+    // Save token list.
+    SaveTokenList(TokenizedCorpus, TokenDir + WorkingName + '.tok');
 
     // Save current Output.
     SaveOut := Output;
 
-    // Redirect Output to F.
-    Assign(Output, WorkingName + '.log');
-    Append(Output);
+    // Redirect Output to log file.
+    Assign(Output, LogDir + WorkingName + '.log');
+
+    if FileExists(LogDir + WorkingName + '.log') then
+      Append(Output)
+    else
+      Rewrite(Output);
 
     ReportStatistics(TokenizedCorpus);
 
     // Restore Output to console.
     Close(Output);
     Output := SaveOut;
-
-    ChDir('..');
   end;
 
   // Need to Write out TC with j loop to deal with chr183.

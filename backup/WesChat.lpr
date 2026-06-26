@@ -446,14 +446,14 @@ begin
   SaveTokenList(TokenizedCorpus, TokenFileName);
 end;
 
-procedure SaveCurrentSymbolTableDefault;
+{procedure SaveCurrentSymbolTableDefault;
 begin
   if Length(SymbolTable) = 0 then
     Exit;
 
   SymbolFileName := DefaultSymbolFile(CurrentBaseName);
   SaveSymbolTable(SymbolFileName, SymbolTable);
-end;
+end;}
 
 procedure MaybeSaveTokenList;
 var
@@ -845,6 +845,12 @@ begin
   Writeln;
   Writeln('--- Bela test ---');
 
+  WorkingDir := 'bela';
+  InitWorkFolders(WorkingDir);
+  CurrentBaseName := 'bela';
+  WorkingName := 'bela';
+  Writeln('Using Bela work folder: ', WorkRoot);
+
   CorpusFileName := ResolveInputFile('bela.txt', CorpusDir);
   SymbolFileName := ResolveInputFile('bela.sym', SymbolDir);
   CurrentBaseName := 'bela';
@@ -898,6 +904,12 @@ procedure DoDamnedThingTest;
 begin
   Writeln;
   Writeln('--- Damned Thing test ---');
+
+  WorkingDir := 'dt327';
+  InitWorkFolders(WorkingDir);
+  CurrentBaseName := 'dt327';
+  WorkingName := 'dt327';
+  Writeln('Using Damned Thing work folder: ', WorkRoot);
 
   TokenFileName := ResolveInputFile('dt327.tok', TokenDir);
   SymbolFileName := ResolveInputFile('dt327.sym', SymbolDir);

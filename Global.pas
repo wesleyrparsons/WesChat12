@@ -235,7 +235,7 @@ var
   nSymbols: Integer;                             // Number of symbols = Length(SymbolTable);
   nVocab: Integer;                               // nVocab is also nSymbol. Number of symbol items.
   TokenID: TIVector;                             // Same as TokenizedCorpus.
-  Training: Boolean = True;                      // In training as opposed to inference mode.
+  Training: Boolean = False;                     // In training as opposed to inference mode.
   Tokenizer: TTokenizer;                         // WesChat or GPT2Chat tokenizer;
   NewModel: Boolean = True;                      // If new model, initialize params.
   ParamsNeedCopyToDevice: Boolean = False;       // Start of infer.

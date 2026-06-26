@@ -44,6 +44,7 @@ const
   RDropout = 0.1;                 // Probability of residual dropout.
   DimVocab = 20000;               // Need maximum of vocab symbols to dimension array. Needed for Embeddings.
   RecentCount = 10;               // Rolling means in training.
+  Version: shortstring = '1.2';   // Version 1.2.
   // Transform constants.
   InvSqrtHeadDim: Single = 1 / Sqrt(HeadDim);         // Used in softmax.
   RowMajor = 101;                 // Row Major.
@@ -229,7 +230,6 @@ var
   ScratchDir: string = '';                       // Folder for scratch files (not used).
   // Utility vars.
   Mt0, Mt1, t0, t1, StopTime: TDateTime;         // For timing.
-  Version: shortstring = '1.2';                  // Version 1.2.
   FromSymbolTable: Boolean = False;              // Operating from input Symbol Table rather than from tokenization.
   GlobalSeed: UInt64;                            // Initialize random sequence.
   nSymbols: Integer;                             // Number of symbols = Length(SymbolTable);

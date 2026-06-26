@@ -26,7 +26,7 @@ procedure RunTrain(var WModelParams: TWModelParams; var WModelState: TWModelStat
 implementation
 
 const
-  Scale = Sqrt(ModelDim);         // Optional transformer-style embedding scaling by sqrt(d_model).
+  Scale = Sqrt(ModelDim);         // Transformer-style embedding scaling by sqrt(d_model).
 
 // Compute the CE loss.
 function ComputeCELoss(const Probs: TSeqVocabMatrix; const TargetTokens: TIDimVector): Double;
@@ -128,7 +128,7 @@ var
     MeanRunningLoss, RecentLossSum, GradScale: Double;
   RecentLosses: array[0..RecentCount] of Double;
   RecentLossIndex, RecentLossCount: Integer;
-  // PreUpdateLoss, PostUpdateLoss: Double;
+  // PreUpdateLoss, PostUpdateLoss: Double; // Not using currently.
 
   function TrainReadIfKeyPressed: Boolean;
   var
@@ -138,38 +138,38 @@ var
     Result := False;
     key := CheckForControlKey;
     case key of
-      'p', 'P': begin
+      'p', 'P': begin        // Pause work.
         Write('Pause requested. Hit <CR> to continue.');
         Readln;
         Result := False;
       end;
-      'x', 'X': begin
+      'x', 'X': begin        // Exit training. Success, go to main menu.
         Writeln('Exit requested. Stopping training.');
         TrainSuccess := False;
         Result := True;
       end;
-      'n', 'N': begin
+      'n', 'N': begin        // Exit training. No success, go to inference.
         Writeln('Stopping training.');
         TrainSuccess := True;
         Result := True;
       end;
-      'v', 'V': begin
+      'v', 'V': begin        // Enable verbose transform.
         VerboseTransform := not VerboseTransform;
         Writeln('Very verbose transform mode: ', VerboseTransform);
         Pause;
-      end;                   // Change verbosity.
-      'i', 'I': begin
+      end;
+      'i', 'I': begin        // Report program info.
         Writeln;
-        ReportInfo;          // Report program info.
+        ReportInfo;
         Pause;
       end;
-      't', 'T': begin
+      't', 'T': begin        // Display training info.
         Writeln('Training. nVocab = ', nVocab, ' DimVocab = ', DimVocab, ' Seqlen = ', SeqLen, ' ModelDim = ', ModelDim, ' Projection = ', Proj,
           '  Epoch = ', Epoch, ' Start = ', Start, ' Stride = ', Stride, ' Length of tokens in corpus = ', Length(TokenizedCorpus));
         Writeln(DateTimeToStr(Now), '  X = Exit training. P = Pause. N = Go to iNference. V = toggle Verbose mode.  I = program Information. T = Training information. S = Save. Training...');
         Pause;
       end;
-      's', 'S': begin
+      's', 'S': begin        // Save model.
         Write('Enter model filename, blank for automatic checkpoint: ');
         Readln(ModelFileName);
 
@@ -209,8 +209,11 @@ begin
   for i := 0 to 9 do
     RecentLosses[i] := 0.0;
 
+  // For each epoch's loss.
   MinLoss := 1000000;
   MinLossEpoch := -1;
+
+  // Initialization.
   StopTraining := False;
   Training := False;               // Set False for debugging.
   GlobalSeed := 123456789;         // For debugging.
@@ -218,7 +221,7 @@ begin
   if NewModel then
     nVocab := nSymbols;            // Need nVocab (second name for variable) for Transform.
 
-  // Start training.
+  // Check DimVocab is large enough.
   if nVocab > DimVocab then begin
     Writeln('nVocab > DimVocab. Aborting training....');
     TrainSuccess := False;
@@ -259,9 +262,8 @@ begin
 
       WindowCount := 0;
       Start := (Epoch * 17) mod Stride;
-      // Start := 0; // For debugging.
+
       // Stride loop thru Sequence.
-      // Force one window for debugging.
       while ((Start + SeqLen + 1) <= Length(TokenizedCorpus)) do begin
 
         if TrainReadIfKeyPressed then begin
@@ -281,7 +283,7 @@ begin
         BuildInputVector(InputTokens, TokenizedCorpus, Start, SeqLen);
         cudaMemcpy(dInputTokens, @InputTokens[0], SeqLen * SizeOf(Integer), cudaMemcpyHostToDevice);
 
-        // Checking.
+        // Checking tokens.
         if VerboseTransform then begin
           Writeln('Checking tokens');
           for i := 0 to SeqLen - 1 do
@@ -550,7 +552,7 @@ begin
 
       if Epoch > 0 then begin
         if DiffLoss > 0 then
-          Write('; Improved by ', DiffLoss:10:8)
+          Write('; Better by ', DiffLoss:10:8)
         else
           Write('; Worse by ', -DiffLoss:10:8);
       end;

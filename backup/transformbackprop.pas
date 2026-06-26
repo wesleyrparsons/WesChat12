@@ -12,12 +12,6 @@ uses
   Matrix,
   Util;
 
-const
-  InvSqrtHeadDim: Single = 1 / Sqrt(HeadDim);         // Used in softmax.
-  RowMajor = 101;       // Row Major.
-  NoTrans  = 111;       // No transposition.
-  Trans    = 112;       // Transposition.
-
 procedure RunTransformBackprop(var WModelParams: TWModelParams; var WModelState: TWModelState; const Blk: Integer);
 
 implementation
@@ -44,8 +38,7 @@ begin
       if DisplaySubstage then Writeln('': Stage, '2E. Transform Backprop, Split, Residual Dropout');
 
       // Backprop Split X7 Grad into X4 and X6: Input X4.Grad, X7.Grad. Output dX.Grad.
-      // Equation: X7.Grad = X4.Grad + X6.Grad. All in R^{L x D}.
-      // X7 = X4 + X6. X4.Grad += X7.Grad.
+      // Equation: X7.Grad = X4.Grad + X6.Grad. X4.Grad += X7.Grad. All in R^{L x D}.
       CuGradSplit(CuHandle, X7.dGrad, X4.dGrad, X6.dGrad, SeqLen, ModelDim);
 
       // Dropout Backward.
@@ -100,7 +93,6 @@ begin
       // 2A. Backprop Multiplication/Overwrite. Obtain W1 from X5ᵀ and Hidden1.
       if DisplaySubstage then Writeln('': Stage, '2A. Transform Backprop, Obtain X5 from Hidden1 and W1');
 
-      // Obtain X5 from Hidden1 and W1.
       // Backprop Hidden1 Grad creates W1 Grad. Input: X5ᵀ.Value, Hidden1.Grad. Output: W1.Grad.
       // Equation: W1.Grad = X5ᵀ.Value · Hidden1.Grad. W1.Grad is R^{D x DB}. X5ᵀ.Value is R^{L x D}. Hidden1.Grad is R^{D x DB).
       // MatMulTN(@X5.Value, @Hidden1.Grad, @W1.Grad, SeqLen, ModelDimProj, ModelDim);
@@ -115,14 +107,11 @@ begin
     Stage := Stage - 2;
     // 1J. Backprop LayerNorm: X5 = LayerNorm(X4, Gamma2, Beta2).
     // Input:  X5.Grad, Gamma2.Value, cached LNXhat2, cached LNInvStd2. Output: X4.Grad, Gamma2.Grad, Beta2.Grad.
-    //   X5.Grad, X4.Grad, LNXhat2: L x D
-    //   Gamma2.Value, Gamma2.Grad, Beta2.Grad: D
-    //   LNInvStd2: L    // 1J. Backprop Layer-Norm. Obtain X4 from X5.
+    // X5.Grad, X4.Grad, LNXhat2 is R^{L x D}. Gamma2.Value, Gamma2.Grad, Beta2.Grad is R^{D}. LNInvStd2 is R^{L}.
     if DisplayStage then Writeln('' : Stage, 'Stage  2, Block ', Blk, ',  Transform Backprop');
     if DisplaySubstage then Writeln('': Stage, '1J. Transform Backprop Stage 1J, Layer Norm Backward X5');
     // Backprop Layer-Norm: Input X5.Grad, Gamma2.Grad, Beta2.Value. Output X4.Grad, Gamma2.Grad, Beta2.Grad.
     // Equation: X4.Grad, Gamma2.Grad, Beta2.Grad = LayerNorm(X5.Grad, Gamma2.Value, Beta2.Value).
-    // X4.Grad, X5.Grad, LNXHat2 in R^{L x D}. Gamma2.Grad, Beta2.Grad in R^{D}.
     // LayerNormBackward(X5.Grad, X4.Grad, Gamma2.Grad, Beta2.Grad, SeqLen, Gamma2.Value, LNXHat2, LNInvStd2);
     LaunchLayerNormBackward(X5.dGrad, dX4FromLN2, Gamma2.dValue, dLNXHat2, dLNInvStd2, Gamma2.dGrad, Beta2.dGrad, SeqLen, ModelDim);
     CuAccumulateGrad(CuHandle, dX4FromLN2, X4.dGrad, SeqLen, ModelDim);
@@ -140,10 +129,10 @@ begin
     // GradSplit(X4.Grad, X.Grad, X3.Grad, SeqLen, ModelDim);
     cuGradSplit(cuHandle, X4.dGrad, X.dGrad, X3.dGrad, SeqLen, ModelDim);
 
-    // Guide: To find the change for the weights: dW0 = X6ᵀ ·  dX7.
-    //        To find the error for the input: dX6 = dX7  · W0ᵀ.
-    // Guide: To find the change for the multiplication: dScores = dX2 · Vᵀ.
-    //        To find the error for the input: dV = Sᵀ · dX2.
+    // To find the change for the weights: dW0 = X6ᵀ ·  dX7.
+    // To find the error for the input: dX6 = dX7  · W0ᵀ.
+    // To find the change for the multiplication: dScores = dX2 · Vᵀ.
+    // To find the error for the input: dV = Sᵀ · dX2.
 
     // 1H. Backprop Mutiplication/Overwrite. Obtain W0 Grad from X3 Grad: Input: X2ᵀ.Value, X3.Grad. Output: W0.Grad.
     if DisplaySubstage then Writeln('': Stage, '1H. Transform Backprop, Obtain W0 Grad from X3 Grad');

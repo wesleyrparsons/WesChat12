@@ -3,7 +3,8 @@ program WesChat;
 {$mode ObjFPC}{$H+}{$I proprietary.txt}
 
 { WesChat, Version 1.2.
-{ Note: Edited 6/24/2026 9 am -- working from WesChat12 on OneDrive }
+{ Note: Edited 7/2/2026 4 pm -- working from WesChat12 on OneDrive }
+{ Note Tiny Stories change in Symbolize }
 {        Input Train        Input Query        Output
  Raw                        QueryString
  Bytes   Corpus             QueryCorpus
@@ -29,6 +30,7 @@ uses
   Infer,
   IOHandler,
   Matrix,
+  ShellAPI,
   Symbolize,
   SysUtils,
   Train,
@@ -58,6 +60,16 @@ var
   CombinedSymbolTable: TSymbolTable;
 
 // Work folder helpers
+procedure OpenWorkFolderInExplorer;
+begin
+  if Trim(WorkRoot) = '' then begin
+    Writeln('WorkRoot is blank.');
+    Exit;
+  end;
+
+  ShellExecute(0, 'open', PChar(WorkRoot), nil, nil, SW_SHOWNORMAL);
+end;
+
 function AddSlash(const S: string): string;
 begin
   Result := IncludeTrailingPathDelimiter(S);
@@ -81,6 +93,7 @@ begin
   WorkRoot := AddSlash(ExpandFileName(Root));
   CorpusDir  := WorkRoot + 'corpus'  + DirectorySeparator;
   SymbolDir  := WorkRoot + 'symbols' + DirectorySeparator;
+  MergeDir   := WorkRoot + 'merges'  + DirectorySeparator;
   TokenDir   := WorkRoot + 'tokens'  + DirectorySeparator;
   ModelDir   := WorkRoot + 'models'  + DirectorySeparator;
   LogDir     := WorkRoot + 'logs'    + DirectorySeparator;
@@ -89,6 +102,7 @@ begin
   ForceDirectories(WorkRoot);
   ForceDirectories(CorpusDir);
   ForceDirectories(SymbolDir);
+  ForceDirectories(MergeDir);
   ForceDirectories(TokenDir);
   ForceDirectories(ModelDir);
   ForceDirectories(LogDir);
@@ -148,11 +162,20 @@ begin
     Result := DefaultDir + S;
 end;
 
+function DefaultMetaFile(const BaseName: string): string;
+begin
+  Result := LogDir + ChangeFileExt(CleanBaseName(BaseName), '.meta');
+end;
+
 function DefaultSymbolFile(const BaseName: string): string;
 begin
   Result := SymbolDir + ChangeFileExt(CleanBaseName(BaseName), '.sym');
 end;
 
+function DefaultMergeFile(const BaseName: string): string;
+begin
+  Result := MergeDir + ChangeFileExt(CleanBaseName(BaseName), '.mer');
+end;
 
 function DefaultTokenFile(const BaseName: string): string;
 begin
@@ -170,6 +193,25 @@ begin
   Result := LogDir + CleanBaseName(BaseName) + '_' + TimeStamp + '.log';
 end;
 
+procedure SaveSymbolizationFilesDefault(const BaseName: string);
+begin
+  if Length(SymbolTable) = 0 then begin
+    Writeln('No symbol table to save.');
+    Exit;
+  end;
+
+  Writeln('--- Saving Symbolization Files ---');
+
+  SymbolFileName := DefaultSymbolFile(BaseName);
+  SaveSymbolTable(SymbolFileName, SymbolTable);
+
+  if Length(Merges) > 0 then
+    SaveMergeTable(Merges, DefaultMergeFile(BaseName))
+  else
+    Writeln('No merges to save.');
+
+  SaveMetaData(DefaultMetaFile(BaseName));
+end;
 
 procedure WriteInfoLog(const BaseName: string);
 var
@@ -186,7 +228,7 @@ begin
   Assign(Output, LogName);
   Rewrite(Output);
 
-  ReportInfo;
+  ReportProgramInfo;
 
   Close(Output);
   Output := SaveOut;
@@ -194,7 +236,7 @@ begin
   Writeln('Log written: ', LogName);
 end;
 
-// General helpers
+// General helpers.
 function AskYesNo(const Prompt: string; DefaultYes: Boolean = True): Boolean;
 var
   S: string;
@@ -365,8 +407,7 @@ begin
   Write('Input symbol table file name: ');
   Readln(SymbolFileName);
 
-  if not RequireExistingFile(SymbolFileName, SymbolDir) then
-    Exit;
+  if not RequireExistingFile(SymbolFileName, SymbolDir) then Exit;
 
   FromSymbolTable := True;
   LoadSymbolTable(SymbolFileName, SymbolTable);
@@ -459,8 +500,7 @@ procedure MaybeSaveTokenList;
 var
   S: string;
 begin
-  if Length(TokenizedCorpus) = 0 then
-    Exit;
+  if Length(TokenizedCorpus) = 0 then Exit;
 
   if AskYesNo('Save token list?', True) then begin
     Write('Output token list file name, blank for ',
@@ -484,6 +524,21 @@ begin
 
     SymbolFileName := MakeOutputFileName(S, SymbolDir, CurrentBaseName, '.sym');
     SaveSymbolTable(SymbolFileName, SymbolTable);
+  end;
+end;
+
+procedure MaybeSaveMergeTable;
+var
+  S: string;
+begin
+  if Length(Merges) = 0 then Exit;
+
+  if AskYesNo('Save merge table?', True) then begin
+    Write('Output merge table file name, blank for ',
+      ExtractFileName(DefaultMergeFile(CurrentBaseName)), ': ');
+    Readln(S);
+
+    SaveMergeTable(Merges, MakeOutputFileName(S, MergeDir, CurrentBaseName, '.mer'));
   end;
 end;
 
@@ -596,6 +651,7 @@ begin
     end;
 
     MaybeSaveSymbolTable;
+    MaybeSaveMergeTable;
   end;
 
   Tokenizer := WesTokenizer;
@@ -604,7 +660,7 @@ begin
   PadToSeqMultiple(TokenizedCorpus, SeqLen);
   nTokenizedCorpus := Length(TokenizedCorpus);
 
-  Writeln('Tokenization complete. Tokens=', Length(TokenizedCorpus), ' Symbols=', nSymbols, '.');
+  Writeln('Tokenization complete. Tokens = ', Length(TokenizedCorpus), '; Symbols = ', nSymbols, '.');
 
   MaybeSaveTokenList;
 end;
@@ -678,15 +734,12 @@ begin
     AppendTokens(TokenizedCorpus, OneTokens);
 
     SetLength(CorpusFileNames, Count + 1);
-    CorpusFileNames[Count] :=
-      FullName + '   ' + IntToStr(FileSize(FullName)) + ' bytes   ' +
+    CorpusFileNames[Count] := FullName + '   ' + IntToStr(FileSize(FullName)) + ' bytes   ' +
       DateTimeToStr(FileDateToDateTime(FileAge(FullName)));
 
     Inc(Count);
 
-    Writeln('  GPT-tokenized: ', FullName,
-      '; tokens added=', Length(OneTokens),
-      '; total tokens=', Length(TokenizedCorpus), '.');
+    Writeln('  GPT-tokenized: ', FullName, '; tokens added=', Length(OneTokens), '; total tokens=', Length(TokenizedCorpus), '.');
   end;
 
   CloseFile(F);
@@ -811,27 +864,27 @@ begin
   RunInfer(WModelParams, WModelState);
 end;
 
-// Main workflow: U = Utilities
-procedure DoUtilities;
+// Main workflow: J = Join symbol tables.
+procedure DoJoinSymbolTables;
 var
   UChoice, S: string;
 begin
   Writeln;
   Writeln('--- Utilities ---');
-  Writeln('C: Combine two symbol tables');
+  Writeln('J: Join two symbol tables');
   Writeln('X: Return to main menu');
   Writeln;
 
-  UChoice := AskChoice('Utility', 'C/X');
+  UChoice := AskChoice('Utility', 'J/X');
 
   case UChoice of
-    'C': begin
+    'J': begin
       MergeSymbolTables(CombinedSymbolTable);
 
       Write('Output combined symbol table name, blank for combined.sym: ');
       Readln(S);
 
-      SymbolFileName := MakeOutputFileName(S, SymbolDir, 'combined', '.sym');
+      SymbolFileName := MakeOutputFileName(S, SymbolDir, 'joined', '.sym');
       SaveSymbolTable(SymbolFileName, CombinedSymbolTable);
 
       Writeln('File ', SymbolFileName, ' successfully saved.');
@@ -839,11 +892,129 @@ begin
   end;
 end;
 
-// Main workflow: B / DT = Tests
-procedure DoBelaTest;
+// Folder utilities.
+procedure ShowWorkFolders;
 begin
   Writeln;
-  Writeln('--- Bela test ---');
+  Writeln('--- Current Work Folders ---');
+  Writeln('WorkingDir = ', WorkingDir);
+  Writeln('WorkRoot   = ', WorkRoot);
+  Writeln('CorpusDir  = ', CorpusDir);
+  Writeln('SymbolDir  = ', SymbolDir);
+  Writeln('MergeDir   = ', MergeDir);
+  Writeln('TokenDir   = ', TokenDir);
+  Writeln('ModelDir   = ', ModelDir);
+  Writeln('LogDir     = ', LogDir);
+  Writeln('ScratchDir = ', ScratchDir);
+end;
+
+function CountFilesInDir(const DirName: string): Integer;
+var
+  SR: TSearchRec;
+  Path: string;
+begin
+  Result := 0;
+
+  if Trim(DirName) = '' then Exit;
+
+  Path := IncludeTrailingPathDelimiter(DirName);
+
+  if SysUtils.FindFirst(Path + '*.*', faAnyFile, SR) = 0 then begin
+    try
+      repeat
+        if (SR.Name <> '.') and (SR.Name <> '..') then
+          if (SR.Attr and faDirectory) = 0 then
+            Inc(Result);
+      until SysUtils.FindNext(SR) <> 0;
+    finally
+      SysUtils.FindClose(SR);
+    end;
+  end;
+end;
+
+procedure ShowWorkFolderFileCounts;
+begin
+  Writeln;
+  Writeln('--- Work Folder File Counts ---');
+  Writeln('CorpusDir  : ', CountFilesInDir(CorpusDir));
+  Writeln('SymbolDir  : ', CountFilesInDir(SymbolDir));
+  Writeln('MergeDir   : ', CountFilesInDir(MergeDir));
+  Writeln('TokenDir   : ', CountFilesInDir(TokenDir));
+  Writeln('ModelDir   : ', CountFilesInDir(ModelDir));
+  Writeln('LogDir     : ', CountFilesInDir(LogDir));
+  Writeln('ScratchDir : ', CountFilesInDir(ScratchDir));
+end;
+
+procedure ListWorkFolderSubfolders;
+begin
+  Writeln;
+  Writeln('--- Work Folder Subfolders ---');
+
+  Writeln('corpus  : ', CorpusDir);
+  Writeln('symbols : ', SymbolDir);
+  Writeln('merges  : ', MergeDir);
+  Writeln('tokens  : ', TokenDir);
+  Writeln('models  : ', ModelDir);
+  Writeln('logs    : ', LogDir);
+  Writeln('scratch : ', ScratchDir);
+end;
+
+procedure ChangeWorkFolder;
+var
+  NewDir: string;
+begin
+  Writeln;
+  Write('Enter new work folder, blank to cancel: ');
+  Readln(NewDir);
+
+  NewDir := Trim(NewDir);
+
+  if NewDir = '' then begin
+    Writeln('Work folder unchanged.');
+    Exit;
+  end;
+
+  WorkingDir := NewDir;
+  InitWorkFolders(WorkingDir);
+
+  Writeln('Work folder changed.');
+  ShowWorkFolders;
+end;
+
+procedure DoFolderUtilities;
+var
+  Choice: string;
+begin
+  repeat
+    Writeln;
+    Writeln('--- File/Folder Utilities ---');
+    Writeln('C: Change work folder');
+    Writeln('L: List work folder subfolders');
+    Writeln('S: Show current folder settings');
+    Writeln('D: Show file counts in work folders');
+    Writeln('O: Open work folder in Explorer');
+    Writeln('X: Return to main menu');
+    Writeln;
+
+    Choice := AskChoice('Folder command', 'C/L/S/D/O/X');
+
+    case Choice of
+      'C': ChangeWorkFolder;
+      'L': ListWorkFolderSubfolders;
+      'O': OpenWorkFolderInExplorer;
+      'D': ShowWorkFolderFileCounts;
+    end;
+
+    if Choice <> 'X' then Pause;
+
+  until Choice = 'X';
+end;
+
+// Main workflow: B / DT = Existing Models
+procedure DoBelaModel;
+begin
+  Writeln;
+  Writeln('--- Bela Model ---');
 
   WorkingDir := 'bela';
   InitWorkFolders(WorkingDir);
@@ -900,10 +1071,10 @@ begin
   end;
 end;
 
-procedure DoDamnedThingTest;
+procedure DoDamnedThingModel;
 begin
   Writeln;
-  Writeln('--- Damned Thing test ---');
+  Writeln('--- Damned Thing Model ---');
 
   WorkingDir := 'dt327';
   InitWorkFolders(WorkingDir);
@@ -948,12 +1119,12 @@ begin
   end;
 end;
 
-procedure DoTests;
+procedure DoExistingModels;
 var
   TChoice: string;
 begin
   Writeln;
-  Writeln('--- Tests ---');
+  Writeln('--- Existing Models ---');
   Writeln('B: Bela corpus');
   Writeln('D: Damned Thing token list');
   Writeln('X: Return to main menu');
@@ -962,8 +1133,8 @@ begin
   TChoice := AskChoice('Test', 'B/D/X');
 
   case TChoice of
-    'B': DoBelaTest;
-    'D', 'DT': DoDamnedThingTest;
+    'B': DoBelaModel;
+    'D', 'DT': DoDamnedThingModel;
   end;
 end;
 
@@ -972,20 +1143,23 @@ procedure Options;
 begin
   Writeln;
   Writeln('Options:');
-  Writeln('  K: Tokenize -- create a token list from a corpus file or a file list.');
+  Writeln('  T: Tokenize -- create a token list from a corpus file or a file list.');
   Writeln('     Uses WesTokenize or GPT2Tokenize.');
   Writeln('     WesTokenize may create a symbol table or use an existing one.');
   Writeln;
-  Writeln('  T: Train -- train a model on a token list.');
+  Writeln('  R: Train -- train a model on a token list.');
   Writeln('     Requires a token list and matching symbol table.');
   Writeln('     Can start a new model or resume from a saved model.');
   Writeln;
   Writeln('  I: Infer -- run inference.');
   Writeln('     Requires a saved model and matching symbol table.');
   Writeln;
-  Writeln('  U: Utilities -- currently combines symbol tables.');
+  Writeln('  J: Join symbol tables.');
+  Writeln('     Requires two symbol tables.');
   Writeln;
-  Writeln('  B: Tests -- Bela and Damned Thing presets.');
+  Writeln('  M: Use existing models -- Bela and Damned Thing.');
+  Writeln('  F: File/folder utilities.');
+  Writeln('  P: Program information.');
   Writeln('  H: Help and options.');
   Writeln('  X: Exit.');
   Writeln;
@@ -998,6 +1172,7 @@ begin
   Writeln('Work folder layout:');
   Writeln('  ', CorpusDir,  '   corpus input files');
   Writeln('  ', SymbolDir,  '   .sym files');
+  Writeln('  ', MergeDir,   '   .mer files');
   Writeln('  ', TokenDir,   '   .tok files');
   Writeln('  ', ModelDir,   '   saved models');
   Writeln('  ', LogDir,     '   logs');
@@ -1053,8 +1228,8 @@ begin
       DisplayTokenWork := True;
     end;
     'NDTW': begin
+      DisplayTokenWork := False;
       Writeln('Display token work is ', DisplayTokenWork);
-      DisplayCorpus := False;
     end;
     'DMW': begin
       DisplayMergeWork := True;
@@ -1082,6 +1257,7 @@ begin
     end;
     'VTR':   begin
       VerboseTransform := True;
+      DisplayStage := True;
       Writeln('Verbose transform is ', VerboseTransform);
     end;
     'NVTR':   begin
@@ -1110,17 +1286,17 @@ begin
     end;
     'DW': begin
       DisplayWindow := True;
-      Writeln('Disply window is ', DisplayWindow);
+      Writeln('Display window is ', DisplayWindow);
     end;
     'NDW': begin
       DisplayWindow := False;
-      Writeln('Disply window is ', DisplayWindow);
+      Writeln('Display window is ', DisplayWindow);
     end;
     'DNP': begin
       DoNotPause := True;
       Writeln('Do not pause is', DoNotPause);
     end;
-    'NDNP': begin
+    'DP': begin
       DoNotPause := False;
       Writeln('Do not pause is', DoNotPause);
     end;
@@ -1140,7 +1316,7 @@ begin
       Write('Override learning rate: ');
       Readln(OverrideLearningRate);
     end;
-    'M': begin
+    'MM': begin
       Write('Maximum merges: ');
       Readln(MaxMerges);
     end;
@@ -1158,7 +1334,7 @@ begin
 
   Vocab := TStringList.Create;
 
-  LoadVocab('vocab1.json', Vocab);
+  LoadVocab('vocab1.json', Vocab);  // Do this later, if Vocab1.json needed.
 
   SetConsoleOutputCP(CP_UTF8);
   SetConsoleCP(CP_UTF8);
@@ -1175,7 +1351,6 @@ begin
   InitWorkFolders(WorkingDir);
 
   Writeln('Work folder: ', WorkRoot);
-  Writeln;
 
   Options;
 
@@ -1185,21 +1360,22 @@ begin
     Ch := UpperCase(Trim(Ch));
 
     case Ch of
-      'K': DoTokenize;
-      'T': DoTrain;
+      'T': DoTokenize;
+      'R': DoTrain;
       'I': DoInfer;
-      'U': DoUtilities;
-      'B': DoTests;
-      'DT': DoDamnedThingTest;
+      'J': DoJoinSymbolTables;
+      'M': DoExistingModels;
+      'F': DoFolderUtilities;
+      'P': ReportProgramInfo;
       'H': Help;
-      'X': Break;
+      'X', 'EXIT': Break;
 
       'VTO', 'NVTO', 'DC', 'NDC', 'DTW', 'NDTW',
       'DMW', 'NDMW', 'DV', 'NDV', 'DEBR', 'NDEBR',
       'SPST', 'NSPST', 'VTR', 'NVTR',
       'DE', 'DS', 'DSS', 'ND',
       'DW', 'NDW', 'DNP', 'DP', 'SF', 'NSF',
-      'TEMP', 'LR', 'M', 'PC':
+      'TEMP', 'LR', 'MM', 'PC':
         HandleSettingCommand(Ch);
 
       else

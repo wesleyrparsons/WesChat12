@@ -75,11 +75,12 @@ procedure LaunchAutoRegressiveMaskBackward(ScoresGrad: PSingle; SeqLen: Integer)
 procedure LaunchDropout(X: PSingle; N: Integer; DropProb: Single; Seed: UInt64);
   cdecl; external 'WesChatKernel12.dll';
 procedure LaunchDropoutBackward(dX: PSingle; N: Integer; DropProb: Single; Seed: UInt64);
-  cdecl; external 'WesChatKernel12.dll';procedure SoftmaxForwardN(const x: PSingle; y: PSingle; const N: Integer);
+  cdecl; external 'WesChatKernel12.dll';
 procedure LaunchSoftmaxForwardStrided(dIn: PSingle; dOut: PSingle; Rows: Integer; Cols: Integer; RowStride: Integer; Temperature: Single);
   cdecl; external 'WesChatKernel12.dll';
-procedure LaunchSoftmaxForwardN(X: PSingle; Y: PSingle; Rows: Integer; N: Integer; Temperature: Single);
-  cdecl; external 'WesChatKernel12.dll';
+procedure LaunchSoftmaxForward(dIn: PSingle; dOut: PSingle; Rows: Integer; N: Integer; Temperature: Single);
+{procedure LaunchSoftmaxForwardN(X: PSingle; Y: PSingle; Rows: Integer; N: Integer; Temperature: Single);
+  cdecl; external 'WesChatKernel12.dll';}
 procedure LaunchSoftmaxBackward(Y: PSingle; dY: PSingle; dX: PSingle; Rows: Integer; D: Integer);
   cdecl; external 'WesChatKernel12.dll';
 procedure LaunchLayerNormForward(InX, OutX, Gamma, Beta, LNXhat, LNInvStd: PSingle; SeqLen, ModelDim: Integer);
@@ -128,7 +129,7 @@ begin
   if not CublasPresent or not CudartPresent or not WesChatkernelPresent then begin
       Writeln('One of the following DLLs is required but not present: cublas64_13.dll, cudart64_13.dll, WesChatKernel12.dll.');
       Pause;
-      Halt;
+      // Halt;
   end;
 end;
 
@@ -930,6 +931,11 @@ begin
     for i := 0 to N - 1 do
       y[i] := y[i] * SumVal;
   end;
+end;
+
+procedure LaunchSoftmaxForward(dIn: PSingle; dOut: PSingle; Rows: Integer; N: Integer; Temperature: Single);
+begin
+  LaunchSoftmaxForwardStrided(dIn, dOut, Rows, N, N, Temperature);
 end;
 
 // Softmax procedure backward. No longer used.

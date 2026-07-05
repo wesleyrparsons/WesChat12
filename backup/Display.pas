@@ -10,7 +10,6 @@ uses
   Global;
 
 // Pause procedures.
-// procedure HardPause;
 procedure Pause;
 
 // Interrupt procedures.
@@ -34,7 +33,7 @@ procedure DisplayX(const X: TScoresMatrix; const Part: TPart = B); overload;
 procedure VTPDisplayX(const Mess: string; const X: TScoresMatrix; const Part: TPart = B); overload;
 
 // Report information on program.
-procedure ReportInfo;
+procedure ReportProgramInfo;
 
 implementation
 
@@ -74,24 +73,41 @@ begin
 end;
 
 // Write information on state of program.
-procedure ReportInfo;
+procedure ReportProgramInfo;
 begin
   Writeln('--- Program Information ---');
   Writeln('WesChat, Version: ', Version);
   Writeln('Author: Wesley R. Parsons');
   Writeln('Date: begun January 10, 2026');
   Writeln('Sequence Length (SeqLen): ', SeqLen);
+  Writeln('Stride: ', Stride);
   Writeln('Model Dimensions (ModelDim): ', ModelDim);
   Writeln('Dimensional Projections (Proj): ', Proj);
   Writeln('Heads (nHead): ', nHead);
   Writeln('Blocks (nBlock): ', nBlock);
   Writeln('Epochs (MaxEpochs): ', MaxEpochs);
-  Writeln('Learning Rate (LearningRate): ', LearningRate: 6: 4);
-  Writeln('Temperature (Temperature): ', Temperature: 6: 4);
-  Writeln('Dropouts for Attention, MLP, Residual (A, MLP, RDropout): ', ADropout: 2: 2, ' ', MLPDropout: 2: 2, ' ', RDropout: 2: 2);
-  Writeln('Trainable Parameters: Embeddings, Wq, Wk, Wv, W0, W1, b1, W2, b2, gamma1, beta1, gamma2, beta2');
   Writeln('Maximum Vocabulary (MaxVocab): ', DimVocab);
   Writeln('Number of Vocabulary (nVocab): ', nVocab);
+  Case LearningStyle of
+    SlowLearning:
+      // Display slow learning rate schedule.
+      Writeln('Learning rate (slow) = ', LearningRate: 9: 7, ' with 0..10: 0.01; 11..20: 0.005; 21..100: 0.0005; 101..300: 0.0001; else 0.00005. ');
+    FastLearning:
+      // Display fast learning rate schedule.
+      Writeln('Learning rate (fast) = ', LearningRate: 9: 7, ' with 0..30: 0.01; 31..100: 0.005; 101..800: 0.001; else 0.0005. ');
+    RolledOffLearning:
+      // Learning Rolled off learning rate.
+      Writeln('Learning rate (rolled of) = ', LearningRate: 9: 7, ' Floor LR = ', FloorLearningRate: 9: 7, ' Base LR = ', BaseLearningRate: 9: 7, ' LR rolloff = ', RollOff: 9: 7, '.');
+  end;
+  if OverrideLearningRate <> -1.0 then
+    Writeln('Override LR = ', OverrideLearningRate: 9 :7);
+  Writeln('Current Learning Rate: ', LearningRate: 9: 7);
+  Writeln('Weight decay: ', WeightDecay: 9: 7, '; Decay scale = ', DecayScale: 9: 7);
+  Writeln('Clip limit: ', ClipLimit: 9: 7);
+  Writeln('Temperature: ', Temperature: 9: 7);
+  Writeln('Global step: ', GlobalStep);
+  Writeln('Dropouts for Attention, MLP, Residual (A, MLP, RDropout): ', ADropout: 4: 4, ' ', MLPDropout: 4: 4, ' ', RDropout: 4: 4);
+  Writeln('Trainable Parameters: Embeddings, Wq, Wk, Wv, W0, W1, b1, W2, b2, gamma1, beta1, gamma2, beta2');
 end;
 
 // Replace unprintable symbols with space.

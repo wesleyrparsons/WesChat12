@@ -4,18 +4,6 @@ unit Notes;
 
 { WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wesparsons.com.}
 
-// After LoadModel:
-LoadModel(...);
-MAllocCublas(...);
-CopyParamsToDevice(WModelParams);   // yes
-
-// After InitializeTransformerParams:
-InitializeTransformerParams(...);
-MAllocCublas(...);
-CopyParamsToDevice(WModelParams);   // yes
-
-// After training, same run:
-
 Good flag names:
 
 ParamsOnDevice: Boolean = False;
@@ -38,13 +26,11 @@ ParamsOnDevice := False;
 
 General
 1. Replace nSymbols with nVocab.
+   UsenTokenizedCorpus instead of Length(TC)
 
 1a. If displaysubstageVVerbose, also displaystage.
-add displayepoch to menus
 
 2. Fix GPT2 in infer unit.
-
-3. Test SaveModel and LoadModel procedures.
 
 4. In main program: Read Corpus, Read Files (vocab and merge), Tokenize, Embed, Transform.
 One proc: display merge/token info. One proc: display transform/embed info.

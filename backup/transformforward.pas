@@ -13,12 +13,6 @@ uses
   SysUtils,
   Util;
 
-const
-  InvSqrtHeadDim: Single = 1 / Sqrt(HeadDim);         // Used in softmax.
-  RowMajor = 101;       // Row Major.
-  NoTrans  = 111;       // No transposition.
-  Trans    = 112;       // Transposition.
-
 procedure RunTransformForward(var WModelParams: TWModelParams; var WModelState: TWModelState; const Blk, Start: Integer);
 
 implementation
@@ -49,26 +43,9 @@ begin
     if DisplayStage then Writeln('' : Stage, 'Stage  1, Block ', Blk, ',  Transform Forward');
     if DisplaySubstage then Writeln('' : Stage, '1A. Transform Forward, Layer Norm X');
     // Layer Norm Forward: Input X. Output X1.
-    // Obtain input X from Tokenizer for Transformer.
     // Equation: X1 = LayerNorm(X). X, X1 in R^{L × D}. Gamma1, Beta1 in R^{D}.
     // LayerNormForward(X.Value, X1.Value, SeqLen, Gamma1.Value, Beta1.Value, LNXhat1, LNInvStd1);
     LaunchLayerNormForward(X.dValue, X1.dValue, Gamma1.dValue, Beta1.dValue, dLNXhat1, dLNInvStd1, SeqLen, ModelDim);
-
-    {CheckCudaError('LayerNormForward X -> X1'); ```
-
-    cudaMemcpy(@X.Value[0,0], X.dValue, XSize, cudaMemcpyDeviceToHost);
-    cudaMemcpy(@X1.Value[0,0], X1.dValue, XSize, cudaMemcpyDeviceToHost);
-
-    Writeln('Block ', Blk, ' X row 0 before LN:');
-    for h := 0 to 15 do
-      Write(X.Value[0,h]:12:6);
-    Writeln;
-
-    Writeln('Block ', Blk, ' X1 row 0 after LN:');
-    for h := 0 to 15 do
-      Write(X1.Value[0,h]:12:6);
-    Writeln;
-    Pause;}
 
     // Display X1.Value matrix.
     if VerboseTransform then begin
@@ -84,7 +61,6 @@ begin
     // Full Size Multiplication/Overwrite: Input X1, Wq. Output Q.
     // Equation: Q = X1 · Wq. Q in R^{L x D}. X1 in R^{L · D}. Wq in R^{D x D}. M=SeqLen N=ModelDim K=ModelDim.
     // MatMulNN(@X1.Value[0, 0], @Wq.Value[0, 0], @Q.Value[0, 0], SeqLen, ModelDim, ModelDim);
-    // Writeln('Before Q = x1*Wq');
     CuMatMulNN(cuHandle, X1.dValue, Wq.dValue, Q.dValue, SeqLen, ModelDim, ModelDim);
 
     // Display Q.Value matrix.
@@ -96,7 +72,6 @@ begin
     // Full Size Multiplication/Overwrite: Input X1, Wk. Output K.
     // Equation: K = X1 · Wk. K in R^{L x D}. X1 in R^{L · D}. Wk in R^{D x D}. M=SeqLen N=ModelDim K=ModelDim.
     // MatMulNN(@X1.Value[0, 0], @Wk.Value[0, 0], @K.Value[0, 0], SeqLen, ModelDim, ModelDim);
-    // Writeln('Before K = x1*Wk');
     CuMatMulNN(cuHandle, X1.dValue, Wk.dValue, K.dValue, SeqLen, ModelDim, ModelDim);
 
     // Display K.Value matrix.
@@ -108,11 +83,9 @@ begin
     // Full Size Multiplication/Overwrite: Input X1, Wv. Output V.
     // Equation: V = X1 · Wv. V in R^{L x D}. X1 in R^{L · D}. Wv in R^{D x D}. M=SeqLen N=ModelDim K=ModelDim.
     // MatMulNN(@X1.Value[0, 0], @Wv.Value[0, 0], @V.Value[0, 0], SeqLen, ModelDim, ModelDim);
-    // Writeln('Before V = x1*Wv');
     CuMatMulNN(cuHandle, X1.dValue, Wv.dValue, V.dValue, SeqLen, ModelDim, ModelDim);
 
     // 1D. RoPE.
-    // Q and K were copied from cublas above.
     // ApplyRoPE(Q.Value, WModelState.InvFreq, SeqLen, ModelDim);
     // ApplyRoPE(K.Value, WModelState.InvFreq, SeqLen, ModelDim);
     if DisplaySubstage then Writeln('' : Blk * 2 + 2, '1D. Transform Forward 1D, RoPE Q and K');
@@ -121,10 +94,8 @@ begin
 
     if DisplaySubstage then Writeln('' : Stage, '1E-G. Transform Forward, Obtain Scores1, Autoregressive mask, obtain Scores2, Softmax, ADropout');
 
-    // Multihead Multiplication/Overwrite: Input Q, Kᵀ. Output: Scores1.
-    // That is, the Queries * Tansposed(Keys) are the attention scores.
+    // Multihead Multiplication/Overwrite: Input Q, Kᵀ. Output: Scores1. That is, the Queries * Tansposed(Keys) are the attention scores.
     // Equation: Scores1 = Q · Kᵀ. Scores1 in R^{L · L}. Q in R^{L x D}. Kᵀ in R^{D x L}. M=SeqLen N=SeqLen K=HeadDim
-
     for h := 0 to nHead - 1 do begin
       HeadOffset := h * HeadDim;
 
@@ -133,9 +104,9 @@ begin
       // K_h is K[*, headOffset .. headOffset+H-1]
       // Multiply Q_h (L x H) by K_h^T (H x L), and scale by InvSqrtHeadDim.
       // MatMulFullScaledNT(@Q.Value[0, HeadOffset], @K.Value[0, HeadOffset], @ScoresHead1[h].Value[0, 0],
-      //   SeqLen, SeqLen, HeadDim, ModelDim, ModelDim, SeqLen, InvSqrtHeadDim, 0.0);
-        // Writeln('Before ScoresHead1 QK');
-        CuMatMulFullScaledNT(CuHandle, PSingle(Q.dValue) + HeadOffset, PSingle(K.dValue) + HeadOffset, ScoresHead1[h].dValue,
+      // SeqLen, SeqLen, HeadDim, ModelDim, ModelDim, SeqLen, InvSqrtHeadDim, 0.0);
+      // Writeln('Before ScoresHead1 QK');
+      CuMatMulFullScaledNT(CuHandle, PSingle(Q.dValue) + HeadOffset, PSingle(K.dValue) + HeadOffset, ScoresHead1[h].dValue,
         SeqLen, SeqLen, HeadDim, ModelDim, ModelDim, SeqLen, InvSqrtHeadDim, 0.0);
 
       // 1F-a. Apply autoregressive mask.
@@ -153,20 +124,19 @@ begin
       // Equation: ScoresHead2 = Dropout(ScoresHead2). ScoresHead in R^{L x L}.
       if Training then
         // for i := 0 to SeqLen - 1 do for j := 0 to SeqLen - 1 do
-        //    if Random < ADropOut then
-        //      ScoresHead2[h].Value[i, j] := 0.0
-        //    else
-        //      ScoresHead2[h].Value[i, j] := ScoresHead2[h].Value[i, j] / (1.0 - ADropOut);
+        //   if Random < ADropOut then
+        //     ScoresHead2[h].Value[i, j] := 0.0
+        //   else
+        //     ScoresHead2[h].Value[i, j] := ScoresHead2[h].Value[i, j] / (1.0 - ADropOut);
         LaunchDropout(ScoresHead2[h].dValue, SeqLen * SeqLen, ADropOut, ADropoutSeed + h);
 
       // 1G. Multiplication/Overwrite. Obtain X2Head from ScoresHead2.
       // Scoring: Input ScoresHead2, VHead. Output: X.
       // Equation: X2 = Scores2 · V. X2 in R^{L · D}. Scores2 in R^{L x L}. V in R^{L x D}. M=SeqLen N=ModelDim K=SeqLen
       // MatMulFullNN(@ScoresHead2[h].Value[0,0], @V.Value[0, HeadOffset], @X2.Value[0, HeadOffset], SeqLen, HeadDim, SeqLen, SeqLen, ModelDim, ModelDim);
-      // Writeln('Before ScoresHead2, in 1G');
       CuMatMulFullNN(CuHandle, ScoresHead2[h].dValue, PSingle(V.dValue) + HeadOffset, PSingle(X2.dValue) + HeadOffset,
         SeqLen, HeadDim, SeqLen, SeqLen, ModelDim, ModelDim);
-    end;
+    end;      // nHead loop.
 
     // Display ScoresHead[0].Value, Scores1Head2[1].Value, X2.Value matrix.
     if VerboseTransform then begin
@@ -182,7 +152,6 @@ begin
     // Weighting: Input X2, W0. Output X3.
     // Equation: X3 = X2 · W0. X3 in R^{L · D}. W0 in R^{D x D}. X2 in R^{L x D}.
     // MatMulNN(@X2.Value[0, 0], @W0.Value[0, 0], @X3.Value[0, 0], SeqLen, ModelDim, ModelDim);
-    // Writeln('Before X2, 1H');
     CuMatMulNN(CuHandle, X2.dValue, W0.dValue, X3.dValue, SeqLen, ModelDim, ModelDim);
 
     // Display X3.Value matrix.
@@ -237,7 +206,7 @@ begin
       // Equation: Hidden1 = Hidden1 + b1. Hidden1 in R^{L x DB}. b1 in R^{DB}.
       // AddMatVec(@Hidden1.Value, b1.Value, SeqLen, ModelDimProj);
       // for i := 0 to SeqLen - 1 do
-        // AddScaled(ModelDimProj, 1.0, @b1.Value[0], @Hidden1.Value[i,0]);
+      //   AddScaled(ModelDimProj, 1.0, @b1.Value[0], @Hidden1.Value[i,0]);
       LaunchAddBiasRows(Hidden1.dValue, b1.dValue, SeqLen, ModelDimProj);
 
       // Display Hidden1.Value matrix.
@@ -257,10 +226,10 @@ begin
       // Do MLP dropout.
       if Training then
         // for i := 0 to SeqLen - 1 do for j := 0 to ModelDimProj - 1 do
-        //    if Random < MLPDropout then
-        //      Hidden2.Value[i, j] := 0.0
-        //    else
-        //      Hidden2.Value[i, j] := Hidden2.Value[i, j] / (1.0 - MLPDropOut);
+        //   if Random < MLPDropout then
+        //     Hidden2.Value[i, j] := 0.0
+        //   else
+        //     Hidden2.Value[i, j] := Hidden2.Value[i, j] / (1.0 - MLPDropOut);
         LaunchDropout(Hidden2.dValue, SeqLen * ModelDimProj, MLPDropOut, MLPDropoutSeed);
 
       // 2D. Multiplication/Overwrite. Obtain X6 from Hidden2.
@@ -278,7 +247,7 @@ begin
       // Equation: X6 = X6 + b2. X6 in R^{L x D}. b2 in R^{D}.
       // AddMatVec(@X6.Value, @b2.Value, SeqLen, ModelDim);
       // for i := 0 to SeqLen - 1 do
-        // AddScaled(ModelDim, 1.0, @b2.Value[0], @X6.Value[i,0]);
+      //   AddScaled(ModelDim, 1.0, @b2.Value[0], @X6.Value[i,0]);
       LaunchAddBiasRows(X6.dValue, b2.dValue, SeqLen, ModelDim);
 
       // Display X6.Value matrix.
@@ -293,10 +262,10 @@ begin
       // Do residual dropout.
       if Training then
         // for i := 0 to SeqLen - 1 do for j := 0 to ModelDim - 1 do
-        //    if Random < RDropout then
-        //      X6.Value[i, j] := 0.0
-        //    else
-        //      X6.Value[i, j] := X6.Value[i, j] / (1.0 - RDropOut);
+        //   if Random < RDropout then
+        //     X6.Value[i, j] := 0.0
+        //   else
+        //     X6.Value[i, j] := X6.Value[i, j] / (1.0 - RDropOut);
         LaunchDropout(X6.dValue, SeqLen * ModelDim, RDropout, RDropoutSeed);
 
       // Residual merge: Input X4, X6. Output X7.

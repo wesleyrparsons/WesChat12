@@ -203,7 +203,6 @@ begin
 
   CloseFile(F);
   Writeln('File ', TokenFileName, ' successfully saved.');
-  Writeln;
 end;
 
 // Clear pointers read from Model.ParamBlock.

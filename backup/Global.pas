@@ -14,31 +14,33 @@ var
   PauseIfKeyPressed: Boolean = True;        // Pause if a key is pressed.
   StopTraining: Boolean;                    // Happens if KeyPressed, to perform options.
   TrainSuccess: Boolean = False;            // Training successful and proceed to inference.
-  DisplayCorpus: Boolean = False;            // One set for real tokenizing and one set for debug.
+  DisplayCorpus: Boolean = False;           // One set for real tokenizing and one set for debug.
   DisplayWindow: Boolean = False;           // Display the SeqLen window.
   VerboseTokenize: Boolean = False;         // Verbose in Tokenize units.
   VerboseTransform: Boolean = False;        // Displays X, Q, ScoresHead1, etc. in Transform units.
   VeryVerboseTokenize: Boolean = False;     // Very verbose in Tokenize units.
-  DisplayTokenWork: Boolean = False;            // Show token work in Tokenize units.
-  DisplayMergeWork: Boolean = True;            // Show merge work in Tokenize units.
-  DisplayVerification: Boolean = False;         // Do verification by rebuilding corpus in Tokenize units.
-  DisplayEachByteRead: Boolean = False;        // Verify reading of bytes.
+  DisplayTokenWork: Boolean = False;        // Show token work in Tokenize units.
+  DisplayMergeWork: Boolean = True;         // Show merge work in Tokenize units.
+  DisplayVerification: Boolean = False;     // Verify by rebuilding corpus in WesTokenize or displaying in GPT.
+  DisplayEachByteRead: Boolean = False;     // Verify reading of bytes.
   SaveFiles: Boolean = True;                // Save various files, otherwise not saved.
   SaveTokenizationFiles: Boolean = True;    // Fave tokenization files (false for inference).
+  MaxSymbols: Integer = 10000;              // Maximum number of symbols.
   MaxMerges: Integer = 20000;               // Maximum number of merges.
-  MaxPairCount: Integer = 400000;           // Maximum number of pair in BPE.
+  MaxPairCount: Integer = 800000;           // Maximum number of pair in BPE.
 
 const
   // Model constants.
-  MaxEpochs = 100000;             // Number of epochs, loops over tokenized corpus,
-  ModelDim = 128;                 // Number of loadings for a symbol.
+  MaxEpochs = 100000;             // Number of epochs, loops over tokenized corpus.
+  ModelDim = 192;                 // Number of loadings for a symbol.
   Proj = 4;                       // Projection to Hidden arrays.
   ModelDimProj = ModelDim * Proj; // Dimension of model of projected X matrix.
   SeqLen = 256;                   // Sequence length for X.
-  Stride = 40;                    // Stride across sequence lengths.
+  Stride = 64;                    // Stride across sequence lengths.
+  StartStride = 17;               // Coprime with Stride. Also use 43. Ty, Leonhard.
   nHead = 8;                      // Number of heads for multi-headed attention.
   HeadDim = ModelDim div nHead;   // Length of one head.
-  nBlock = 4;                     // Number of blocks in transformer.
+  nBlock = 6;                     // Number of blocks in transformer.
   ADropOut = 0.1;                 // Probability of attention dropout.
   MLPDropOut = 0.1;               // Probability of MLP dropout.
   RDropout = 0.1;                 // Probability of residual dropout.
@@ -130,6 +132,8 @@ type                                                                           /
   // Display types.
   TPart = (B, E, F, G);                // Length = VocabSize * Dimension. But only use nSymbols in rows.
   TSymbolTable = TRBSVector;           // Array of symbols. So index of array is a symbol string.
+  // LearningTypes.
+  TLearning = (FastLearning, SlowLearning, StaggeredLearning);
   // Block types.
   TParamBlock = array[0..nBlock - 1] of record
     Wq, Wk, Wv, W0:                 TWeightTensor;         // Weights.
@@ -144,6 +148,7 @@ type                                                                           /
     ParamBlock:                     TParamBlock;
   end;
   TStateBlock = array[0..nBlock - 1] of record                  // Model of non-trainable parameters.
+    // Matrices for neural net.
     X, X1, X2, X3, X4, X5, X6, X7:  TSeqTensor;                 // X's at all stages.
     X1q, X1v, X1k:                  TSeqTensor;                 // X's for Q, K, V.
     Q, K, V:                        TSeqTensor;                 // Q is X*Wq, K is X*Wk, V is X*Wv.
@@ -162,6 +167,7 @@ type                                                                           /
     ADropoutSeed:         UInt64;                          // Seeds for dropouts.
     MLPDropoutSeed:       UInt64;
     RDropoutSeed:         UInt64;
+    //
     dX4FromLN2:           PSingle;
     dXFromLN1:            PSingle;
   end;
@@ -177,8 +183,6 @@ var
   // cublas vars.
   CuHandle: TcublasHandle;
   CudaAllocated: Boolean = False;
-  // One: Single = 1.0;
-  // Zero: Single = 0.0;
   // DLL accessibility vars.
   CublasPresent: Boolean;
   CudartPresent: Boolean;
@@ -202,31 +206,35 @@ var
   EOS: Integer = 257;                            // End of corpus.
   PAD: Integer = 258;                            // Padding to bring up to SeqLen.
   UNK: Integer = 259;                            // Unknown.
-  // Model setings vars.
+  // Model settings vars.
+  Training:             Boolean = True;          // In training as opposed to inference mode. For dropouts also.
+  LearningStyle:        TLearning = SlowLearning;     // Style of learning.
+  ShuffleWindows:       Boolean = False;         // Shuffle the windows each epoch.
   BaseLearningRate:     Double = 0.01000;        // Base learning rate for Gradient.
-  FloorLearningRate:    Double = 0.00050;        // Floor learning rate for Gradient.
-  OverrideLearningRate: Double = -1.0;           // Override learning rate for Gradient.
+  FloorLearningRate:    Double = 0.00010;        // Floor learning rate for Gradient.
+  OverrideLearningRate: Double =-1.00000;        // Override learning rate for Gradient.
   RollOff:              Double = 0.99990;        // Reduction in learning rate.
-  WeightDecay:          Double = 0.00010;        // Decay (multiplicative) for learning rate.
-  LearningRate:         Double;                  // Derived learningRate for Gradient.
-  GlobalStep:           Integer;                 // Increments once per window.
+  WeightDecay:          Double = 0.00001;        // Decay (multiplicative) for learning rate.
   DecayScale:           Double;                  // 1.0 - LearningRate * WeightDecay.
-  Temperature:          Double = 1.0;            // Temperature for softmax.
-  ClipLimit:            Double = 1.0;            // Clips gradients.
+  LearningRate:         Double;                  // Derived learningRate for Gradient.
+  GlobalStep:           Int64;                   // Increments once per window.
+  Temperature:          Double = 1.00000;        // Temperature for softmax.
+  ClipLimit:            Double = 0.40000;        // Clips gradients.
   // Staging and epoch vars.
-  DisplayStage: Boolean = False;                 // Display progress by stage in train and transform.
+  DisplayStage:    Boolean = False;              // Display progress by stage in train and transform.
   DisplaySubstage: Boolean = False;              // Display progress by stage in train and transform.
-  DisplayEpoch: Boolean = True;                  // Display progress by epoch in train and transform.
+  DisplayEpoch:    Boolean = True;               // Display progress by epoch in train and transform.
   Stage: Integer;                                // Indentation for stage;
   // Saving vars.
-  WorkRoot: string = '';                         // Work folder name set by user or default.
-  CorpusDir: string = '';                        // Folder for corpus files.
-  SymbolDir: string = '';                        // Folder for symbol files.
-  TokenDir: string = '';                         // Folder for token files.
-  ModelDir: string = '';                         // Folder for model files.
-  LogDir: string = '';                           // Folder for log files.
-  RunDir: string = '';                           // Folder for run files (not used).
-  ListDir: string = '';                          // Folder for list files (not used).
+  WorkRoot:   string = '';                       // Work folder name set by user or default.
+  CorpusDir:  string = '';                       // Folder for corpus files.
+  SymbolDir:  string = '';                       // Folder for symbol files.
+  MergeDir:   string = '';                       // Folder for merge files.
+  TokenDir:   string = '';                       // Folder for token files.
+  ModelDir:   string = '';                       // Folder for model files.
+  LogDir:     string = '';                       // Folder for log files.
+  RunDir:     string = '';                       // Folder for run files (not used).
+  ListDir:    string = '';                       // Folder for list files (not used).
   ScratchDir: string = '';                       // Folder for scratch files (not used).
   // Utility vars.
   Mt0, Mt1, t0, t1, StopTime: TDateTime;         // For timing.
@@ -235,7 +243,6 @@ var
   nSymbols: Integer;                             // Number of symbols = Length(SymbolTable);
   nVocab: Integer;                               // nVocab is also nSymbol. Number of symbol items.
   TokenID: TIVector;                             // Same as TokenizedCorpus.
-  Training: Boolean = True;                      // In training as opposed to inference mode.
   Tokenizer: TTokenizer;                         // WesChat or GPT2Chat tokenizer;
   NewModel: Boolean = True;                      // If new model, initialize params.
   ParamsNeedCopyToDevice: Boolean = False;       // Start of infer.

@@ -180,7 +180,7 @@ begin
     Writeln;
 
     // Softmax Forward.
-    LaunchSoftmaxForwardN(dProbs, dProbs, SeqLen, nVocab, Temperature);
+    LaunchSoftmaxForward(dProbs, dProbs, SeqLen, nVocab, Temperature);
     cudaMemcpy(@Probs[0, 0], dProbs, ProbsSize, cudaMemcpyDeviceToHost);
 
     // Set special tokens to zero probability.
@@ -256,7 +256,7 @@ begin
   // Initialize transformer state.
   InitializeTransformerState(WModelState);
 
-  Writeln('Beginning of inference.  Expected random loss = ', Ln(nVocab): 10: 8);
+  Writeln('Beginning of inference.  Expected random loss = ', Ln(nVocab): 9: 7);
 
   try
     // Send params (if new model) and inverse freq to device.
@@ -269,7 +269,7 @@ begin
       Write('Enter query: ');
       Readln(QueryString);
       // Test query.
-      QueryString := 'political power';   // Temporary.
+      // QueryString := 'political power';
       Writeln('Query string: ', QueryString);
 
       if QueryString = EmptyStr then begin

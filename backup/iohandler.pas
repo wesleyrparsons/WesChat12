@@ -120,6 +120,7 @@ begin
   Close(F);
   nSymbols := Length(SymbolTable);
   Writeln('Loaded ', nSymbols, ' symbols from ', FileName, '.');
+  Pause;
 end;
 
 // Save symbol table.

@@ -61,7 +61,6 @@ procedure MDeallocateCublas(var WModelParams: TWModelParams; var WModelState: TW
 procedure CopyInvFreqToDevice(var WModelState: TWModelState);
 procedure ZeroGradients(var WModelParams: TWModelParams; var WModelState: TWModelState; const Blk: Integer);
 // Optimization routines.
-//procedure CuUpdateParam(Handle: TcublasHandle; const N: Integer; const LearningRate: Single; const Grad: PSingle; Param: PSingle);
 procedure Optimization(var WModelParams: TWModelParams; const Blk: Integer);
 procedure UpdateEmbeddings(var WModelParams: TWModelParams; var WModelState: TWModelState);
 // DLL transform routines.
@@ -76,11 +75,12 @@ procedure LaunchAutoRegressiveMaskBackward(ScoresGrad: PSingle; SeqLen: Integer)
 procedure LaunchDropout(X: PSingle; N: Integer; DropProb: Single; Seed: UInt64);
   cdecl; external 'WesChatKernel12.dll';
 procedure LaunchDropoutBackward(dX: PSingle; N: Integer; DropProb: Single; Seed: UInt64);
-  cdecl; external 'WesChatKernel12.dll';procedure SoftmaxForwardN(const x: PSingle; y: PSingle; const N: Integer);
+  cdecl; external 'WesChatKernel12.dll';
 procedure LaunchSoftmaxForwardStrided(dIn: PSingle; dOut: PSingle; Rows: Integer; Cols: Integer; RowStride: Integer; Temperature: Single);
   cdecl; external 'WesChatKernel12.dll';
-procedure LaunchSoftmaxForwardN(X: PSingle; Y: PSingle; Rows: Integer; N: Integer; Temperature: Single);
-  cdecl; external 'WesChatKernel12.dll';
+procedure LaunchSoftmaxForward(dIn: PSingle; dOut: PSingle; Rows: Integer; N: Integer; Temperature: Single);
+{procedure LaunchSoftmaxForwardN(X: PSingle; Y: PSingle; Rows: Integer; N: Integer; Temperature: Single);
+  cdecl; external 'WesChatKernel12.dll';}
 procedure LaunchSoftmaxBackward(Y: PSingle; dY: PSingle; dX: PSingle; Rows: Integer; D: Integer);
   cdecl; external 'WesChatKernel12.dll';
 procedure LaunchLayerNormForward(InX, OutX, Gamma, Beta, LNXhat, LNInvStd: PSingle; SeqLen, ModelDim: Integer);
@@ -931,6 +931,11 @@ begin
     for i := 0 to N - 1 do
       y[i] := y[i] * SumVal;
   end;
+end;
+
+procedure LaunchSoftmaxForward(dIn: PSingle; dOut: PSingle; Rows: Integer; N: Integer; Temperature: Single);
+begin
+  LaunchSoftmaxForwardStrided(dIn, dOut, Rows, N, N, Temperature);
 end;
 
 // Softmax procedure backward. No longer used.

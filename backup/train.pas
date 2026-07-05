@@ -27,28 +27,83 @@ implementation
 
 const
   Scale = Sqrt(ModelDim);         // Transformer-style embedding scaling by sqrt(d_model).
+var
+  LastBestSaveEpoch: Integer;     // Saving models.
+  AutoSaveEpoch: Integer;         // At this epoch, start saving new minimum loss models.
+  BestSavedLoss: Double;
+  MinSaveGap: Integer;
+  MinSaveDelta: Double;
 
 // Compute the CE loss.
-function ComputeCELoss(const Probs: TSeqVocabMatrix; const TargetTokens: TIDimVector): Double;
+function ComputeCELoss(const Probs: TSeqVocabMatrix;
+  const TargetTokens: TIDimVector): Double;
 const
   Eps = 1.0e-12;
 var
   i, Tok: Integer;
-  P: Double;
+  P, RawP: Double;
+  TinyCount: Integer;
 begin
   Result := 0.0;
+  TinyCount := 0;
 
   for i := 0 to SeqLen - 1 do begin
     Tok := TargetTokens[i];
+
+    // Check token BEFORE indexing Probs.
+    if (Tok < 0) or (Tok >= nVocab) then begin
+      Writeln('Bad target token: ', Tok, 'decoded = ', Decode(Tok), ', at position ', i, '. nVocab = ', nVocab, '.');
+      Halt;
+    end;
+
     P := Probs[i, Tok];
 
-    if P < Eps then
+    // Check NaN/Inf before doing comparisons.
+    if IsNan(P) then begin
       P := Eps;
+      Writeln('NaN probability at position ', i, ', token ', Tok, 'decoded = ', Decode(Tok), ', using P = ', Eps: 9: 7, '. Pausing....');
+      Pause;
+    end;
+
+    if IsInfinite(P) then begin
+      P := 0.99999999;
+      Writeln('Infinite probability at position ', i, ', token ', Tok, 'decoded = ', Decode(Tok), ', using P = 0.99999999. Pausing....');
+      Pause;
+    end;
+
+    if P < 0.0 then begin
+      P := Eps;
+      Writeln('Probability less than 0.0, ', P: 9: 7, ', at position ', i, ', token ', Tok, ' decoded = ', Decode(Tok), ', using P = ', P: 9: 7, '. Pausing....');
+      Pause;
+    end;
+
+    if P > 1.0 then begin
+      P := 0.99999999;
+      Writeln('Probability greater than 1.0, ', P: 9: 7, ', at position ', i, ', token ', Tok, ' decoded = ', Decode(Tok), ', using P = ', P: 9: 7, '. Pausing....');
+      Pause;
+    end;
+
+    if P < Eps then begin
+      Inc(TinyCount);
+
+      {RawP := P;
+      if TinyCount >= 10 then begin
+        Write('Tiny probability/ies below Eps in CE loss. Count = ', TinyCount);
+        Writeln(' Sequence position = ', i,', target token  = ', Tok, 'decoded = ', Decode(Tok), ', raw P = ', RawP: 9: 7, ',  using P = ', Eps: 9: 7);
+      end;}
+
+      P := Eps;
+    end;
 
     Result := Result - Ln(P);
   end;
 
   Result := Result / SeqLen;
+
+  if TinyCount > 48 then begin
+    Writeln('Warning: ', TinyCount, ' probabilities were below epsilon of ', Eps: 9: 7, ' in this CE loss.  Pausing....');
+    Pause;
+  end;
 end;
 
 // Compute the CE loss only.
@@ -117,10 +172,48 @@ begin
     Input[i] := TokenizedCorpus[StartIndex + i];
 end;
 
+// Shuffle routines.
+procedure BuildWindowStarts(const TokenCount, SeqLen, Stride, Epoch, StartStride: Integer; var Starts: TIVector);
+var
+  Start, Count: Integer;
+begin
+  SetLength(Starts, 0);
+
+  Start := (Epoch * StartStride) mod Stride;
+  Count := 0;
+
+  while (Start + SeqLen + 1) <= TokenCount do begin
+    SetLength(Starts, Count + 1);
+    Starts[Count] := Start;
+    Inc(Count);
+
+    Inc(Start, Stride);
+  end;
+end;
+
+procedure Swap(var A, B: Integer);
+var
+  C: Integer;
+begin
+  C := A;
+  A := B;
+  B := C;
+end;
+
+procedure ShuffleStarts(var Starts: TIVector);
+var
+  i, j: Integer;
+begin
+  if Length(Starts) <= 1 then Exit;
+
+  for i := High(Starts) downto 1 do begin
+    j := Random(i + 1);   // 0..i
+    Swap(Starts[i], Starts[j]);
+  end;
+end;
+
 // Run the training.
 procedure RunTrain(var WModelParams: TWModelParams; var WModelState: TWModelState; const TokenizedCorpus: TIVector);
-const
-  Sqrt10 = 3.16227766016837933199;
 var
   i, j, k: Integer;
   Blk, LastBlk, Epoch, Start, WindowCount, MinLossEpoch: Integer;
@@ -128,6 +221,7 @@ var
     MeanRunningLoss, RecentLossSum, GradScale: Double;
   RecentLosses: array[0..RecentCount] of Double;
   RecentLossIndex, RecentLossCount: Integer;
+  Starts: TIVector;
   // PreUpdateLoss, PostUpdateLoss: Double; // Not using currently.
 
   function TrainReadIfKeyPressed: Boolean;
@@ -147,26 +241,32 @@ var
         Writeln('Exit requested. Stopping training.');
         TrainSuccess := False;
         Result := True;
+        StopTraining := True;
       end;
       'n', 'N': begin        // Exit training. No success, go to inference.
         Writeln('Stopping training.');
         TrainSuccess := True;
         Result := True;
+        StopTraining := True;
       end;
       'v', 'V': begin        // Enable verbose transform.
         VerboseTransform := not VerboseTransform;
         Writeln('Very verbose transform mode: ', VerboseTransform);
-        Pause;
+      end;
+      'l', 'L': begin        // Override learning rate.
+        Write('Enter override learning rate: ');
+        Readln(OverrideLearningRate);
       end;
       'i', 'I': begin        // Report program info.
         Writeln;
-        ReportInfo;
+        ReportProgramInfo;
         Pause;
       end;
-      't', 'T': begin        // Display training info.
-        Writeln('Training. nVocab = ', nVocab, ' DimVocab = ', DimVocab, ' Seqlen = ', SeqLen, ' ModelDim = ', ModelDim, ' Projection = ', Proj,
-          '  Epoch = ', Epoch, ' Start = ', Start, ' Stride = ', Stride, ' Length of tokens in corpus = ', Length(TokenizedCorpus));
-        Writeln(DateTimeToStr(Now), '  X = Exit training. P = Pause. N = Go to iNference. V = toggle Verbose mode.  I = program Information. T = Training information. S = Save. Training...');
+      'r', 'R': begin        // Display training info.
+        Writeln('Training. Work = ', ExtractFileName(WorkingDir), '; nTC = ', Length(TokenizedCorpus), ',  nVocab = ', nVocab, '; DimVocab = ', DimVocab, '; Seqlen = ', SeqLen,
+          '; Stride = ', Stride, '; ModelDim = ', ModelDim, '; nHead = ', nHead, '; nBlock = ', nBlock, '; Proj = ', Proj, '; DropOut = ', Training, '.');
+        Write(DateTimeToStr(Now), '  X = Exit training. P = Pause. N = Go to iNference. V = toggle Verbose mode.  ');
+        Writeln('L = set Learning rate. I = program Information. R = tRaining information. S = Save. Training...');
         Pause;
       end;
       's', 'S': begin        // Save model.
@@ -201,6 +301,13 @@ var
   end;
 
 begin
+  // For saving models.
+  LastBestSaveEpoch := -1000000000;
+  AutoSaveEpoch := 50;
+  BestSavedLoss := MaxDouble;
+  MinSaveGap := 10;
+  MinSaveDelta := 0.01;      // Adjust for saving best model.
+
   // For running losses.
   RecentLossIndex := 0;
   RecentLossCount := 0;
@@ -210,12 +317,12 @@ begin
     RecentLosses[i] := 0.0;
 
   // For each epoch's loss.
+  MEL := 0;
   MinLoss := 1000000;
   MinLossEpoch := -1;
 
   // Initialization.
-  StopTraining := False;
-  Training := False;               // Set False for debugging.
+  StopTraining := False;           // Control var.
   GlobalSeed := 123456789;         // For debugging.
   //GlobalSeed := GetTickCount64;  // For training.
   if NewModel then
@@ -246,8 +353,8 @@ begin
     Epoch := 0;
     Start := 0;
     GlobalStep := 0;
-    Writeln('Start Training');
-    Writeln('X = Exit training. P = Pause. V = toggle Verbose mode. I = program Information. T = Training information. S = Save. Transforming...');
+    Writeln('Training started.');
+    Writeln('X = Exit training. P = Pause. V = toggle Verbose mode. I = program Information. T = Training information. S = Save. Training...');
 
     // Display embeddings.
     if VerboseTransform then begin
@@ -259,12 +366,20 @@ begin
     // Loop through epochs.
     for Epoch := 0 to MaxEpochs - 1 do with WModelState do begin
       EpochLoss := 0;
-
       WindowCount := 0;
-      Start := (Epoch * 17) mod Stride;
+
+      // Start := (Epoch * StartStride) mod Stride;
+      // Build a window start point.
+      BuildWindowStarts(Length(TokenizedCorpus), SeqLen, Stride, Epoch, StartStride, Starts);
+
+      // Shuffle the window.
+      if ShuffleWindows then
+        ShuffleStarts(Starts);
 
       // Stride loop thru Sequence.
-      while ((Start + SeqLen + 1) <= Length(TokenizedCorpus)) do begin
+      // while ((Start + SeqLen + 1) <= Length(TokenizedCorpus)) do begin
+      for i := 0 to High(Starts) do begin
+        Start := Starts[i];
 
         if TrainReadIfKeyPressed then begin
           StopTraining := True;
@@ -286,12 +401,12 @@ begin
         // Checking tokens.
         if VerboseTransform then begin
           Writeln('Checking tokens');
-          for i := 0 to SeqLen - 1 do
-            Write(i:4, ' token=', InputTokens[i], ' ');
+          for j := 0 to SeqLen - 1 do
+            Write(j: 4, ' token=', InputTokens[i], ' ');
           Writeln('Values for row zero.');
           k := InputTokens[0];
           for j := 0 to 15 do
-            Write(WModelParams.Embeddings.Value[k, j]:8:5, ' ');
+            Write(WModelParams.Embeddings.Value[k, j]: 8: 5, ' ');
          Pause;
         end;
 
@@ -450,21 +565,38 @@ begin
         LaunchClipVector(WModelParams.Embeddings.dGrad, DimVocab * ModelDim, ClipLimit);
         CheckCudaError('Gradient clipping.');
 
-        // Modify learning rate and decay scale.
-        // Remember Training may be False (affects dropouts).
-        // Remember GlobalStep := WindowCount * Epoch; GS is redundant}
-        // Weight decay tied to learning rate, AdamW style.
-        Case Epoch of
-          0..100: LearningRate := 0.01;
-          101..200: LearningRate := 1.0 /(100 * Sqrt10);
-          201..500: LearningRate := 0.001;
-          501..1000: LearningRate := 1.0 / (1000 * Sqrt10);
-         else LearningRate := 0.00005;
+        // Use schedule to calculate learning rate. Remember Training may be False (affects dropouts).
+        Case LearningStyle of
+          // Slow schedule.
+          SlowLearning:
+            case Epoch of
+              0..10:      LearningRate := 0.01;
+              11..20:     LearningRate := 0.005;
+              21..100:    LearningRate := 0.0005;
+              101..1000:  LearningRate := 0.0001;
+              else        LearningRate := 0.00005;
+            end;
+          // Fast schedule.
+          FastLearning:
+            case Epoch of
+              0..30:      LearningRate := 0.01;
+              31..100:    LearningRate := 0.005;
+              101..400:   LearningRate := 0.001;
+              401..800:   LearningRate := 0.0005;
+              else        LearningRate := 0.0001;
+            end;
+          // Rolled off schedule.
+          RolledOffLearning: begin
+            LearningRate := Max(FloorLearningRate, BaseLearningRate * Power(Rolloff, GlobalStep));
+            LearningRate := FloorLearningRate + (BaseLearningRate - FloorLearningRate) * Power(Rolloff, GlobalStep);
+          end;
         end;
-        // User can set override.
+
+        // User can set override learning rate.
         if OverrideLearningRate <> -1.0 then
           LearningRate := OverrideLearningRate;
-        // LearningRate := FloorLearningRate + (BaseLearningRate - FloorLearningRate) * Power(Rolloff, GlobalStep);
+
+        // Decay tied to learning rate, AdamW-style.
         DecayScale:= 1.0 - LearningRate * WeightDecay;
 
         // Modify weights and biases.
@@ -502,25 +634,19 @@ begin
         MEL := EpochLoss / WindowCount
       else
         MEL := 0.0;
-      if MEL < MinLoss then begin
-        MinLoss := MEL;
-        MinLossEpoch := Epoch;
-      end;
 
-      // Difference from previous epoch.
-      // Positive DiffLoss means improvement.
+      // Difference from previous epoch. Positive DiffLoss means improvement.
       if Epoch = 0 then
         DiffLoss := 0.0
       else
         DiffLoss := LastLoss - MEL;
       LastLoss := MEL;
 
-      // Rolling mean over last 10 epoch mean losses.
-      if RecentLossCount < RecentCount then begin
-        Inc(RecentLossCount);
-      end else begin
+      // Rolling mean over last RecentCount (typically 10) epochs.
+      if RecentLossCount < RecentCount then
+        Inc(RecentLossCount)
+      else
         RecentLossSum := RecentLossSum - RecentLosses[RecentLossIndex];
-      end;
       RecentLosses[RecentLossIndex] := MEL;
       RecentLossSum := RecentLossSum + MEL;
       RecentLossIndex := (RecentLossIndex + 1) mod RecentCount;
@@ -531,33 +657,71 @@ begin
       // Display loss progress.
       if Epoch = 0 then
         StartLoss := MEL;
-      if (Epoch mod 20) = 0 then begin
-        Writeln('>> nTC = ', Length(TokenizedCorpus), ' nVocab = ', nVocab, ' DimVocab = ', DimVocab, ' Seqlen = ', SeqLen, ' Stride = ', Stride,
-          ' ModelDim = ', ModelDim, ' nHead = ', nHead, ' nBlock = ', nBlock, ' Proj = ', Proj);
-        Writeln('>> Learning rate = ', LearningRate:10:8, ' Floor LR = ', FloorLearningRate:10:8, ' Base LR = ', BaseLearningRate:10:8,
-          ' LR rolloff = ', RollOff:10:8, ' Weight decay = ', WeightDecay:10:8, ' Decay scale = ', DecayScale:10:8);
-        Writeln('>> Training = ', Training, ' Temperature = ', Temperature: 10: 8, ' Clip limit = ', ClipLimit: 10: 8, ' Global step = ', GlobalStep);
+      if (Epoch mod 10) = 1 then begin
+
+        // Parameters.
+        Writeln('>> Work = ', ExtractFileName(WorkingDir), '; nTC = ', Length(TokenizedCorpus), '; nVocab = ', nVocab, '; DimVocab = ', DimVocab, '; Seqlen = ', SeqLen,
+          '; Stride = ', Stride, '; ModelDim = ', ModelDim, '; nHead = ', nHead, '; nBlock = ', nBlock, '; Proj = ', Proj, '; DropOut = ', Training, '.');
+
+        if OverrideLearningRate = -1.0 then begin
+          // Not override learning rate.
+          Case LearningStyle of
+            SlowLearning:
+              // Display slow learning rate schedule.
+              Write('>> Learning rate (slow) = ', LearningRate: 9: 7, ' with 0..10: 0.01; 11..20: 0.005; 21..100: 0.0005; 101..300: 0.0001; else 0.00005. ');
+            FastLearning:
+              // Display fast learning rate schedule.
+              Write('>> Learning rate (fast) = ', LearningRate: 9: 7, ' with 0..30: 0.01; 31..100: 0.005; 101..800: 0.001; else 0.0005. ');
+            RolledOffLearning:
+              // Learning Rolled off learning rate.
+              Write('>> Learning rate (rolled of) = ', LearningRate: 9: 7, ' Floor LR = ', FloorLearningRate: 9: 7, ' Base LR = ', BaseLearningRate: 9: 7, ' LR rolloff = ', RollOff: 9: 7, '.');}
+          end;
+        end
+        else
+        // Display override learning rate.
+        Write('>> Learning rate (override) = ', LearningRate: 9: 7, '. ');
+
+        Writeln('Weight decay = ', WeightDecay: 9: 7, '; Decay scale = ', DecayScale: 9: 7, '; Perplexity = ', exp(MEL): 9: 7,'.');
+        Writeln('>> Temperature = ', Temperature: 9: 7, '; Clip limit = ', ClipLimit: 9: 7, '; Global step = ', GlobalStep, '.');
       end;
+
+      // Save best model subject to conditions.
+      if MEL < MinLoss then begin
+        MinLoss := MEL;
+        MinLossEpoch := Epoch;
+        // Writeln('New minimum loss in Epoch ', Epoch, '. MinLoss = ', MinLoss: 9: 7);
+
+        if (Epoch >= AutoSaveEpoch) and ((Epoch - LastBestSaveEpoch) >= MinSaveGap) and
+          ((BestSavedLoss = MaxDouble) or ((BestSavedLoss - MEL) >= MinSaveDelta)) then begin
+
+          Write('Saving new best model. Previous saved best = ', BestSavedLoss: 9: 7, ' in epoch ', LastBestSaveEpoch,
+            '; new best = ', MEL: 9: 7, ' in epoch ', Epoch);
+          if SaveModel(ModelDir + WorkingName + '_best.model', WModelParams) then begin
+            LastBestSaveEpoch := Epoch;
+            BestSavedLoss := MEL;
+            Writeln('. Best model saved.');
+          end
+          else
+            Writeln('. Best model was not saved.');
+        end;
+      end;
+
       if MinLossEpoch = Epoch then
         Write('^^')
       else
         Write('--');
-      Write('Epoch ', Epoch, ' has ended. Window count = ', WindowCount, '. Mean loss: Start = ', StartLoss:10:8, '; Minimum = ',
-        MinLoss:10:8, ' in epoch ', MinLossEpoch, '; Current = ', MEL:10:8);
-
-      {if RecentLossCount = 10 then
-        Write('; Rolling10 = ', MeanRunningLoss:10:8)
-      else}
-        Write('; Rolling', RecentLossCount, ' = ', MeanRunningLoss:10:8);
+      Write('Epoch ', Epoch, ' ended. LR = ', LearningRate: 10 :8, '. Window count = ', WindowCount, '. Mean loss: Start = ', StartLoss: 9: 7, '; Minimum = ',
+        MinLoss: 9: 7, ' in epoch ', MinLossEpoch, '; Current = ', MEL: 9: 7);
+      Write('; Rolling', RecentLossCount, ' = ', MeanRunningLoss: 9: 7);
 
       if Epoch > 0 then begin
         if DiffLoss > 0 then
-          Write('; Better by ', DiffLoss:10:8)
+          Write('; Better by ', DiffLoss: 9: 7)
         else
-          Write('; Worse by ', -DiffLoss:10:8);
+          Write('; Worse by ', -DiffLoss: 9: 7);
       end;
+      Writeln('.');
 
-      Writeln(' in epoch ', Epoch, '.');
     end;      // End epoch loop.
   except
     Writeln('Error in training.');
@@ -565,7 +729,7 @@ begin
   end;        // End try loop.
 
   Writeln;
-  Writeln('End of training.');
+  Writeln('Training ended.');
   TrainSuccess := True;
   Pause;
 end;

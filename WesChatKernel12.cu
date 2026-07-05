@@ -533,13 +533,14 @@ void LaunchReLUBackward(
 
     cudaDeviceSynchronize();  // good for debugging
 }
-// Softmaz Forward Strided, June 13 2026.
+
+// Softmax Forward Strided, June 13 2026.
 // Softmax Forward, strided.
 #include <math.h>
 #include <float.h>
 
 extern "C" __declspec(dllexport)
-__global__ void SoftmaxForwardStridedKernel2(
+__global__ void SoftmaxForwardStridedKernel(
     const float* In,
     float* Out,
     int Rows,
@@ -622,101 +623,13 @@ void LaunchSoftmaxForwardStrided(
     int blocks = Rows;
     int sharedBytes = threads * sizeof(float);
 
-    SoftmaxForwardStridedKernel2<<<blocks, threads, sharedBytes>>>(
+    SoftmaxForwardStridedKernel<<<blocks, threads, sharedBytes>>>(
         dIn,
         dOut,
         Rows,
         Cols,
         RowStride,
         Temperature);
-}
-
-// Softmax Forward, strided.
-#include <cuda_runtime.h>
-#include <math.h>
-#include <float.h>
-
-extern "C" __global__
-void SoftmaxForwardStridedKernel(
-    const float* X,
-    float* Y,
-    int Rows,
-    int N,
-    float Temperature)
-{
-    int row = blockIdx.x;
-    int tid = threadIdx.x;
-
-    extern __shared__ float shared[];
-
-    float invT = 1.0f / Temperature;
-
-    // 1. local max over this thread's columns
-    float localMax = -FLT_MAX;
-
-    for (int col = tid; col < N; col += blockDim.x) {
-        float v = X[row * N + col] * invT;
-        if (v > localMax)
-            localMax = v;
-    }
-
-    shared[tid] = localMax;
-    __syncthreads();
-
-    // reduce max
-    for (int stride = blockDim.x / 2; stride > 0; stride >>= 1) {
-        if (tid < stride) {
-            if (shared[tid + stride] > shared[tid])
-                shared[tid] = shared[tid + stride];
-        }
-        __syncthreads();
-    }
-
-    float maxVal = shared[0];
-
-    // 2. local exp sum
-    float localSum = 0.0f;
-
-    for (int col = tid; col < N; col += blockDim.x) {
-        float e = expf((X[row * N + col] * invT) - maxVal);
-        Y[row * N + col] = e;
-        localSum += e;
-    }
-
-    shared[tid] = localSum;
-    __syncthreads();
-
-    // reduce sum
-    for (int stride = blockDim.x / 2; stride > 0; stride >>= 1) {
-        if (tid < stride)
-            shared[tid] += shared[tid + stride];
-        __syncthreads();
-    }
-
-    float invSum = 1.0f / shared[0];
-
-    // 3. normalize
-    for (int col = tid; col < N; col += blockDim.x) {
-        Y[row * N + col] *= invSum;
-    }
-}
-
-extern "C" __declspec(dllexport)
-void LaunchSoftmaxForwardN(
-    const float* X,
-    float* Y,
-    int Rows,
-    int N,
-    float Temperature)
-{
-    int threads = 256;
-    int sharedBytes = threads * sizeof(float);
-
-    SoftmaxForwardStridedKernel<<<Rows, threads, sharedBytes>>>(
-        X, Y, Rows, N, Temperature
-    );
-
-    cudaDeviceSynchronize();
 }
 
 // Softmax Backward, strided.

@@ -353,7 +353,7 @@ var
 begin
   Merges.Clear;
   Merges.CaseSensitive := True;
-  Merges.Sorted := False;
+  Merges.Sorted := True;     // Changed from False to speed up.
   Merges.Duplicates := dupIgnore;
 
   SL := TStringList.Create;
@@ -374,7 +374,7 @@ begin
     SL.Free;
   end;
 
-  Writeln('End of loading merges. Length of merges: ', i);
+  Writeln('End of loading merges. Length of merges: ', Merges.Count);
   if VeryVerboseTokenize then begin
     Write('Merges 0: ',Merges[0],'   Raw: ');
     for i := 1 to Length(Merges[0]) do
@@ -561,7 +561,7 @@ begin
    Inc(iWord);
  end;
 
-  // Remove the $0120 that was added.
+ // Remove the $0120 that was added.
  if Length(Words[0]) > 0 then
   Words[0] := Copy(Words[0], 2, Length(Words[0]) - 1);
 
@@ -631,7 +631,7 @@ begin
 
   Pause;
   t0 := Now;
-  Write('Tokenizing...');
+  Write('Tokenizing started.');
   TokenizeFile(FileName, Vocab, Merges, Tokens);
   t1 := Now;
 
@@ -641,10 +641,10 @@ begin
 
   nTokenizedCorpus := Length(TokenizedCorpus);
   for i := 0 to High(Tokens) do
-  TokenizedCorpus[i] := Tokens[i];
+    TokenizedCorpus[i] := Tokens[i];
 
-  Writeln('After 3 routines, tokens.');
-  for i := 0 to High(Tokens) do begin
+  Writeln('After 3 routines, 100 tokens.');
+  for i := 0 to 99 do begin
     Write(' *', i, ' ', Tokens[i], ' ', Vocab[Tokens[i]], '*  ');
     s := Vocab[Tokens[i]];
     Write('=');
@@ -655,11 +655,13 @@ begin
   Writeln;
   Pause;
 
-  Writeln('End of tokenize.');
-  Writeln('TokenizedCorpus: ');
-  for i := 0 to High(TokenizedCorpus) do
-    Write(TokenizedCorpus[i], ' ');
-  Writeln;
+  Writeln('Tokenizing ended.');
+  if DisplayVerification then begin
+    Writeln('TokenizedCorpus: ');
+    for i := 0 to High(TokenizedCorpus) do
+      Write(TokenizedCorpus[i], ' ');
+    Writeln;
+  end;
   Pause;
 
   // Report statistics.

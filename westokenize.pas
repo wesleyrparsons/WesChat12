@@ -42,8 +42,7 @@ type
 var
   StartSymbol: Integer = 260;                    // UTF-8 0.255, BOS, EOS, PAD, UNK is 259.
   nCorpus: Integer;
-  ElapsedMS: Int64;                              // For timing.
-  Hours, Mins: Int64;                            // For timing.
+  ElapsedMS, Hours, Mins: Int64;                 // For timing.
   Secs, MSecs: Double;                           // For timing.
   FileName, Reconstructed: String;               // Saving data.
   Magic: array[0..3] of Char = ('S', 'Y', 'M', 'T');  // For saving symbol table.
@@ -58,6 +57,7 @@ function MatchLongest(root: PTrieNode; const text: TBVector; startPos: Integer;
   out tokenID, matchLen: Integer): Boolean;
 procedure ReportStatistics(const TokenizedCorpus: TIVector);
 procedure DetokenizeToDisplay(const TokenizedCorpus: TIVector; const Part: TPart = B);
+procedure SaveTokenizationLog(const TokenizedCorpus: TIVector; const LogFileName: string);
 procedure RunWesTokenize(const Corpus: TBVector; var TokenizedCorpus: TIVector);
 
 implementation
@@ -198,11 +198,29 @@ end;
 { Computations and reports }
 // Calculate time statistics.
 procedure CalculateTimeStatistics;
+var
+  RawMS, PauseMS: Int64;
 begin
-  // Total elapsed time.
-  ElapsedMS := MilliSecondsBetween(t0, t1) - Round(StopTime);
+  RawMS := MilliSecondsBetween(t1, t0);
+  PauseMS := Round(StopTime);
+
+  ElapsedMS := RawMS - PauseMS;
+
+
+Writeln('DEBUG timing:');
+Writeln('  t0       = ', DateTimeToStr(t0));
+Writeln('  t1       = ', DateTimeToStr(t1));
+Writeln('  RawMS    = ', RawMS);
+Writeln('  StopTime = ', StopTime:0:4);
+Writeln('  PauseMS  = ', PauseMS);
+Writeln('  ElapsedMS= ', ElapsedMS);
+pause;
+
+  if ElapsedMS < 0 then
+    ElapsedMS := 0;
+
   Hours := ElapsedMS div 3600000;
-  Mins := ElapsedMS div 60000;
+  Mins := (ElapsedMS mod 3600000) div 60000;
   Secs := (ElapsedMS mod 60000) / 1000.0;
 end;
 
@@ -459,6 +477,9 @@ begin
   Writeln('Original text size (bytes/tokens): ', nCorpus);
   Writeln('Encoded text size (bytes/tokens): ', nTokenizedCorpus);
   Writeln('Compression ratio: ', nCorpus   / nTokenizedCorpus:0: 4);
+
+  // New code.
+  // if ElapsedMS = 0 then ElapsedMS := 1000;
   if not FromSymbolTable then
     Writeln('Tokens per second: ', nCorpus / (ElapsedMS / 1000): 6: 4);
   Writeln;
@@ -546,10 +567,73 @@ begin
   Writeln;
 end;
 
-// Run the tokenizer.
-procedure RunWesTokenize(const Corpus: TBVector; var TokenizedCorpus: TIVector);
+procedure SaveTokenizationLog(const TokenizedCorpus: TIVector; const LogFileName: string);
 var
   SaveOut: Text;
+  OutName, OutDir: string;
+  Redirected: Boolean;
+begin
+  OutName := Trim(LogFileName);
+
+  if OutName = '' then begin
+    if Trim(WorkingName) <> '' then
+      OutName := WorkingName + '.log'
+    else
+      OutName := 'tokenization.log';
+  end;
+
+  if ExtractFilePath(OutName) = '' then begin
+    if Trim(LogDir) <> '' then
+      OutName := IncludeTrailingPathDelimiter(LogDir) + OutName
+    else
+      OutName := IncludeTrailingPathDelimiter(GetCurrentDir) + OutName;
+  end;
+
+  if ExtractFileExt(OutName) = '' then
+    OutName := OutName + '.log';
+
+  OutDir := ExtractFilePath(OutName);
+
+  try
+    if Trim(OutDir) <> '' then
+      ForceDirectories(OutDir);
+
+    SaveOut := Output;
+    Redirected := False;
+
+    try
+      Assign(Output, OutName);
+
+      if FileExists(OutName) then
+        Append(Output)
+      else
+        Rewrite(Output);
+
+      Redirected := True;
+
+      ReportStatistics(TokenizedCorpus);
+
+    finally
+      if Redirected then
+        Close(Output);
+
+      Output := SaveOut;
+    end;
+
+    Writeln('Tokenization log written: ', OutName);
+
+  except
+    on E: Exception do begin
+      Output := SaveOut;
+
+      Writeln('Error saving tokenization log: ', E.ClassName, ' ', E.Message);
+      Writeln('Target log file = "', OutName, '"');
+    end;
+  end;
+end;
+
+// Run the tokenizer.
+procedure RunWesTokenize(const Corpus: TBVector; var TokenizedCorpus: TIVector);
 begin
   // Timing.
   t0 := Now;       // Start of timing for entire tokenization;
@@ -575,29 +659,6 @@ begin
   if VerboseTokenize then
     ReportStatistics(TokenizedCorpus);
 
-  // Save TokenizedCorpus and other data.
-  if SaveFiles and SaveTokenizationFiles then begin
-    // Save token list.
-    SaveTokenList(TokenizedCorpus, TokenDir + WorkingName + '.tok');
-
-    // Save current Output.
-    SaveOut := Output;
-
-    // Redirect Output to log file.
-    Assign(Output, LogDir + WorkingName + '.log');
-
-    if FileExists(LogDir + WorkingName + '.log') then
-      Append(Output)
-    else
-      Rewrite(Output);
-
-    ReportStatistics(TokenizedCorpus);
-
-    // Restore Output to console.
-    Close(Output);
-    Output := SaveOut;
-  end;
-
   // Verify by reconstructing.
   if DisplayVerification and VerboseTokenize and DisplayCorpus then begin
     Writeln('--- Reconstructed Corpus, Beginning ---');
@@ -613,8 +674,6 @@ begin
     Writeln;
     Pause;
   end;
-
-  Writeln('End of tokenization procedure in WesTokenize.');
 
 end;
 

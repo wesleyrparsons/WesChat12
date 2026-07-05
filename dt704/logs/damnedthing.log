@@ -1,0 +1,120 @@
+
+--- File Information ---
+Files used in symbol table: 
+C:\Users\wespa\OneDrive\LazarusProject\WesChat12\damnedthing.txt   18457 bytes   5/20/2026 6:59:04 AM  
+
+--- Time Statistics ---
+Start time: 7/4/2026 8:31:04 PM     End time: 7/4/2026 8:31:04 PM
+Total elapsed time: 0 hours, 0 min 0.0000 sec
+--- BPE Statistics ---
+Original text size (bytes/tokens): 18457
+Encoded text size (bytes/tokens): 5120
+Compression ratio: 3.6049
+Tokens per second: 
+--- File Information ---
+Files used in symbol table: 
+C:\Users\wespa\OneDrive\LazarusProject\WesChat12\damnedthing.txt   18457 bytes   5/20/2026 6:59:04 AM  
+
+--- Time Statistics ---
+Start time: 7/4/2026 8:36:58 PM     End time: 7/4/2026 8:36:58 PM
+Total elapsed time: 0 hours, 0 min 0.0090 sec
+--- BPE Statistics ---
+Original text size (bytes/tokens): 18457
+Encoded text size (bytes/tokens): 5120
+Compression ratio: 3.6049
+Tokens per second: 2050777.7778
+
+--- Token Statistics ---
+Merged token instances: 4672
+Unmerged token instances: 448
+Mean token length: 3.6049
+
+--- Top 30 Most Frequent Merged Tokens ---
+   1  ID=   371  Count=      57  Symbol="the "
+   2  ID=   262  Count=      55  Symbol="  "
+   3  ID=   276  Count=      46  Symbol=", "
+   4  ID=   261  Count=      45  Symbol="th"
+   5  ID=   720  Count=      35  Symbol="a "
+   6  ID=   290  Count=      31  Symbol="ed "
+   7  ID=   480  Count=      30  Symbol="and "
+   8  ID=   317  Count=      28  Symbol="was "
+   9  ID=   321  Count=      27  Symbol="to "
+  10  ID=   266  Count=      24  Symbol="s "
+  11  ID=   311  Count=      23  Symbol="se"
+  12  ID=   501  Count=      23  Symbol="that "
+  13  ID=   300  Count=      23  Symbol="ing "
+  14  ID=   308  Count=      21  Symbol="--"
+  15  ID=   260  Count=      21  Symbol="e "
+  16  ID=   279  Count=      20  Symbol=". "
+  17  ID=   304  Count=      20  Symbol="of "
+  18  ID=   268  Count=      19  Symbol="t "
+  19  ID=   552  Count=      19  Symbol="as "
+  20  ID=   278  Count=      19  Symbol="y "
+  21  ID=   339  Count=      18  Symbol="is "
+  22  ID=   274  Count=      18  Symbol="an"
+  23  ID=   327  Count=      18  Symbol="in "
+  24  ID=   309  Count=      17  Symbol="at "
+  25  ID=   267  Count=      17  Symbol="d "
+  26  ID=   353  Count=      17  Symbol="an "
+  27  ID=   322  Count=      17  Symbol="e  "
+  28  ID=   363  Count=      16  Symbol="sh"
+  29  ID=   299  Count=      16  Symbol="at"
+  30  ID=   396  Count=      16  Symbol="; "
+Merged tokens never used: 209
+Merged tokens used only once: 203
+Top 30 merged tokens account for 756 / 4482 merged-token instances = 16.87%
+
+
+--- File Information ---
+Files used in symbol table: 
+C:\Users\wespa\OneDrive\LazarusProject\WesChat12\damnedthing.txt   18457 bytes   5/20/2026 6:59:04 AM  
+
+--- Time Statistics ---
+Start time: 7/4/2026 8:43:30 PM     End time: 7/4/2026 8:43:30 PM
+Total elapsed time: 0 hours, 0 min 0.0000 sec
+--- BPE Statistics ---
+Original text size (bytes/tokens): 18457
+Encoded text size (bytes/tokens): 5120
+Compression ratio: 3.6049
+Tokens per second: 18457.0000
+
+--- Token Statistics ---
+Merged token instances: 4672
+Unmerged token instances: 448
+Mean token length: 3.6049
+
+--- Top 30 Most Frequent Merged Tokens ---
+   1  ID=   371  Count=      57  Symbol="the "
+   2  ID=   262  Count=      55  Symbol="  "
+   3  ID=   276  Count=      46  Symbol=", "
+   4  ID=   261  Count=      45  Symbol="th"
+   5  ID=   720  Count=      35  Symbol="a "
+   6  ID=   290  Count=      31  Symbol="ed "
+   7  ID=   480  Count=      30  Symbol="and "
+   8  ID=   317  Count=      28  Symbol="was "
+   9  ID=   321  Count=      27  Symbol="to "
+  10  ID=   266  Count=      24  Symbol="s "
+  11  ID=   311  Count=      23  Symbol="se"
+  12  ID=   501  Count=      23  Symbol="that "
+  13  ID=   300  Count=      23  Symbol="ing "
+  14  ID=   308  Count=      21  Symbol="--"
+  15  ID=   260  Count=      21  Symbol="e "
+  16  ID=   279  Count=      20  Symbol=". "
+  17  ID=   304  Count=      20  Symbol="of "
+  18  ID=   268  Count=      19  Symbol="t "
+  19  ID=   552  Count=      19  Symbol="as "
+  20  ID=   278  Count=      19  Symbol="y "
+  21  ID=   339  Count=      18  Symbol="is "
+  22  ID=   274  Count=      18  Symbol="an"
+  23  ID=   327  Count=      18  Symbol="in "
+  24  ID=   309  Count=      17  Symbol="at "
+  25  ID=   267  Count=      17  Symbol="d "
+  26  ID=   353  Count=      17  Symbol="an "
+  27  ID=   322  Count=      17  Symbol="e  "
+  28  ID=   363  Count=      16  Symbol="sh"
+  29  ID=   299  Count=      16  Symbol="at"
+  30  ID=   396  Count=      16  Symbol="; "
+Merged tokens never used: 209
+Merged tokens used only once: 203
+Top 30 merged tokens account for 756 / 4482 merged-token instances = 16.87%
+

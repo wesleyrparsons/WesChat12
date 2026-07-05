@@ -4,24 +4,22 @@ unit Notes;
 
 { WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wesparsons.com.}
 
-Good flag names:
+Add lazy heap for pair operations in Symbolize.
 
+Good flag names:
 ParamsOnDevice: Boolean = False;
 HostParamsChanged: Boolean = False;
 
 Simpler for now:
-
 if not ParamsOnDevice then begin
   CopyParamsToDevice(WModelParams);
   ParamsOnDevice := True;
 end;
 
 After training updates GPU params, keep:
-
 ParamsOnDevice := True;
 
 After loading model:
-
 ParamsOnDevice := False;
 
 General

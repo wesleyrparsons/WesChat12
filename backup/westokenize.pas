@@ -42,8 +42,7 @@ type
 var
   StartSymbol: Integer = 260;                    // UTF-8 0.255, BOS, EOS, PAD, UNK is 259.
   nCorpus: Integer;
-  ElapsedMS: Int64;                              // For timing.
-  Hours, Mins: Int64;                            // For timing.
+  ElapsedMS, Hours, Mins: Int64;                 // For timing.
   Secs, MSecs: Double;                           // For timing.
   FileName, Reconstructed: String;               // Saving data.
   Magic: array[0..3] of Char = ('S', 'Y', 'M', 'T');  // For saving symbol table.
@@ -199,11 +198,29 @@ end;
 { Computations and reports }
 // Calculate time statistics.
 procedure CalculateTimeStatistics;
+var
+  RawMS, PauseMS: Int64;
 begin
-  // Total elapsed time.
-  ElapsedMS := MilliSecondsBetween(t0, t1) - Round(StopTime);
+  RawMS := MilliSecondsBetween(t1, t0);
+  PauseMS := Round(StopTime);
+
+  ElapsedMS := RawMS - PauseMS;
+
+
+Writeln('DEBUG timing:');
+Writeln('  t0       = ', DateTimeToStr(t0));
+Writeln('  t1       = ', DateTimeToStr(t1));
+Writeln('  RawMS    = ', RawMS);
+Writeln('  StopTime = ', StopTime:0:4);
+Writeln('  PauseMS  = ', PauseMS);
+Writeln('  ElapsedMS= ', ElapsedMS);
+Pause;
+
+  if ElapsedMS <= 0 then
+    ElapsedMS := 1;
+
   Hours := ElapsedMS div 3600000;
-  Mins := ElapsedMS div 60000;
+  Mins := (ElapsedMS mod 3600000) div 60000;
   Secs := (ElapsedMS mod 60000) / 1000.0;
 end;
 
@@ -451,6 +468,7 @@ begin
   Writeln('--- Time Statistics ---');
   Writeln('Start time: ', DateTimetoStr(t0), '     End time: ', DateTimeToStr(t1));
   Writeln('Total elapsed time: ', Hours, ' hours, ', Mins, ' min ', Secs: 4: 4, ' sec');
+  Writeln;
 end;
 
 // Report BPE statistics.
@@ -460,12 +478,13 @@ begin
   Writeln('Original text size (bytes/tokens): ', nCorpus);
   Writeln('Encoded text size (bytes/tokens): ', nTokenizedCorpus);
   Writeln('Compression ratio: ', nCorpus   / nTokenizedCorpus:0: 4);
-  // Guard
-  if ElapsedMS = 0 then ElapsedMS := 1000;
+
+  // New code.
+  // if ElapsedMS = 0 then ElapsedMS := 1000;
   if not FromSymbolTable then
     Writeln('Tokens per second: ', nCorpus / (ElapsedMS / 1000): 6: 4);
   Writeln;
-  end;
+end;
 
 begin
   CalculateTimeStatistics;
@@ -621,11 +640,11 @@ begin
   t0 := Now;       // Start of timing for entire tokenization;
   StopTime := 0;   // Time to subtract from timing.
 
-  // Create the tokenized corpus.     ''
-    nCorpus := Length(Corpus);
-    if not Training then
-      FileName := 'Inference';
-    TokenizeFromSymbolTable(FileName, TokenizedCorpus, Corpus);
+  // Create the tokenized corpus.
+  nCorpus := Length(Corpus);
+  if not Training then
+    FileName := 'Inference';
+  TokenizeFromSymbolTable(FileName, TokenizedCorpus, Corpus);
 
   // Timing.
   t1 := Now;
@@ -656,7 +675,6 @@ begin
     Writeln;
     Pause;
   end;
-
 end;
 
 end.

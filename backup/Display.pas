@@ -33,6 +33,7 @@ procedure DisplayX(const X: TScoresMatrix; const Part: TPart = B); overload;
 procedure VTPDisplayX(const Mess: string; const X: TScoresMatrix; const Part: TPart = B); overload;
 
 // Report information on program.
+procedure ReportKeyVariables;
 procedure ReportProgramInfo;
 
 implementation
@@ -72,6 +73,24 @@ begin
     Result := #0;   { means: no key }
 end;
 
+// Write key variables in program.
+procedure ReportKeyVariables;
+begin
+  Writeln('Epochs (MaxEpochs): ', MaxEpochs);
+  Case LearningStyle of
+    SlowLearning:
+      Writeln('Learning rate (slow): ', LearningRate: 9: 7, ' with 0..10: 0.01; 11..20: 0.005; 21..100: 0.0005; 101..300: 0.0001; else 0.00005. ');
+    FastLearning:
+      Writeln('Learning rate (fast): ', LearningRate: 9: 7, ' with 0..30: 0.01; 31..100: 0.005; 101..800: 0.001; else 0.0005. ');
+    RolledOffLearning:
+      Writeln('Learning rate (rolled of): ', LearningRate: 9: 7, ' Floor LR = ', FloorLearningRate: 9: 7, ' Base LR = ', BaseLearningRate: 9: 7, ' LR rolloff = ', RollOff: 9: 7, '.');
+  end;
+  Writeln('Maximum symbols: ', MaxSymbols);
+  Writeln('Weight decay: ', WeightDecay: 9: 7);
+  Writeln('Clip limit: ', ClipLimit: 9: 7);
+  Writeln('Dropouts used: ', Training);
+end;
+
 // Write information on state of program.
 procedure ReportProgramInfo;
 begin
@@ -91,16 +110,16 @@ begin
   Case LearningStyle of
     SlowLearning:
       // Display slow learning rate schedule.
-      Writeln('Learning rate (slow) = ', LearningRate: 9: 7, ' with 0..10: 0.01; 11..20: 0.005; 21..100: 0.0005; 101..300: 0.0001; else 0.00005. ');
+      Writeln('Learning rate (slow): ', LearningRate: 9: 7, ' with 0..10: 0.01; 11..20: 0.005; 21..100: 0.0005; 101..300: 0.0001; else 0.00005. ');
     FastLearning:
       // Display fast learning rate schedule.
-      Writeln('Learning rate (fast) = ', LearningRate: 9: 7, ' with 0..30: 0.01; 31..100: 0.005; 101..800: 0.001; else 0.0005. ');
+      Writeln('Learning rate (fast): ', LearningRate: 9: 7, ' with 0..30: 0.01; 31..100: 0.005; 101..800: 0.001; else 0.0005. ');
     RolledOffLearning:
       // Learning Rolled off learning rate.
-      Writeln('Learning rate (rolled of) = ', LearningRate: 9: 7, ' Floor LR = ', FloorLearningRate: 9: 7, ' Base LR = ', BaseLearningRate: 9: 7, ' LR rolloff = ', RollOff: 9: 7, '.');
+      Writeln('Learning rate (rolled of): ', LearningRate: 9: 7, ' Floor LR = ', FloorLearningRate: 9: 7, ' Base LR = ', BaseLearningRate: 9: 7, ' LR rolloff = ', RollOff: 9: 7, '.');
   end;
   if OverrideLearningRate <> -1.0 then
-    Writeln('Override LR = ', OverrideLearningRate: 9 :7);
+    Writeln('Override LR: ', OverrideLearningRate: 9 :7);
   Writeln('Current Learning Rate: ', LearningRate: 9: 7);
   Writeln('Weight decay: ', WeightDecay: 9: 7, '; Decay scale = ', DecayScale: 9: 7);
   Writeln('Clip limit: ', ClipLimit: 9: 7);

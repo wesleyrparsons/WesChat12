@@ -20,7 +20,7 @@ var
   VerboseTransform: Boolean = False;        // Displays X, Q, ScoresHead1, etc. in Transform units.
   VeryVerboseTokenize: Boolean = False;     // Very verbose in Tokenize units.
   DisplayTokenWork: Boolean = False;        // Show token work in Tokenize units.
-  DisplayMergeWork: Boolean = True;         // Show merge work in Tokenize units.
+  DisplayMergeWork: Boolean = False;         // Show merge work in Tokenize units.
   DisplayVerification: Boolean = False;     // Verify by rebuilding corpus in WesTokenize or displaying in GPT.
   DisplayEachByteRead: Boolean = False;     // Verify reading of bytes.
   SaveFiles: Boolean = True;                // Save various files, otherwise not saved.
@@ -31,7 +31,7 @@ var
 
 const
   // Model constants.
-  MaxEpochs = 100000;             // Number of epochs, loops over tokenized corpus.
+  MaxEpochs = 8000000;             // Number of epochs, loops over tokenized corpus.
   ModelDim = 192;                 // Number of loadings for a symbol.
   Proj = 4;                       // Projection to Hidden arrays.
   ModelDimProj = ModelDim * Proj; // Dimension of model of projected X matrix.
@@ -41,9 +41,9 @@ const
   nHead = 8;                      // Number of heads for multi-headed attention.
   HeadDim = ModelDim div nHead;   // Length of one head.
   nBlock = 6;                     // Number of blocks in transformer.
-  ADropOut = 0.1;                 // Probability of attention dropout.
-  MLPDropOut = 0.1;               // Probability of MLP dropout.
-  RDropout = 0.1;                 // Probability of residual dropout.
+  ADropOut = 0.05;                 // Probability of attention dropout.
+  MLPDropOut = 0.05;               // Probability of MLP dropout.
+  RDropout = 0.05;                 // Probability of residual dropout.
   DimVocab = 20000;               // Need maximum of vocab symbols to dimension array. Needed for Embeddings.
   RecentCount = 10;               // Rolling means in training.
   Version: shortstring = '1.2';   // Version 1.2.
@@ -133,7 +133,7 @@ type                                                                           /
   TPart = (B, E, F, G);                // Length = VocabSize * Dimension. But only use nSymbols in rows.
   TSymbolTable = TRBSVector;           // Array of symbols. So index of array is a symbol string.
   // LearningTypes.
-  TLearning = (FastLearning, SlowLearning, StaggeredLearning);
+  TLearning = (FastLearning, SlowLearning, RolledOffLearning);
   // Block types.
   TParamBlock = array[0..nBlock - 1] of record
     Wq, Wk, Wv, W0:                 TWeightTensor;         // Weights.

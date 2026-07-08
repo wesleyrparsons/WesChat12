@@ -61,25 +61,25 @@ begin
     // Check NaN/Inf before doing comparisons.
     if IsNan(P) then begin
       P := Eps;
-      Writeln('NaN probability at position ', i, ', token ', Tok, 'decoded = ', Decode(Tok), ', using P = ', Eps: 9: 7, '. Pausing....');
+      Writeln('NaN probability at position ', i, ', token ', Tok, 'decoded = ', Decode(Tok), ', using P = ', Eps: 9: 7, '. Pausing...');
       Pause;
     end;
 
     if IsInfinite(P) then begin
       P := 0.99999999;
-      Writeln('Infinite probability at position ', i, ', token ', Tok, 'decoded = ', Decode(Tok), ', using P = 0.99999999. Pausing....');
+      Writeln('Infinite probability at position ', i, ', token ', Tok, 'decoded = ', Decode(Tok), ', using P = 0.99999999. Pausing...');
       Pause;
     end;
 
     if P < 0.0 then begin
       P := Eps;
-      Writeln('Probability less than 0.0, ', P: 9: 7, ', at position ', i, ', token ', Tok, ' decoded = ', Decode(Tok), ', using P = ', P: 9: 7, '. Pausing....');
+      Writeln('Probability less than 0.0, ', P: 9: 7, ', at position ', i, ', token ', Tok, ' decoded = ', Decode(Tok), ', using P = ', P: 9: 7, '. Pausing...');
       Pause;
     end;
 
     if P > 1.0 then begin
       P := 0.99999999;
-      Writeln('Probability greater than 1.0, ', P: 9: 7, ', at position ', i, ', token ', Tok, ' decoded = ', Decode(Tok), ', using P = ', P: 9: 7, '. Pausing....');
+      Writeln('Probability greater than 1.0, ', P: 9: 7, ', at position ', i, ', token ', Tok, ' decoded = ', Decode(Tok), ', using P = ', P: 9: 7, '. Pausing...');
       Pause;
     end;
 
@@ -101,7 +101,7 @@ begin
   Result := Result / SeqLen;
 
   if TinyCount > 48 then begin
-    Writeln('Warning: ', TinyCount, ' probabilities were below epsilon of ', Eps: 9: 7, ' in this CE loss.  Pausing....');
+    Writeln('Warning: ', TinyCount, ' probabilities were below epsilon of ', Eps: 9: 7, ' in this CE loss.  Pausing...');
     Pause;
   end;
 end;
@@ -232,11 +232,6 @@ var
     Result := False;
     key := CheckForControlKey;
     case key of
-      'p', 'P': begin        // Pause work.
-        Write('Pause requested. Hit <CR> to continue.');
-        Readln;
-        Result := False;
-      end;
       'x', 'X': begin        // Exit training. Success, go to main menu.
         Writeln('Exit requested. Stopping training.');
         TrainSuccess := False;
@@ -244,7 +239,7 @@ var
         StopTraining := True;
       end;
       'n', 'N': begin        // Exit training. No success, go to inference.
-        Writeln('Stopping training.');
+        Writeln('Stopping training. Going to inference...');
         TrainSuccess := True;
         Result := True;
         StopTraining := True;
@@ -253,20 +248,22 @@ var
         VerboseTransform := not VerboseTransform;
         Writeln('Very verbose transform mode: ', VerboseTransform);
       end;
-      'l', 'L': begin        // Override learning rate.
-        Write('Enter override learning rate: ');
-        Readln(OverrideLearningRate);
-      end;
-      'i', 'I': begin        // Report program info.
+      'w', 'W': begin        // Report program info.
         Writeln;
         ReportProgramInfo;
         Pause;
       end;
-      'r', 'R': begin        // Display training info.
-        Writeln('Training. Work = ', ExtractFileName(WorkingDir), '; nTC = ', Length(TokenizedCorpus), ',  nVocab = ', nVocab, '; DimVocab = ', DimVocab, '; Seqlen = ', SeqLen,
-          '; Stride = ', Stride, '; ModelDim = ', ModelDim, '; nHead = ', nHead, '; nBlock = ', nBlock, '; Proj = ', Proj, '; DropOut = ', Training, '.');
-        Write(DateTimeToStr(Now), '  X = Exit training. P = Pause. N = Go to iNference. V = toggle Verbose mode.  ');
-        Writeln('L = set Learning rate. I = program Information. R = tRaining information. S = Save. Training...');
+      'p', 'P':              // Pause work.
+        Pause;
+      'l', 'L': begin        // Override learning rate.
+        Write('Enter override learning rate: ');
+        Readln(OverrideLearningRate);
+      end;
+      'i', 'I': begin        // Display training info.
+        Writeln('Training. Work = ', ExtractFileName(ExcludeTrailingPathDelimiter(WorkingDir)), '; nTC = ', Length(TokenizedCorpus), ',  nVocab = ', nVocab, '; DimVocab = ', DimVocab,
+          '; Seqlen = ', SeqLen, '; Stride = ', Stride, '; ModelDim = ', ModelDim, '; nHead = ', nHead, '; nBlock = ', nBlock, '; Proj = ', Proj, '; DropOut = ', Training, '.');
+        Write(DateTimeToStr(Now), '  X = Exit training. N = go to iNference. V = toggle Verbose mode.  ');
+        Writeln('I = program Information. P = Pause. L = set Learning rate. S = Save. Training...');
         Pause;
       end;
       's', 'S': begin        // Save model.
@@ -293,7 +290,6 @@ var
           Writeln('File ', ModelFileName, ' successfully saved.')
         else
           Writeln('File not saved.');
-
         Pause;
       end;
 
@@ -330,7 +326,7 @@ begin
 
   // Check DimVocab is large enough.
   if nVocab > DimVocab then begin
-    Writeln('nVocab > DimVocab. Aborting training....');
+    Writeln('nVocab > DimVocab. Aborting training...');
     TrainSuccess := False;
     Exit;
   end;
@@ -354,7 +350,8 @@ begin
     Start := 0;
     GlobalStep := 0;
     Writeln('Training started.');
-    Writeln('X = Exit training. P = Pause. V = toggle Verbose mode. I = program Information. T = Training information. S = Save. Training...');
+    Write(DateTimeToStr(Now), '  X = Exit training. N = go to iNference. V = toggle Verbose mode.  ');
+    Writeln('I = program Information. P = Pause. L = set Learning rate. S = Save. Training...');
 
     // Display embeddings.
     if VerboseTransform then begin
@@ -660,8 +657,8 @@ begin
       if (Epoch mod 10) = 1 then begin
 
         // Parameters.
-        Writeln('>> Work = ', ExtractFileName(WorkingDir), '; nTC = ', Length(TokenizedCorpus), '; nVocab = ', nVocab, '; DimVocab = ', DimVocab, '; Seqlen = ', SeqLen,
-          '; Stride = ', Stride, '; ModelDim = ', ModelDim, '; nHead = ', nHead, '; nBlock = ', nBlock, '; Proj = ', Proj, '; DropOut = ', Training, '.');
+        Writeln('>> Work = ', ExtractFileName(ExcludeTrailingPathDelimiter(WorkingDir)), '; nTC = ', Length(TokenizedCorpus), '; nVocab = ', nVocab, '; DimVocab = ', DimVocab,
+          '; Seqlen = ', SeqLen, '; Stride = ', Stride, '; ModelDim = ', ModelDim, '; nHead = ', nHead, '; nBlock = ', nBlock, '; Proj = ', Proj, '; DropOut = ', Training, '.');
 
         if OverrideLearningRate = -1.0 then begin
           // Not override learning rate.

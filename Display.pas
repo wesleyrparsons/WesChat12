@@ -33,6 +33,7 @@ procedure DisplayX(const X: TScoresMatrix; const Part: TPart = B); overload;
 procedure VTPDisplayX(const Mess: string; const X: TScoresMatrix; const Part: TPart = B); overload;
 
 // Report information on program.
+procedure ReportKeyVariables;
 procedure ReportProgramInfo;
 
 implementation
@@ -70,6 +71,24 @@ begin
     Result := ReadKey
   else
     Result := #0;   { means: no key }
+end;
+
+// Write key variables in program.
+procedure ReportKeyVariables;
+begin
+  Writeln('Maximum symbols: ', MaxSymbols);
+  Writeln('Epochs (MaxEpochs): ', MaxEpochs);
+  Case LearningStyle of
+    SlowLearning:
+      Writeln('Learning rate (slow): ', LearningRate: 9: 7, ' with 0..10: 0.01; 11..20: 0.005; 21..100: 0.0005; 101..300: 0.0001; else 0.00005. ');
+    FastLearning:
+      Writeln('Learning rate (fast): ', LearningRate: 9: 7, ' with 0..30: 0.01; 31..100: 0.005; 101..800: 0.001; else 0.0005. ');
+    RolledOffLearning:
+      Writeln('Learning rate (rolled of): ', LearningRate: 9: 7, ' Floor LR = ', FloorLearningRate: 9: 7, ' Base LR = ', BaseLearningRate: 9: 7, ' LR rolloff = ', RollOff: 9: 7, '.');
+  end;
+  Writeln('Weight decay: ', WeightDecay: 9: 7);
+  Writeln('Clip limit: ', ClipLimit: 9: 7);
+  Writeln('Dropouts used: ', Training);
 end;
 
 // Write information on state of program.

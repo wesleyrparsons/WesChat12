@@ -3,22 +3,14 @@ program WesChat;
 {$mode ObjFPC}{$H+}{$I proprietary.txt}
 
 { WesChat, Version 1.2.
-{ Note: Edited 7/2/2026 4 pm -- working from WesChat12 on OneDrive }
+{ Note: Edited 7/6/2026 8 am -- working from WesChat12 on OneDrive }
 { Note Tiny Stories change in Symbolize }
 {        Input Train        Input Query        Output
  Raw                        QueryString
  Bytes   Corpus             QueryCorpus
  Token   TokenizedCorpus    QueryTokenized     QueryOutput }
- Folder layout:
-    WorkRoot\
-      corpus\
-      symbols\
-      tokens\
-      models\
-      logs\
-      runs\
-      lists\
-      scratch\ }
+ Folder layout: WorkRoot \corpus \lists \logs \merges \models \scratch \symbols \tokens }
+
 uses
   Classes,
   CombineTables,
@@ -162,10 +154,15 @@ begin
     Result := DefaultDir + S;
 end;
 
-function DefaultMetaFile(const BaseName: string): string;
+function DefaultSymbolStatsFile(const BaseName: string): string;
+begin
+  Result := LogDir + CleanBaseName(BaseName) + '.sym.tok';
+end;
+
+{function DefaultMetaFile(const BaseName: string): string;
 begin
   Result := LogDir + ChangeFileExt(CleanBaseName(BaseName), '.meta');
-end;
+end;}
 
 function DefaultSymbolFile(const BaseName: string): string;
 begin
@@ -190,7 +187,7 @@ end;
 
 function DefaultTokenLogFile(const BaseName: string): string;
 begin
-  Result := LogDir + ChangeFileExt(CleanBaseName(BaseName), '.log');
+  Result := LogDir + ChangeFileExt(CleanBaseName(BaseName), '.tok.log');
 end;
 
 function DefaultLogFile(const BaseName: string): string;
@@ -199,6 +196,26 @@ begin
 end;
 
 procedure SaveSymbolizationFilesDefault(const BaseName: string);
+begin
+  if Length(SymbolTable) = 0 then begin
+    Writeln('No symbol table to save.');
+    Exit;
+  end;
+
+  Writeln('--- Saving Symbolization Files ---');
+
+  SymbolFileName := DefaultSymbolFile(BaseName);
+  SaveSymbolTable(SymbolFileName, SymbolTable);
+
+  if Length(Merges) > 0 then
+    SaveMergeTable(Merges, DefaultMergeFile(BaseName))
+  else
+    Writeln('No merges to save.');
+
+  SaveMetaData(DefaultSymbolStatsFile(BaseName));
+end;
+
+{procedure SaveSymbolizationFilesDefault(const BaseName: string);
 begin
   if Length(SymbolTable) = 0 then begin
     Writeln('No symbol table to save.');
@@ -215,7 +232,7 @@ begin
     Writeln('No merges to save.');
 
   SaveMetaData(DefaultMetaFile(BaseName));
-end;
+end;}
 
 procedure SaveTokenizationFilesDefault(const BaseName: string);
 begin
@@ -237,8 +254,7 @@ var
   SaveOut: Text;
   LogName: string;
 begin
-  if not SaveFiles then
-    Exit;
+  if not SaveFiles then Exit;
 
   LogName := DefaultLogFile(BaseName);
 
@@ -631,6 +647,7 @@ end;
 procedure TokenizeWithWes;
 var
   SourceChoice, SymbolChoice: string;
+  RawTokenCount, PaddedTokenCount: Integer;
 begin
   SetLength(TokenizedCorpus, 0);
 
@@ -674,18 +691,26 @@ begin
   end;
 
   Tokenizer := WesTokenizer;
+  Writeln('Tokenizing with WesChat...');
   RunWesTokenizeNoAutoSave(Corpus, TokenizedCorpus);
 
-  PadToSeqMultiple(TokenizedCorpus, SeqLen);
-  nTokenizedCorpus := Length(TokenizedCorpus);
+  RawTokenCount := Length(TokenizedCorpus);
 
-  Writeln('Tokenization complete. Tokens = ', Length(TokenizedCorpus), '; Symbols = ', nSymbols, '.');
+  PadToSeqMultiple(TokenizedCorpus, SeqLen);
+
+  PaddedTokenCount := Length(TokenizedCorpus);
+  nTokenizedCorpus := PaddedTokenCount;
+
+  Write('WesChat tokenization complete.');
+  Writeln(' Raw tokens = ', RawTokenCount, '; Padded tokens = ', PaddedTokenCount, '; Padding added = ', PaddedTokenCount - RawTokenCount, '; Symbols = ', nSymbols, '.');
 
   if AskYesNo('Save tokenization files?', True) then
     SaveTokenizationFilesDefault(CurrentBaseName);
 end;
 
 procedure TokenizeGPTSingleFile;
+var
+  PaddedTokenCount, RawTokenCount: Integer;
 begin
   SetLength(TokenizedCorpus, 0);
 
@@ -694,9 +719,13 @@ begin
   Tokenizer := GPT2Tokenizer;
   RunGPT2TokenizeNoAutoSave(CorpusFileName, TokenizedCorpus);
 
+  RawTokenCount := Length(TokenizedCorpus);
   PadToSeqMultiple(TokenizedCorpus, SeqLen);
+  PaddedTokenCount := Length(TokenizedCorpus);
   nTokenizedCorpus := Length(TokenizedCorpus);
 
+  Write('GPT tokenization complete.');
+  Writeln(' Raw tokens = ', RawTokenCount, '; Padded tokens = ', PaddedTokenCount, '; Padding added = ', PaddedTokenCount - RawTokenCount, '; Symbols = ', nSymbols, '.');
   Writeln('GPT tokenization complete. Tokens=', Length(TokenizedCorpus), '.');
 
   MaybeSaveTokenList;
@@ -799,13 +828,13 @@ begin
   end;
 
   if Length(TokenizedCorpus) > 0 then begin
-    if AskYesNo('Proceed to training now?', False) then begin
+    if AskYesNo('Proceed to training now?', True) then begin
       RunTrain(WModelParams, WModelState, TokenizedCorpus);
 
       if TrainSuccess then
         MaybeSaveModel;
 
-      if TrainSuccess and AskYesNo('Proceed to inference?', False) then
+      if TrainSuccess and AskYesNo('Proceed to inference?', True) then
         RunInfer(WModelParams, WModelState);
     end;
   end;
@@ -1360,6 +1389,9 @@ begin
   SetConsoleCP(CP_UTF8);
 
   Writeln('WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons.');
+  Writeln;
+
+  ReportKeyVariables;
   Writeln;
 
   Write('Enter WesChat work folder, blank for .\WesChatWork: ');

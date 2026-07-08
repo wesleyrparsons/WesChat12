@@ -68,8 +68,8 @@ var
   StartSymbol: Integer = 260;                    // UTF-8 0.255, BOS, EOS, PAD, UNK is 259.
   nCorpus: Integer;
   ElapsedMS, MElapsedMS: Int64;                  // For timing.
-  MHours, Hours, MMIns, Mins: Int64;             // For timing.
-  Secs, MSecs: Double;                           // For timing.
+  Hours, Mins: Int64;                            // For timing.
+  Secs: Double;                                  // For timing.
   Head, Tail: PTokenNode;                        // Start and end node of list of tokens.
   MergeCount: Integer;                           // Maximum allowed number of merges and actual number.
   Merges: TMergeArray;                           // Array recording the merges.
@@ -627,7 +627,7 @@ var
         Writeln('Verbose tokenize mode: ', VerboseTokenize);
         Pause;
       end;
-      'w', 'W': begin
+      'i', 'I': begin
         Writeln;
         ReportProgramInfo;
         Pause;
@@ -638,8 +638,8 @@ var
         Writeln;
         Writeln('Maximum symbols = ', MaxSymbols, '. Current symbols = ', Length(SymbolTable),
           '. Maximum merges = ', MaxMerges, '. Hash capacity = ', H.Capacity, '. Used slots = ', H.Used, '. Heap entries = ', Heap.Count, '. Best count = ', BestCount, '.');
-        Write(DateTimeToStr(Now), '  X = Exit program. B = Break out of merge loop. V = toggle Verbose mode. P = Pause.');
-        Writeln('  W = WesChat Information. M = Merging information. S = Save. Symbolizing and merging...');
+        Write(DateTimeToStr(Now), '  X = Exit program. B = Break out of merge loop. V = toggle Verbose mode. I = program Information. ');
+        Writeln('P = Pause. M = Merging information. S = Save. Symbolizing and merging...');
         Pause;
       end;
       's', 'S': begin
@@ -657,6 +657,7 @@ var
               'WesChatWork' + DirectorySeparator + 'symbols' + DirectorySeparator;
             ForceDirectories(SymbolDir);
           end;
+
           // Make sure the directory name is clean.
           SymbolDir := IncludeTrailingPathDelimiter(SymbolDir);
 
@@ -671,7 +672,6 @@ var
 
           SaveSymbolTable(f, SymbolTable);
 
-          // Writeln('File ', f, ' successfully saved.');
           Pause;
         except
           on E: Exception do begin
@@ -690,8 +690,8 @@ var
 begin
   MergeCount := 0;
 
-  Write(DateTimeToStr(Now), '  X = Exit program. B = Break out of merge loop. V = toggle Verbose mode.');
-  Writeln('  W = WesChat information. M = Merging information. Symbolizing and merging...');
+  Write(DateTimeToStr(Now), '  X = Exit program. B = Break out of merge loop. V = toggle Verbose mode. I = program Information. ');
+  Writeln('P = Pause. M = Merging information. S = Save. Symbolizing and merging...');
   Writeln;
 
   if DisplayMergeWork then
@@ -726,6 +726,7 @@ begin
 
     // Stop if no useful merges remain.
     if BestCount < 2 then begin
+      Writeln;
       Writeln('Stopping: no more valid merges at iteration ', m, '.');
       Break;
     end;
@@ -766,11 +767,6 @@ begin
   Hours := ElapsedMS div 3600000;
   Mins := ElapsedMS div 60000;
   Secs := (ElapsedMS mod 60000) / 1000.0;
-  // Merge eotal elapsed time.
-  MElapsedMS := MilliSecondsBetween(Mt0, Mt1) - Round(StopTime);
-  MHours := MElapsedMS div 3600000;
-  MMins := MElapsedMS div 60000;
-  MSecs := (MElapsedMS mod 60000) / 1000.0;
 end;
 
 // Calculate and symbols statistics.
@@ -898,13 +894,9 @@ begin
   Writeln('Start time: ', DateTimetoStr(t0), '     End time: ', DateTimeToStr(t1));
   Writeln('Total elapsed time: ', Hours, ' hours, ', Mins, ' min ', Secs: 4: 4, ' sec');
   Writeln('Number of symbols: ', nSymbols);
-  if not FromSymbolTable then begin
-    Writeln('Elapsed time applying merges: ', MHours, ' hours, ', Mmins, ' min ', Msecs: 4: 4, ' sec');
-  end;
   Writeln('Original text size (bytes/tokens): ', nCorpus);
   if not FromSymbolTable then begin
     Writeln('Tokens per second (total): ', nCorpus / (ElapsedMS / 1000): 6: 4);
-    Writeln('Tokens per second (merging): ', nCorpus / (MElapsedMS / 1000): 6: 4);
     Writeln;
   end;
 end;
@@ -934,9 +926,9 @@ begin
   // If caller passes blank filename, build a default.
   if OutName = '' then begin
     if Trim(WorkingName) <> '' then
-      OutName := WorkingName + '.meta'
+      OutName := ChangeFileExt(ExtractFileName(WorkingName), '') + '.sym.tok'
     else
-      OutName := 'symbolize.meta';
+      OutName := 'symbolize.sym.tok';
   end;
 
   // If caller passed no path, save into LogDir if available.
@@ -949,7 +941,7 @@ begin
 
   // Add .meta extension if missing.
   if ExtractFileExt(OutName) = '' then
-    OutName := OutName + '.meta';
+    OutName := OutName + '.sym.tok';
 
   OutDir := ExtractFilePath(OutName);
 
@@ -1161,7 +1153,6 @@ begin
   end;}
 
   Writeln('Symbolizing and merging ended.');
-  Pause;
 end;
 
 end.

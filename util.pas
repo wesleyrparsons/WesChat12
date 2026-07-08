@@ -775,7 +775,7 @@ begin
   end;
 end;
 
-// Procedures for updating the parameters. Herw, with decay.
+// Procedures for updating the parameters. Here, with decay.
 procedure CuUpdateParamDecay(Handle: TcublasHandle; const N: Integer; const LearningRate: Single; const Grad: PSingle; Param: PSingle);
 var
   Alpha: Single;
@@ -785,7 +785,7 @@ begin
   cublasSaxpy_v2(Handle, N, @Alpha, Grad, 1, Param, 1);
 end;
 
-// Procedures for updating the parameters. Herw, without decay.
+// Procedures for updating the parameters. Here, without decay.
 procedure CuUpdateParamNoDecay(Handle: TcublasHandle; const N: Integer; const LearningRate: Single; const Grad: PSingle; Param: PSingle);
 var
   Alpha: Single;
@@ -794,61 +794,40 @@ begin
   cublasSaxpy_v2(Handle, N, @Alpha, Grad, 1, Param, 1);
 end;
 
-{Same as NoDecay
-procedure CuUpdateParam(Handle: TcublasHandle; const N: Integer; const LearningRate: Single; const Grad: PSingle; Param: PSingle);
-var
-  Alpha: Single;
-begin
-  Alpha := -LearningRate;
-  cublasSaxpy_v2(Handle, N, @Alpha, Grad, 1, Param, 1);
-end;}
-
 // Update the weights and biases. At some point, eliminate non-cublas updates.
 procedure Optimization(var WModelParams: TWModelParams; const Blk: Integer);
 begin
   with WModelParams.ParamBlock[Blk] do begin
     // W weights: main attention output.
-    // UpdateParam(ModelDim * ModelDim, LearningRate, @W0.Grad[0,0], @W0.Value[0,0]);
     CuUpdateParamDecay(CuHandle, ModelDim * ModelDim, LearningRate, W0.dGrad, W0.dValue);
     // cblas_saxpy(ModelDim * ModelDim, -LearningRate, @W0.Grad[0, 0], 1, @W0.Value[0, 0], 1);
 
     // Wq, Wk, Wv weights: Q, K, V.
-    // UpdateParam(ModelDim * ModelDim, LearningRate, @Wq.Grad[0,0], @Wq.Value[0,0]);
     CuUpdateParamDecay(CuHandle, ModelDim * ModelDim, LearningRate, Wq.dGrad, Wq.dValue);
     // cblas_saxpy(ModelDim * ModelDim, -LearningRate, @Wq.Grad[0, 0], 1, @Wq.Value[0, 0], 1);
-    // UpdateParam(ModelDim * ModelDim, LearningRate, @Wk.Grad[0,0], @Wk.Value[0,0]);
     CuUpdateParamDecay(CuHandle, ModelDim * ModelDim, LearningRate, Wk.dGrad, Wk.dValue);
     // cblas_saxpy(ModelDim * ModelDim, -LearningRate, @Wk.Grad[0, 0], 1, @Wk.Value[0, 0], 1);
-    // UpdateParam(ModelDim * ModelDim, LearningRate, @Wv.Grad[0,0], @Wv.Value[0,0]);
     CuUpdateParamDecay(CuHandle, ModelDim * ModelDim, LearningRate, Wv.dGrad, Wv.dValue);
     // cblas_saxpy(ModelDim * ModelDim, -LearningRate, @Wv.Grad[0, 0], 1, @Wv.Value[0, 0], 1);
 
-    // UpdateParam(ModelDim * ModelDimProj, LearningRate, @W1.Grad[0,0], @W1.Value[0,0]);
     CuUpdateParamDecay(CuHandle, ModelDim * ModelDimProj, LearningRate, W1.dGrad, W1.dValue);
     // cblas_saxpy(ModelDim * ModelDimProj, -LearningRate, @W1.Grad[0, 0], 1, @W1.Value[0, 0], 1);
-    // UpdateParam(ModelDimProj * ModelDim, LearningRate, @W2.Grad[0,0], @W2.Value[0,0]);
     CuUpdateParamDecay(CuHandle, ModelDimProj * ModelDim, LearningRate, W2.dGrad, W2.dValue);
     // cblas_saxpy(ModelDimProj * ModelDim, -LearningRate, @W2.Grad[0, 0], 1, @W2.Value[0, 0], 1);
 
     // b1, b2: biases.
-    // UpdateParam(ModelDimProj, LearningRate, @b1.Grad[0], @b1.Value[0]);
     CuUpdateParamDecay(CuHandle, ModelDimProj, LearningRate, b1.dGrad, b1.dValue);
     // cblas_saxpy(ModelDimProj, -LearningRate, @b1.Grad[0], 1, @b1.Value[0], 1);
-    // UpdateParam(ModelDim, LearningRate, @b2.Grad[0], @b2.Value[0]);
     CuUpdateParamDecay(CuHandle, ModelDim,     LearningRate, b2.dGrad, b2.dValue);
     // cblas_saxpy(ModelDim, -LearningRate, @b2.Grad[0], 1, @b2.Value[0], 1);
 
     // Gamma1, Gamm2, Beta1, Beta2: Layer-Norm parameters.
-    // UpdateParam(ModelDim, LearningRate, @Gamma1.Grad[0], @Gamma1.Value[0]);
     CuUpdateParamNoDecay(CuHandle, ModelDim, LearningRate, Gamma1.dGrad, Gamma1.dValue);
     // cblas_saxpy(ModelDim, -LearningRate, @Gamma1.Grad[0], 1, @Gamma1.Value[0], 1);
-    // UpdateParam(ModelDim, LearningRate, @Gamma2.Grad[0], @Gamma2.Value[0]);
     CuUpdateParamNoDecay(CuHandle, ModelDim, LearningRate, Gamma2.dGrad, Gamma2.dValue);
     // cblas_saxpy(ModelDim, -LearningRate, @Gamma2.Grad[0], 1, @Gamma2.Value[0], 1);
-    // UpdateParam(ModelDim, LearningRate, @Beta1.Grad[0], @Beta1.Value[0]);
     CuUpdateParamNoDecay(CuHandle, ModelDim, LearningRate, Beta1.dGrad, Beta1.dValue);
     // cblas_saxpy(ModelDim, -LearningRate, @Beta1.Grad[0], 1, @Beta1.Value[0], 1);
-    // UpdateParam(ModelDim, LearningRate, @Beta2.Grad[0], @Beta2.Value[0]);
     CuUpdateParamNoDecay(CuHandle, ModelDim, LearningRate, Beta2.dGrad, Beta2.dValue);
     // cblas_saxpy(ModelDim, -LearningRate, @Beta2.Grad[0], 1, @Beta2.Value[0], 1);
 

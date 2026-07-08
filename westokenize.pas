@@ -206,18 +206,16 @@ begin
 
   ElapsedMS := RawMS - PauseMS;
 
+  {Writeln('DEBUG timing:');
+  Writeln('  t0       = ', DateTimeToStr(t0));
+  Writeln('  t1       = ', DateTimeToStr(t1));
+  Writeln('  RawMS    = ', RawMS);
+  Writeln('  StopTime = ', StopTime:0:4);
+  Writeln('  PauseMS  = ', PauseMS);
+  Writeln('  ElapsedMS= ', ElapsedMS);}
 
-Writeln('DEBUG timing:');
-Writeln('  t0       = ', DateTimeToStr(t0));
-Writeln('  t1       = ', DateTimeToStr(t1));
-Writeln('  RawMS    = ', RawMS);
-Writeln('  StopTime = ', StopTime:0:4);
-Writeln('  PauseMS  = ', PauseMS);
-Writeln('  ElapsedMS= ', ElapsedMS);
-pause;
-
-  if ElapsedMS < 0 then
-    ElapsedMS := 0;
+  if ElapsedMS <= 0 then
+    ElapsedMS := 1;
 
   Hours := ElapsedMS div 3600000;
   Mins := (ElapsedMS mod 3600000) div 60000;
@@ -468,6 +466,7 @@ begin
   Writeln('--- Time Statistics ---');
   Writeln('Start time: ', DateTimetoStr(t0), '     End time: ', DateTimeToStr(t1));
   Writeln('Total elapsed time: ', Hours, ' hours, ', Mins, ' min ', Secs: 4: 4, ' sec');
+  Writeln;
 end;
 
 // Report BPE statistics.
@@ -483,7 +482,7 @@ begin
   if not FromSymbolTable then
     Writeln('Tokens per second: ', nCorpus / (ElapsedMS / 1000): 6: 4);
   Writeln;
-  end;
+end;
 
 begin
   CalculateTimeStatistics;
@@ -639,11 +638,11 @@ begin
   t0 := Now;       // Start of timing for entire tokenization;
   StopTime := 0;   // Time to subtract from timing.
 
-  // Create the tokenized corpus.     ''
-    nCorpus := Length(Corpus);
-    if not Training then
-      FileName := 'Inference';
-    TokenizeFromSymbolTable(FileName, TokenizedCorpus, Corpus);
+  // Create the tokenized corpus.
+  nCorpus := Length(Corpus);
+  if not Training then
+    FileName := 'Inference';
+  TokenizeFromSymbolTable(FileName, TokenizedCorpus, Corpus);
 
   // Timing.
   t1 := Now;
@@ -674,7 +673,6 @@ begin
     Writeln;
     Pause;
   end;
-
 end;
 
 end.

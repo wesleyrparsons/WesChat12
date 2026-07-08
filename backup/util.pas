@@ -129,7 +129,7 @@ begin
   if not CublasPresent or not CudartPresent or not WesChatkernelPresent then begin
       Writeln('One of the following DLLs is required but not present: cublas64_13.dll, cudart64_13.dll, WesChatKernel12.dll.');
       Pause;
-      Halt;
+      // Halt;
   end;
 end;
 
@@ -775,7 +775,7 @@ begin
   end;
 end;
 
-// Procedures for updating the parameters. Herw, with decay.
+// Procedures for updating the parameters. Here, with decay.
 procedure CuUpdateParamDecay(Handle: TcublasHandle; const N: Integer; const LearningRate: Single; const Grad: PSingle; Param: PSingle);
 var
   Alpha: Single;

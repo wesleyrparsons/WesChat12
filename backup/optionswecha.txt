@@ -1,0 +1,41 @@
+
+
+  // Writeln('  VV: VeryVerbose := True');
+  // Writeln('  NVV: VeryVerbose := False');
+  Writeln('  VTO: VerboseTokenize := True');
+  Writeln('  NVTO: VerboseTokenize := False');
+  Writeln('  DC: DisplayCorpus := True');
+  Writeln('  NDC: DisplayCorpus := False');
+  Writeln('  DTW: DisplayTokenWork := True');
+  Writeln('  NDTW: DisplayTokenWork := False');
+  Writeln('  DMW: DisplayMergeWork := True');
+  Writeln('  NDMW: DisplayMergeWork := False');
+  Writeln('  DV: DisplayVerification := True');
+  Writeln('  NDV: DisplayVerification := False');
+  Writeln('  DEBR: DisplayEachByteRead := True');
+  Writeln('  NDEBR: DisplayEachByteRead := False');
+  Writeln('  SPST: SavePartialSymbolTable := True');
+  Writeln('  NSPST: SavePartialSymbolTable := False');
+  Writeln('  M: Maximum merges: ');
+  Writeln('  PC: Maximum pair count: ');
+  Writeln('  PSTT: PartialSymbolTableTrigger: ')
+
+  Writeln('  DE: DisplayEpoch := True');
+  Writeln('  DS: DisplayStage := True; DisplayEpoch := True');
+  Writeln('  DSS: DisplaySubstage := True; DisplayStage := True; DisplayEpoch := True');
+  Writeln('  ND: DisplayEpoch := False; DisplayStage := False; DisplaySubsubstage := True');
+  Writeln('  DW: DisplayWindow := True');
+  Writeln('  NDW: DisplayWindow := False');
+
+  Writeln('  DNP: DoNotPause := True');
+  Writeln('  DP: DoNotPause := False');
+
+  Writeln('  SF: SaveFiles := True');
+  Writeln('  NSF: SaveFiles := False');
+
+  Writeln('  LR: Learning rate: ');                     
+  Writeln('  T: Temperature: ');       
+
+
+            
+elim testvector

@@ -24,7 +24,7 @@ var
 begin
   with WModelParams.ParamBlock[Blk] do with WModelState.StateBlock[Blk] do begin
 
-    Stage := Blk * 2 + 4;
+    Stage := Blk * 4 + 4;
     // Display X6.Value matrix. X6.Value is in cublas.
     if VerboseTransform then begin
       cudaMemcpy(@X6.Value[0, 0], X6.dValue, XSize, cudaMemcpyDeviceToHost);
@@ -34,11 +34,12 @@ begin
     // BACK PROPAGATION. FEED BACKWARD NETWORK.
 
       // 2E. Backprop Split and Addition/Accumulation. Backprop through final residual. Obtain b2 from X6.
-      if DisplayStage then Writeln('' : Stage, 'Stage  2, Block ', Blk, ',  Transform Backprop');
+      if DisplayStage then Writeln('' : Stage, 'Stage 1, Block ', Blk, ', Transform Backprop');
       if DisplaySubstage then Writeln('': Stage, '2E. Transform Backprop, Split, Residual Dropout');
 
       // Backprop Split X7 Grad into X4 and X6: Input X4.Grad, X7.Grad. Output dX.Grad.
-      // Equation: X7.Grad = X4.Grad + X6.Grad. X4.Grad += X7.Grad. All in R^{L x D}.
+      // Forward: X7 = X4 + X6.
+      // Backward:// X4.Grad := X7.Grad; X6.Grad := X7.Grad.
       CuGradSplit(CuHandle, X7.dGrad, X4.dGrad, X6.dGrad, SeqLen, ModelDim);
 
       // Dropout Backward.
@@ -46,9 +47,7 @@ begin
         LaunchDropoutBackward(X6.dGrad, SeqLen * ModelDim, RDropout, RDropoutSeed);
 
       // Backprop X6 Grad creates b2 Grad. Input X6.Grad. Output b2.Grad.
-      // Equation: b2.Grad = sum of X6.Grad. b2.Grad is R^{L x D}. X6.Grad in R^{L x D}.
-      // for i := 0 to SeqLen - 1 do
-      //   AddScaled(ModelDim, 1.0, @X6.Grad[i,0], @b2.Grad[0]);
+      // Equation: b2.Grad = sum of X6.Grad. // b2.Grad is R^{D}. X6.Grad in R^{L x D}.
       LaunchAddBiasRowsBackward(X6.dGrad, b2.dGrad, SeqLen, ModelDim);
 
       // 2D. Backprop Multiplication/Overwrite. Obtain W2 from Hidden2 and X6.
@@ -56,14 +55,11 @@ begin
 
       // Backprop X6 Grad creates W2 Grad: Input Hidden2ᵀ.Value, X6.Grad. Output W2.Grad.
       // Equation: W2.Grad = Hidden2ᵀ.Value · X6.Grad. W2.Grad is R^{DB x D}. Hidden2ᵀ.Value is R^{DB x L}. X6.Grad in R^{L x D}.
-      // MatMulTN(@Hidden2.Value, @X6.Grad, @W2.Grad, ModelDimProj, ModelDim, SeqLen);
       CuMatMulFullTN(CuHandle, Hidden2.dValue, X6.dGrad, W2.dGrad, ModelDimProj, ModelDim, SeqLen, ModelDimProj, ModelDim, ModelDim);
 
       // Backprop X6 Grad creates Hidden2 Grad: Input
       // Equation: Hidden2.Grad = X6.Grad * W2ᵀ.Value. X6.Grad in R^{L x D}. W2ᵀ.Value is R^{D x DB}. Hidden2.Grad is R^{L x DB}.
-      // MatMulNT(@X6.Grad, @W2.Value, @Hidden2.Grad, SeqLen, ModelDimProj, ModelDim);
       CuMatMulNT(CuHandle, X6.dGrad, W2.dValue, Hidden2.dGrad, SeqLen, ModelDimProj, ModelDim);
-      // CuMatMulFullNT(CuHandle, X6.dGrad, W2.dValue, Hidden2.dGrad, SeqLen, ModelDimProj, ModelDim, ModelDim, ModelDim, ModelDimProj);  Backup.
 
       // Dropout Backward.
       if Training then
@@ -74,20 +70,13 @@ begin
 
       // Backprop BackReLU activation on Hidden: Input Hidden2.Grad. Output Hidden1.Grad.
       // Equation: Hidden1.Grad = ReLUMaskBackward(Hidden2.Grad). Hidden1.Grad is R^{L x DB}. Hidden2.Value is R^{L x DB}.
-      // for i := 0 to SeqLen - 1 do for j := 0 to ModelDimProj - 1 do
-      //  if Hidden1.Value[i, j] > 0.0 then
-      //    Hidden1.Grad[i, j] := Hidden2.Grad[i, j]
-      //  else
-      //    Hidden1.Grad[i, j] := 0.0;
       LaunchReLUBackward(Hidden1.dValue, Hidden2.dGrad, Hidden1.dGrad, SeqLen, ModelDimProj);
 
       // 2B. Backprop Addition/Accumulate. Obtain b1 from Hidden1.
       if DisplaySubstage then Writeln('': Stage, '2B. Transform Backprop , Obtain b1 from Hidden1');
 
       // Backprop Hidden Grad creates b1 Grad: Input Hidden1.Grad. Output b1.Grad.
-      // Equation: b1.Grad = sum of Hidden1.Grad. b1.Grad is R^{L x DB}. Hidden1.Grad in R^{L x DB}.
-      // for i := 0 to SeqLen - 1 do
-      //   AddScaled(ModelDimProj, 1.0, @Hidden1.Grad[i,0], @b1.Grad[0]);
+      // Equation: b1.Grad = sum of Hidden1.Grad. b1.Grad is R^{DB}. Hidden1.Grad in R^{L x DB}.
       LaunchAddBiasRowsBackward(Hidden1.dGrad, b1.dGrad, SeqLen, ModelDimProj);
 
       // 2A. Backprop Multiplication/Overwrite. Obtain W1 from X5ᵀ and Hidden1.
@@ -95,12 +84,10 @@ begin
 
       // Backprop Hidden1 Grad creates W1 Grad. Input: X5ᵀ.Value, Hidden1.Grad. Output: W1.Grad.
       // Equation: W1.Grad = X5ᵀ.Value · Hidden1.Grad. W1.Grad is R^{D x DB}. X5ᵀ.Value is R^{L x D}. Hidden1.Grad is R^{D x DB).
-      // MatMulTN(@X5.Value, @Hidden1.Grad, @W1.Grad, SeqLen, ModelDimProj, ModelDim);
       CuMatMulFullTN(CuHandle, X5.dValue, Hidden1.dGrad, W1.dGrad, ModelDim, ModelDimProj, SeqLen, ModelDim, ModelDimProj, ModelDimProj);
 
       // Backprop Hidden1 Grad accumulates into X5 Grad. Input: Hidden1.Grad, W1ᵀ.Value. Output: X5.Grad.
       // Equation: X5.Grad = Hidden1.Grad · W1ᵀ.Value. Hidden1.Grad is R^{D x DB). W1ᵀ.Value is R^{DB x D}. X5.Grad is R^{L x D}.
-      // MatMulAccNT(CuHandle, @Hidden1.Grad, @W1.Value, @X5.Grad, SeqLen, ModelDim, ModelDimProj);
       CuMatMulAccNT(CuHandle, Hidden1.dGrad, W1.dValue, X5.dGrad, SeqLen, ModelDim, ModelDimProj);
 
       // 1. BACKPROP STAGE TRANSFORMER.
@@ -110,9 +97,9 @@ begin
     // X5.Grad, X4.Grad, LNXhat2 is R^{L x D}. Gamma2.Value, Gamma2.Grad, Beta2.Grad is R^{D}. LNInvStd2 is R^{L}.
     if DisplayStage then Writeln('' : Stage, 'Stage  2, Block ', Blk, ',  Transform Backprop');
     if DisplaySubstage then Writeln('': Stage, '1J. Transform Backprop Stage 1J, Layer Norm Backward X5');
+
     // Backprop Layer-Norm: Input X5.Grad, Gamma2.Grad, Beta2.Value. Output X4.Grad, Gamma2.Grad, Beta2.Grad.
     // Equation: X4.Grad, Gamma2.Grad, Beta2.Grad = LayerNorm(X5.Grad, Gamma2.Value, Beta2.Value).
-    // LayerNormBackward(X5.Grad, X4.Grad, Gamma2.Grad, Beta2.Grad, SeqLen, Gamma2.Value, LNXHat2, LNInvStd2);
     LaunchLayerNormBackward(X5.dGrad, dX4FromLN2, Gamma2.dValue, dLNXHat2, dLNInvStd2, Gamma2.dGrad, Beta2.dGrad, SeqLen, ModelDim);
     CuAccumulateGrad(CuHandle, dX4FromLN2, X4.dGrad, SeqLen, ModelDim);
 
@@ -123,10 +110,9 @@ begin
     end;
 
     // 1I. Backprop Split. Input: X1.Grad. Output: X3.Grad. Output X4.Grad,
-    if DisplaySubstage then Writeln('': Stage, '1I. Transform Backprop Stage 1I, Split X4 = X1 + X3');
+    if DisplaySubstage then Writeln('': Stage, '1I. Transform Backprop Stage 1I, Split X4 = X + X3');
 
     // Equation: X4 = X + X3, so dX += dX4 and dX3 += dX4. All in R^{L x D}.
-    // GradSplit(X4.Grad, X.Grad, X3.Grad, SeqLen, ModelDim);
     cuGradSplit(cuHandle, X4.dGrad, X.dGrad, X3.dGrad, SeqLen, ModelDim);
 
     // To find the change for the weights: dW0 = X6ᵀ ·  dX7.
@@ -137,13 +123,11 @@ begin
     // 1H. Backprop Mutiplication/Overwrite. Obtain W0 Grad from X3 Grad: Input: X2ᵀ.Value, X3.Grad. Output: W0.Grad.
     if DisplaySubstage then Writeln('': Stage, '1H. Transform Backprop, Obtain W0 Grad from X3 Grad');
 
-    // Equations: W0.Grad = X2ᵀ.Value · X3.Grad. W0.Grad is R^{L x D}. X3.Grad is R^{L x D}.
-    // MatMulTN(@X2.Value, @X3.Grad, @W0.Grad, ModelDim, SeqLen, ModelDim);
+    // Equations: W0.Grad = X2ᵀ.Value · X3.Grad. // W0.Grad is R^{D x D}. X3.Grad is R^{L x D}.
     CuMatMulFullTN(CuHandle, X2.dValue, X3.dGrad, W0.dGrad, ModelDim, ModelDim, SeqLen, ModelDim, ModelDim, ModelDim);
 
     // Backprop Create X2.Grad from X3.Grad: Input: X3.Grad, W0ᵀ.Value. Output: X2.Grad.
     // Equations: X2.Grad = X3.Grad · W0ᵀ. W0.Grad is R^{L x D}. X2.Grad, X3.Grad is R^{L x D}. W0ᵀ.Value is R^{D x L}.
-    // MatMulNT(@X3.Grad, @W0.Value, @X2.Grad, SeqLen, ModelDim, ModelDim);
     CuMatMulNT(CuHandle, X3.dGrad, W0.dValue, X2.dGrad, SeqLen, ModelDim, ModelDim);
 
     // Display X3.Grad matrix. X3.Grad already in cblas.
@@ -158,15 +142,11 @@ begin
     // Equations: Scores2.Grad = X2.Grad · Vᵀ.Value. Scores2.Grad is R^{L x L}. X2.Grad is R^{L x D}. Vᵀ.Value is R^{D x L}.
     for h := 0 to nHead - 1 do begin
       HeadOffset := h * HeadDim;
-      // MatMulFullNT(@X2.Grad[0, HeadOffset], @V.Value[0, HeadOffset],
-      //   @ScoresHead2[h].Grad[0,0], SeqLen, SeqLen, HeadDim, ModelDim, ModelDim, SeqLen);
       CuMatMulFullNT(CuHandle, PSingle(X2.dGrad) + HeadOffset, PSingle(V.dValue) + HeadOffset,
         ScoresHead2[h].dGrad, SeqLen, SeqLen, HeadDim, ModelDim, ModelDim, SeqLen);
 
       // Backprop Create VHead Grad from X2Head Grad: Input ScoresHead2ᵀ.Value, X2Head.Grad. Output: VHead.Grad.
       // Equations: VHead.Grad = ScoresHead2ᵀ.Value · X2Head.Grad. VHead.Grad is R^{L x D}. ScoresHead2ᵀ.Value is R^{L x L}. X2Head.Grad is R^{L x D}.
-      // MatMulFullTN(@ScoresHead2[h].Value[0,0], @X2.Grad[0, HeadOffset],
-      //   @V.Grad[0, HeadOffset], SeqLen, HeadDim, SeqLen, SeqLen, ModelDim, ModelDim);
       CuMatMulFullTN(CuHandle, ScoresHead2[h].dValue, PSingle(X2.dGrad) + HeadOffset,
         PSingle(V.dGrad) + HeadOffset, SeqLen, HeadDim, SeqLen, SeqLen, ModelDim, ModelDim);
 
@@ -178,19 +158,15 @@ begin
 
       // Backprop Softmax: Input ScoresHead2.Value ScoresHead2.Grad. Output ScoresHead1.Grad.
       // Equation: ScoresHead1.Grad = SoftMaxBackwards(ScoresHead2.Value, ScoresHead2.Grad).
-      // for i := 0 to SeqLen - 1 do
-      // SoftmaxBackward(ScoresHead2[h].Value[i], ScoresHead2[h].Grad[i], ScoresHead1[h].Grad[i]);
-      LaunchSoftmaxBackward(ScoresHead2[h].dValue, ScoresHead2[h].dGrad, ScoresHead1[h].dGrad, SeqLen, SeqLen);
+      // ScoresHead1.dValue contains the pre-dropout softmax output.
+      // ScoresHead2.dGrad has already passed through dropout backward.
+      LaunchSoftmaxBackward(ScoresHead1[h].dValue, ScoresHead2[h].dGrad, ScoresHead1[h].dGrad, SeqLen, SeqLen);
 
       // Scaling after Softmax.
-      // Scale(SeqLen * SeqLen, InvSqrtHeadDim, @ScoresHead1[h].Grad[0,0]);
-      // cblas_sscal(SeqLen * SeqLen, InvSqrtHeadDim, @ScoresHead1[h].Grad[0,0], 1); Old.
       CuScale(CuHandle, SeqLen * SeqLen, InvSqrtHeadDim, ScoresHead1[h].dGrad);
 
       // Backprop AutoRegression.
       // Equation: ScoresHead1.Grad = Unmask(ScoresHead1.Grad).
-      // for i := 0 to SeqLen - 1 do for j := i + 1 to SeqLen - 1 do
-      //   ScoresHead1[h].Grad[i, j] := 0.0;
       LaunchAutoRegressiveMaskBackward(ScoresHead1[h].dGrad, SeqLen);
 
       // Backprop standardization. Input: ScoresHead1.Grad. Output: ScoresHead1.Grad.
@@ -199,13 +175,11 @@ begin
       // 1E. Backprop multiplication. Obtain QHead.Grad and KHead.Grad.
       // Backprop Multiplication: Input ScoresHead1.Grad, KHead.Value. Output QHead.Grad.
       // Equation: QHead.Grad = ScoresHead1.Grad · KHead.Value. QHead.Grad, ScoresHead1.Grad in R^{L x L}. KHead.Value in R^{L x HeadDim}.
-      // MatMulFullNN(@ScoresHead1[h].Grad[0,0], @K.Value[0, HeadOffset], @Q.Grad[0, HeadOffset], SeqLen, HeadDim, SeqLen, SeqLen, ModelDim, ModelDim);
       CuMatMulFullNN(CuHandle, ScoresHead1[h].dGrad, PSingle(K.dValue) + HeadOffset,
         PSingle(Q.dGrad) + HeadOffset, SeqLen, HeadDim, SeqLen, SeqLen, ModelDim, ModelDim);
 
       // Backprop Multiplication: Input ScoresHead1.Gradᵀ, Q.Value. Output K.Grad.
       // Equation: K.Grad = ScoresHead1.Gradᵀ · Q.Value. K.Grad in R^{L x D}. ScoresHead1.Gradᵀ in R^{L · L}. Q.Value in R^{L x D}.
-      // MatMulFullTN(@ScoresHead1[h].Grad[0,0], @Q.Value[0, HeadOffset], @K.Grad[0, HeadOffset], SeqLen, HeadDim, SeqLen, SeqLen, ModelDim, ModelDim);
       CuMatMulFullTN(CuHandle, ScoresHead1[h].dGrad, PSingle(Q.dValue) + HeadOffset,
         PSingle(K.dGrad) + HeadOffset, SeqLen, HeadDim, SeqLen, SeqLen, ModelDim, ModelDim);
     end; // h loop.
@@ -219,8 +193,8 @@ begin
     // 1D. RoPE Backward.
     if DisplaySubstage then Writeln('': Stage, '1D. Transform Backprop, RoPE');
 
-    LaunchRoPEBackward(Q.dGrad, WModelState.dInvFreq, SeqLen, ModelDim);
-    LaunchRoPEBackward(K.dGrad, WModelState.dInvFreq, SeqLen, ModelDim);
+    LaunchRoPEBackward(Q.dGrad, WModelState.dInvFreq, SeqLen, nHead, HeadDim, ModelDim);
+    LaunchRoPEBackward(K.dGrad, WModelState.dInvFreq, SeqLen, nHead, HeadDim, ModelDim);
 
     // 1C. Backprop multiplication/overwrite. Obtain W_.Grad and X1_q.Grad for Q, K, and V.
     if DisplaySubstage then Writeln('': Stage, '1C. Transform Backprop, Obtain W_.Grad and X1_q.Grad for Q, K, and V');
@@ -230,57 +204,37 @@ begin
      X1q.Grad = Q.Grad · Wqᵀ.Value}
     // Backprop Create Wq.Grad from Q.Grad: Input X1ᵀ.Value · Q.Grad. Output Wq.Grad.
     // Equation: Wq.Grad = X1ᵀ · Q.Grad. Wq.Grad in R^{D x D}. X1ᵀ in R^{D x L}. Q.Grad in R^{L x D}.
-    // MatMulTN(@X1.Value[0, 0], @Q.Grad[0, 0], @Wq.Grad[0, 0], ModelDim, ModelDim, SeqLen);
     CuMatMulFullTN(CuHandle, X1.dValue, Q.dGrad, Wq.dGrad, ModelDim, ModelDim, SeqLen, ModelDim, ModelDim, ModelDim);
 
     // Backprop Create X1q from Q.Grad: Input Q.Grad, Wqᵀ.Value. Output X1q.Grad.
     // Equation: X1q.Grad = Q.Grad · Wqᵀ. X1q.Grad in R^{L x D}. Q.Grad in R^{L x D}. Wqᵀ.Value in R^{D · D}.
-    // MatMulNT(@Q.Grad[0, 0], @Wq.Value[0, 0], @X1q.Grad[0, 0], SeqLen, ModelDim, ModelDim);
     CuMatMulNT(CuHandle, Q.dGrad, Wq.dValue, X1q.dGrad, SeqLen, ModelDim, ModelDim);
 
     {Wk.Grad = X1ᵀ.Value · K.Grad
      X1k.Grad = K.Grad · Wkᵀ.Value}
     // Backprop Create Wk Grad from K Grad: Input X1ᵀ.Value · K.Grad. Output Wk.Grad.
     // Equation:  Wk.Grad = X1ᵀ.Value · K.Grad. Wk.Grad in R^{D x D}. X1ᵀ.Value in R^{D x L}. K.Grad in R^{L x D}.
-    // MatMulTN(@X1.Value[0, 0], @K.Grad[0, 0], @Wk.Grad[0, 0], ModelDim, ModelDim, SeqLen);
     CuMatMulFullTN(CuHandle, X1.dValue, K.dGrad, Wk.dGrad, ModelDim, ModelDim, SeqLen, ModelDim, ModelDim, ModelDim);
 
     // Backprop Create X1k.Grad from K.Grad. Input K.Grad, Wkᵀ.Value. Output X1k.Grad.
     // Equation: X1k.Grad = K.Grad · Wkᵀ.Value. X1k.Grad in R^{L x D}. K.Grad in R^{L x D}. Wkᵀ.Value in R^{D · D}.
-    // MatMulNT(@K.Grad[0, 0], @Wk.Value[0, 0], @X1k.Grad[0, 0], SeqLen, ModelDim, ModelDim);
     CuMatMulNT(CuHandle, K.dGrad, Wk.dValue, X1k.dGrad, SeqLen, ModelDim, ModelDim);
 
     {Wv.Grad = X1ᵀ · V.Grad
      X1v.Grad = V.Grad · Wvᵀ.Value}
     // Backprop Create Wv.Grad from V.Grad: Input X1ᵀ.Value · V.Grad. Output Wv.Grad.
     // Equation: Wv.Grad = X1ᵀ.Value · V.Grad. Wv.Grad in R^{D x D}. X1ᵀ in R^{D x L}. V.Grad in R^{L x D}.
-    // MatMulTN(@X1.Value, @V.Grad, @Wv.Grad, ModelDim, ModelDim, SeqLen);
     CuMatMulFullTN(CuHandle, X1.dValue, V.dGrad, Wv.dGrad, ModelDim, ModelDim, SeqLen, ModelDim, ModelDim, ModelDim);
 
     // Backprop Create X1v.Grad from V.Grad. Input V.Grad, Wvᵀ. Value. Output X1v.Grad.
     // Equation: X1v.Grad = V.Grad times Wvᵀ.Value. X1v.Grad = V.Grad · WVᵀ.Value. V.Grad in R^{L x D}. Wvᵀ.Value in R^{D · D}.
-    // MatMulNT(@V.Grad, @Wv.Value, @X1v.Grad, SeqLen, ModelDim, ModelDim);
     CuMatMulNT(CuHandle, V.dGrad, Wv.dValue, X1v.dGrad, SeqLen, ModelDim, ModelDim);
 
-    // 1B. Backprop Merge: Obtain X1 Grad as sum of Grads. Input X1q.Grad, X1k.Grad, and X1v.Grad. Output X1.Grad.
-    if DisplaySubstage then Writeln('': Stage, '1B. Transform Backprop, Obtain X1 Grad as sum of Grads');
-
     // Equation:  X1.Grad = X1q.Grad + X1k.Grad + X1v.Grad. All in R^{L x D}.
-    // for i := 0 to SeqLen - 1 do for j := 0 to ModelDim - 1 do
-    //   X1.Grad[i, j] := X1q.Grad[i, j] + X1k.Grad[i, j] + X1v.Grad[i, j];
-    // X1.dGrad := X1q.dGrad.
-    {cublasScopy_v2(CuHandle, SeqLen * ModelDim, X1q.dGrad, 1, X1.dGrad, 1);
-    // X1.dGrad += X1k.dGrad.
-    CuAddScaled(CuHandle, SeqLen * ModelDim, 1.0, X1k.dGrad, X1.dGrad);
-    // X1.dGrad += X1v.dGrad.
-    CuAddScaled(CuHandle, SeqLen * ModelDim, 1.0, X1v.dGrad, X1.dGrad);
+    // 1B. Backprop Merge: X1.Grad = X1q.Grad + X1k.Grad + X1v.Grad.
+    if DisplaySubstage then Writeln('': Stage, '1B. Transform Backprop, Obtain X1 Grad as sum of Q, K, and V paths');
 
-    // Backprop Accumulate: Input X1.Grad, X4.Grad. Output X1.Grad.
-    // Equation: X1.Grad = X1.Grad + X4.Grad. All R^{L x D}.
-    // AccumulateGrad(X4.Grad, X1.Grad, SeqLen, ModelDim);}
-
-    // At 1B, accumulate Q/K/V paths into the existing X1.dGrad.
-    // Do not overwrite X1.dGrad.
+    // X1.dGrad was zeroed at the beginning of this training window.
     CuAccumulateGrad(CuHandle, X1q.dGrad, X1.dGrad, SeqLen, ModelDim);
     CuAccumulateGrad(CuHandle, X1k.dGrad, X1.dGrad, SeqLen, ModelDim);
     CuAccumulateGrad(CuHandle, X1v.dGrad, X1.dGrad, SeqLen, ModelDim);
@@ -295,7 +249,6 @@ begin
     if DisplaySubstage then Writeln('': Stage, '1A. Transform Backprop, Layer Norm X1');
 
     // Equation: X.Grad, Gamma1.Grad, Beta1.Grad = LayerNorm(X1.Value, X1.Grad, Gamma1.Value, Beta1.Value). X.Grad, X1.Grad in R^{L x D}. Gamma1.Grad, Beta1.Grad in R^{D}.
-    // LayerNormBackward(X1.Grad, X.Grad, Gamma1.Grad, Beta1.Grad, SeqLen, Gamma1.Value, LNXhat1, LNInvStd1);
     LaunchLayerNormBackward(X1.dGrad, dXFromLN1, Gamma1.dValue, dLNXHat1, dLNInvStd1, Gamma1.dGrad, Beta1.dGrad, SeqLen, ModelDim);
     CuAccumulateGrad(CuHandle, dXFromLN1, X.dGrad, SeqLen, ModelDim);
 

@@ -3,8 +3,8 @@ program WesChat;
 {$mode ObjFPC}{$H+}{$I proprietary.txt}
 
 { WesChat, Version 1.2.
-{ Note: Edited 7/6/2026 8 am -- working from WesChat12 on OneDrive }
-{ Note Tiny Stories change in Symbolize }
+{ Note: Edited 7/26/2026 6 pm -- working from WesChat12 on OneDrive }
+{ Need to recompile CEGradientStrided; Note Tiny Stories change in Symbolize }
 {        Input Train        Input Query        Output
  Raw                        QueryString
  Bytes   Corpus             QueryCorpus
@@ -22,6 +22,7 @@ uses
   Infer,
   IOHandler,
   Matrix,
+  OutputHead,
   ShellAPI,
   Symbolize,
   SysUtils,
@@ -62,7 +63,7 @@ begin
   ShellExecute(0, 'open', PChar(WorkRoot), nil, nil, SW_SHOWNORMAL);
 end;
 
-function AddSlash(const S: string): string;
+{function AddSlash(const S: string): string;
 begin
   Result := IncludeTrailingPathDelimiter(S);
 end;
@@ -73,14 +74,14 @@ begin
 
   if Result = '' then
     Result := 'weschat';
-end;
+end;}
 
 function TimeStamp: string;
 begin
   Result := FormatDateTime('yyyy-mm-dd_hhnnss', Now);
 end;
 
-procedure InitWorkFolders(const Root: string);
+{procedure InitWorkFolders(const Root: string);
 begin
   WorkRoot := AddSlash(ExpandFileName(Root));
   CorpusDir  := WorkRoot + 'corpus'  + DirectorySeparator;
@@ -104,7 +105,7 @@ begin
   // Compatibility with older units that still look at WorkingDir/WorkingName.
   WorkingDir := WorkRoot;
   WorkingName := 'weschat';
-end;
+end;}
 
 function PathHasDirectory(const S: string): Boolean;
 begin
@@ -215,25 +216,6 @@ begin
   SaveMetaData(DefaultSymbolStatsFile(BaseName));
 end;
 
-{procedure SaveSymbolizationFilesDefault(const BaseName: string);
-begin
-  if Length(SymbolTable) = 0 then begin
-    Writeln('No symbol table to save.');
-    Exit;
-  end;
-
-  Writeln('--- Saving Symbolization Files ---');
-  SymbolFileName := DefaultSymbolFile(BaseName);
-  SaveSymbolTable(SymbolFileName, SymbolTable);
-
-  if Length(Merges) > 0 then
-    SaveMergeTable(Merges, DefaultMergeFile(BaseName))
-  else
-    Writeln('No merges to save.');
-
-  SaveMetaData(DefaultMetaFile(BaseName));
-end;}
-
 procedure SaveTokenizationFilesDefault(const BaseName: string);
 begin
   if Length(TokenizedCorpus) = 0 then begin
@@ -313,8 +295,8 @@ begin
   Result := FileSize(FileName) >= MinSize;
 
   if not Result then
-    Writeln('File too small: ', FileName, '. Size=', FileSize(FileName),
-      ' minimum=', MinSize, '.');
+    Writeln('File too small: ', FileName, '. Size = ', FileSize(FileName),
+      ' minimum = ', MinSize, '.');
 end;
 
 function ReadCorpusFilePrompt(var OutCorpusFileName: string; var OutCorpus: TBVector): Boolean;
@@ -448,7 +430,7 @@ begin
   LoadSymbolTable(SymbolFileName, SymbolTable);
 
   if Length(SymbolTable) < MinSymbols then begin
-    Writeln('Too few symbols found. Length(SymbolTable)=', Length(SymbolTable));
+    Writeln('Too few symbols found. Length(SymbolTable) = ', Length(SymbolTable));
     Exit;
   end;
 
@@ -473,7 +455,7 @@ begin
   IOHandler.LoadTokenList(TokenFileName, TokenizedCorpus);
 
   if Length(TokenizedCorpus) < MinTokens then begin
-    Writeln('Token list too small. Length=', Length(TokenizedCorpus));
+    Writeln('Token list too small. Length = ', Length(TokenizedCorpus));
     Exit;
   end;
 
@@ -497,7 +479,7 @@ begin
   if not RequireExistingFile(ModelFileName, ModelDir) then
     Exit;
 
-  if CudaAllocated then
+  if CudaAllocated then                               // Change to same shutdwn code at end?
     MDeallocateCublas(WModelParams, WModelState);
 
   if LoadModel(ModelFileName, WModelParams) then begin
@@ -522,15 +504,6 @@ begin
   SaveTokenList(TokenizedCorpus, TokenFileName);
 end;
 
-{procedure SaveCurrentSymbolTableDefault;
-begin
-  if Length(SymbolTable) = 0 then
-    Exit;
-
-  SymbolFileName := DefaultSymbolFile(CurrentBaseName);
-  SaveSymbolTable(SymbolFileName, SymbolTable);
-end;}
-
 procedure MaybeSaveTokenList;
 var
   S: string;
@@ -544,36 +517,6 @@ begin
 
     TokenFileName := MakeOutputFileName(S, TokenDir, CurrentBaseName, '.tok');
     SaveTokenList(TokenizedCorpus, TokenFileName);
-  end;
-end;
-
-procedure MaybeSaveSymbolTable;
-var
-  S: string;
-begin
-  if Length(SymbolTable) = 0 then Exit;
-
-  if AskYesNo('Save symbol table?', True) then begin
-    Write('Output symbol table file name, blank for ', ExtractFileName(DefaultSymbolFile(CurrentBaseName)), ': ');
-    Readln(S);
-
-    SymbolFileName := MakeOutputFileName(S, SymbolDir, CurrentBaseName, '.sym');
-    SaveSymbolTable(SymbolFileName, SymbolTable);
-  end;
-end;
-
-procedure MaybeSaveMergeTable;
-var
-  S: string;
-begin
-  if Length(Merges) = 0 then Exit;
-
-  if AskYesNo('Save merge table?', True) then begin
-    Write('Output merge table file name, blank for ',
-      ExtractFileName(DefaultMergeFile(CurrentBaseName)), ': ');
-    Readln(S);
-
-    SaveMergeTable(Merges, MakeOutputFileName(S, MergeDir, CurrentBaseName, '.mer'));
   end;
 end;
 
@@ -682,7 +625,7 @@ begin
     nVocab := nSymbols;
 
     if nSymbols < MinSymbols then begin
-      Writeln('Too few symbols found after symbolization. nSymbols=', nSymbols);
+      Writeln('Too few symbols found after symbolization. nSymbols = ', nSymbols);
       Exit;
     end;
 
@@ -726,7 +669,7 @@ begin
 
   Write('GPT tokenization complete.');
   Writeln(' Raw tokens = ', RawTokenCount, '; Padded tokens = ', PaddedTokenCount, '; Padding added = ', PaddedTokenCount - RawTokenCount, '; Symbols = ', nSymbols, '.');
-  Writeln('GPT tokenization complete. Tokens=', Length(TokenizedCorpus), '.');
+  Writeln('GPT tokenization complete. Tokens = ', Length(TokenizedCorpus), '.');
 
   MaybeSaveTokenList;
 end;
@@ -788,7 +731,7 @@ begin
 
     Inc(Count);
 
-    Writeln('  GPT-tokenized: ', FullName, '; tokens added=', Length(OneTokens), '; total tokens=', Length(TokenizedCorpus), '.');
+    Writeln('  GPT-tokenized: ', FullName, '; tokens added= ', Length(OneTokens), '; total tokens = ', Length(TokenizedCorpus), '.');
   end;
 
   CloseFile(F);
@@ -797,11 +740,12 @@ begin
   PadToSeqMultiple(TokenizedCorpus, SeqLen);
   nTokenizedCorpus := Length(TokenizedCorpus);
 
-  Writeln('GPT list tokenization complete. Tokens=', Length(TokenizedCorpus), '.');
+  Writeln('GPT list tokenization complete. Tokens = ', Length(TokenizedCorpus), '.');
 
   MaybeSaveTokenList;
 end;
 
+// Do a tokenization procedure.
 procedure DoTokenize;
 var
   TokChoice, SourceChoice: string;
@@ -816,6 +760,8 @@ begin
   TokChoice := AskChoice('Tokenizer: W = WesTokenize, G = GPT2Tokenize', 'W/G');
 
   if TokChoice = 'G' then begin
+    EnsureGPT2VocabLoaded;
+
     SourceChoice := AskChoice('Corpus source: F = one file, L = list of corpus file names', 'F/L');
 
     if SourceChoice = 'L' then
@@ -823,12 +769,14 @@ begin
     else
       TokenizeGPTSingleFile;
   end
-  else begin
+  else
     TokenizeWithWes;
-  end;
 
   if Length(TokenizedCorpus) > 0 then begin
     if AskYesNo('Proceed to training now?', True) then begin
+      NewModel := True;
+      ParamsNeedCopyToDevice := True;
+
       RunTrain(WModelParams, WModelState, TokenizedCorpus);
 
       if TrainSuccess then
@@ -856,7 +804,7 @@ begin
       Exit;
   end
   else if AskYesNo('Use token list already in memory?', True) then begin
-    Writeln('Using in-memory token list. Tokens=', Length(TokenizedCorpus));
+    Writeln('Using in-memory token list. Tokens = ', Length(TokenizedCorpus));
   end
   else
     if not LoadTokenListPrompt then Exit;
@@ -866,7 +814,7 @@ begin
   else begin
     nSymbols := Length(SymbolTable);
     nVocab := nSymbols;
-    Writeln('Using symbol table already in memory. Symbols=', nSymbols);
+    Writeln('Using symbol table already in memory. Symbols = ', nSymbols);
   end;
 
   ModelChoice := AskChoice('Model: N = new model, R = resume/load saved model', 'N/R');
@@ -875,7 +823,7 @@ begin
     if not LoadModelPrompt then Exit;
 
     if nVocab <> nSymbols then begin
-      Writeln('Warning: loaded model nVocab=', nVocab, ' but current symbol table nSymbols=', nSymbols, '.');
+      Writeln('Warning: loaded model nVocab = ', nVocab, ' but current symbol table nSymbols = ', nSymbols, '.');
       Writeln('For resumed training these should match.');
 
       if not AskYesNo('Continue anyway?', False) then Exit;
@@ -883,6 +831,7 @@ begin
   end
   else begin
     NewModel := True;
+    ParamsNeedCopyToDevice := True;
     nVocab := nSymbols;
   end;
 
@@ -1097,13 +1046,16 @@ begin
   nVocab := nSymbols;
 
   Tokenizer := WesTokenizer;
+  NewModel := True;
+  ParamsNeedCopyToDevice := True;
+
   RunWesTokenizeNoAutoSave(Corpus, TokenizedCorpus);
 
   PadToSeqMultiple(TokenizedCorpus, SeqLen);
   nTokenizedCorpus := Length(TokenizedCorpus);
 
-  Writeln('Bela tokenization complete. Tokens=', Length(TokenizedCorpus),
-    ' Symbols=', nSymbols, '.');
+  Writeln('Bela tokenization complete. Tokens = ', Length(TokenizedCorpus),
+    ' Symbols = ', nSymbols, '.');
 
   if AskYesNo('Save refreshed Bela token list?', False) then
     SaveCurrentTokenListDefault;
@@ -1154,7 +1106,61 @@ begin
   nSymbols := Length(SymbolTable);
   nVocab := nSymbols;
 
-  Writeln('Damned Thing data loaded. Tokens=', Length(TokenizedCorpus), ' Symbols=', nSymbols, '.');
+  Tokenizer := WesTokenizer;
+  NewModel := True;
+  ParamsNeedCopyToDevice := True;
+  Writeln('Damned Thing data loaded. Tokens = ', Length(TokenizedCorpus), ' Symbols = ', nSymbols, '.');
+
+  if AskYesNo('Proceed to training?', True) then begin
+    RunTrain(WModelParams, WModelState, TokenizedCorpus);
+
+    if TrainSuccess then begin
+      MaybeSaveModel;
+
+      if AskYesNo('Proceed to inference?', False) then
+        RunInfer(WModelParams, WModelState);
+    end;
+  end;
+end;
+
+procedure DoChurchillModel;
+begin
+  Writeln;
+  Writeln('--- Churchill Model ---');
+
+  WorkingDir := 'churchill';
+  InitWorkFolders(WorkingDir);
+  CurrentBaseName := 'churchill';
+  WorkingName := 'churchill';
+  Writeln('Using Churchill work folder: ', WorkRoot);
+
+  TokenFileName := ResolveInputFile('churchill.tok', TokenDir);
+  SymbolFileName := ResolveInputFile('churchill.sym', SymbolDir);
+
+  if not FileExists(TokenFileName) then begin
+    Writeln('File not found: churchill.tok');
+    Exit;
+  end;
+
+  if not FileExists(SymbolFileName) then begin
+    Writeln('File not found: churchill.sym');
+    Exit;
+  end;
+
+  IOHandler.LoadTokenList(TokenFileName, TokenizedCorpus);
+  PadToSeqMultiple(TokenizedCorpus, SeqLen);
+  nTokenizedCorpus := Length(TokenizedCorpus);
+
+  FromSymbolTable := True;
+  LoadSymbolTable(SymbolFileName, SymbolTable);
+  nSymbols := Length(SymbolTable);
+  nVocab := nSymbols;
+
+  Tokenizer := WesTokenizer;
+  NewModel := True;
+  ParamsNeedCopyToDevice := True;
+
+  Writeln('Churchill data loaded. Tokens = ', Length(TokenizedCorpus), ' Symbols = ', nSymbols, '.');
 
   if AskYesNo('Proceed to training?', True) then begin
     RunTrain(WModelParams, WModelState, TokenizedCorpus);
@@ -1176,14 +1182,16 @@ begin
   Writeln('--- Existing Models ---');
   Writeln('B: Bela corpus');
   Writeln('D: Damned Thing token list');
+  Writeln('C: Churchill token list');
   Writeln('X: Return to main menu');
   Writeln;
 
-  TChoice := AskChoice('Test', 'B/D/X');
+  TChoice := AskChoice('Model', 'B/D/C/X');
 
   case TChoice of
     'B': DoBelaModel;
     'D', 'DT': DoDamnedThingModel;
+    'C': DoChurchillModel;
   end;
 end;
 
@@ -1206,7 +1214,7 @@ begin
   Writeln('  J: Join symbol tables.');
   Writeln('     Requires two symbol tables.');
   Writeln;
-  Writeln('  M: Use existing models -- Bela and Damned Thing.');
+  Writeln('  M: Use existing models -- Bela, Damned Thing, and Churchill.');
   Writeln('  F: File/folder utilities.');
   Writeln('  P: Program information.');
   Writeln('  H: Help and options.');
@@ -1246,7 +1254,7 @@ begin
   Writeln('  ND:  Reduce display');
   Writeln;
   Writeln('Parameters:');
-  Writeln('  M:    Maximum merges');
+  Writeln('  MM:   Maximum merges');
   Writeln('  PC:   Maximum pair count');
   Writeln('  LR:   Override learning rate');
   Writeln('  TEMP: Temperature');
@@ -1288,13 +1296,13 @@ begin
       DisplayMergeWork := False;
       Writeln('Display merge work is ', DisplayMergeWork);
     end;
-    'DV': begin
-      DisplayVerification := True;
-      Writeln('Display verification is ', DisplayVerification);
+    'DTV': begin
+      DisplayTokenVerification := True;
+      Writeln('Display token verification is ', DisplayTokenVerification);
     end;
-    'NDV': begin
-      DisplayVerification := False;
-      Writeln('Display verification is ', DisplayVerification);
+    'NDTV': begin
+      DisplayTokenVerification := False;
+      Writeln('Display token verification is ', DisplayTokenVerification);
     end;
     'DEBR':  begin
       DisplayEachByteRead := True;
@@ -1331,7 +1339,7 @@ begin
     'ND': begin
       DisplayEpoch := False;
       DisplayStage := False;
-      DisplaySubstage := True;
+      DisplaySubstage := False;
     end;
     'DW': begin
       DisplayWindow := True;
@@ -1358,8 +1366,8 @@ begin
       Writeln('Save files is ', SaveFiles);
     end;
     'TEMP': begin
-      Write('Temperature: ');
-      Readln(Temperature);
+      Write('Inference temperature: ');
+      Readln(ITemperature);
     end;
     'LR': begin
       Write('Override learning rate: ');
@@ -1380,10 +1388,6 @@ end;
 begin
   SetMultiByteConversionCodePage(CP_UTF8);
   SetMultiByteRTLFileSystemCodePage(CP_UTF8);
-
-  Vocab := TStringList.Create;
-
-  LoadVocab('vocab1.json', Vocab);  // Do this later, if Vocab1.json needed.
 
   SetConsoleOutputCP(CP_UTF8);
   SetConsoleCP(CP_UTF8);
@@ -1424,7 +1428,7 @@ begin
 
       'VTO', 'NVTO', 'DC', 'NDC', 'DTW', 'NDTW',
       'DMW', 'NDMW', 'DV', 'NDV', 'DEBR', 'NDEBR',
-      'SPST', 'NSPST', 'VTR', 'NVTR',
+      'VTR', 'NVTR',
       'DE', 'DS', 'DSS', 'ND',
       'DW', 'NDW', 'DNP', 'DP', 'SF', 'NSF',
       'TEMP', 'LR', 'MM', 'PC':
@@ -1435,8 +1439,11 @@ begin
     end;
   end;
 
-  if CudaAllocated then
+  // Stop cuda.
+  if CudaAllocated or (CuHandle <> nil) then
     EndCuda(WModelParams, WModelState);
 
-  Vocab.Free;
+  // Free vocab.
+  if Assigned(Vocab) then
+    Vocab.Free;
 end.

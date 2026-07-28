@@ -23,7 +23,7 @@ const
   HiddenSize: Integer = SeqLen * ModelDimProj * SizeOf(Single);
   ScoresSize: Integer = SeqLen * SeqLen * SizeOf(Single);
   EmbeddingsSize: Integer = DimVocab * ModelDim * SizeOf(Single);
-  InvFreqSize: Integer = (ModelDim div 2) * SizeOf(Single);
+  InvFreqSize: Integer = (HeadDim div 2) * SizeOf(Single);
   ProbsSize: Integer = SeqLen * DimVocab * SizeOf(Single);
 
 // Cublas and Cuda procedures.
@@ -46,10 +46,10 @@ procedure TCFull(const TC: TIVector);
 function Decode(const x: Integer): UnicodeString;
 // Transform routines.
 function ComputeLoss(const Probs: TSeqVocabMatrix; const TargetTokens: TIDimVector): Double;
-procedure ScaleAllGradients(var WModelParams: TWModelParams; const S: Single);
+// procedure ScaleAllGradients(var WModelParams: TWModelParams; const S: Single);
 // Initialization routines.
 procedure XGUniformW(var W: TWeightMatrix; FanIn, FanOut: Integer);
-procedure XGUniformWHead(var W: TWeightHeadMatrix; FanIn, FanOut: Integer);
+//procedure XGUniformWHead(var W: TWeightHeadMatrix; FanIn, FanOut: Integer);
 procedure XGUniformW1(var W: TWeightProjMatrix; FanIn, FanOut: Integer);
 procedure XGUniformW2(var W: TWeightProjMatrixT; FanIn, FanOut: Integer);
 procedure InitializeTransformerState(var WModelState: TWModelState);
@@ -79,21 +79,21 @@ procedure LaunchDropoutBackward(dX: PSingle; N: Integer; DropProb: Single; Seed:
 procedure LaunchSoftmaxForwardStrided(dIn: PSingle; dOut: PSingle; Rows: Integer; Cols: Integer; RowStride: Integer; Temperature: Single);
   cdecl; external 'WesChatKernel12.dll';
 procedure LaunchSoftmaxForward(dIn: PSingle; dOut: PSingle; Rows: Integer; N: Integer; Temperature: Single);
-{procedure LaunchSoftmaxForwardN(X: PSingle; Y: PSingle; Rows: Integer; N: Integer; Temperature: Single);
-  cdecl; external 'WesChatKernel12.dll';}
 procedure LaunchSoftmaxBackward(Y: PSingle; dY: PSingle; dX: PSingle; Rows: Integer; D: Integer);
   cdecl; external 'WesChatKernel12.dll';
 procedure LaunchLayerNormForward(InX, OutX, Gamma, Beta, LNXhat, LNInvStd: PSingle; SeqLen, ModelDim: Integer);
   cdecl; external 'WesChatKernel12.dll';
 procedure LaunchLayerNormBackward(dY, dX, Gamma, LNXhat, LNInvStd, dGamma, dBeta: PSingle; SeqLen, ModelDim: Integer);
   cdecl; external 'WesChatKernel12.dll';
-procedure LaunchRoPEForward(H: PSingle; InvFreq: PSingle; SeqLen: Integer; ModelDim: Integer);
+procedure LaunchRoPEForward(H: PSingle; const InvFreq: PSingle; SeqLen: Integer; NumHeads: Integer; HeadDim: Integer; RowStride: Integer);
+  cdecl; external 'WesChatKernel12.dll';
+procedure LaunchRoPEBackward(dH: PSingle; const InvFreq: PSingle; SeqLen: Integer; NumHeads: Integer; HeadDim: Integer; RowStride: Integer);
   cdecl; external 'WesChatKernel12.dll';
 procedure LaunchRoPEBackward(dH: PSingle; InvFreq: PSingle; SeqLen: Integer; ModelDim: Integer);
   cdecl; external 'WesChatKernel12.dll';
 procedure LaunchCEGradient(Probs: PSingle; TopGradient: PSingle; TargetTokens: PInteger; SeqLen: Integer; nVocab: Integer);
   cdecl; external 'WesChatKernel12.dll';
-procedure LaunchCEGradientStrided(Probs: PSingle; TopGradient: PSingle; TargetTokens: PInteger; Rows: Integer; VocabSize: Integer; RowStride: Integer);
+procedure LaunchCEGradientStrided(Probs: PSingle; TopGradient: PSingle; TargetTokens: PInteger; Rows: Integer; VocabSize: Integer; RowStride: Integer; GradScale: Single);
   cdecl; external 'WesChatKernel12.dll';
 procedure LaunchAddInputEmbeddingGrad(XGrad: PSingle; EmbGrad: PSingle; InputTokens: PInteger; SeqLen: Integer; ModelDim: Integer; nVocab: Integer);
   cdecl; external 'WesChatKernel12.dll';
@@ -151,20 +151,35 @@ procedure CheckCudaError(const Where: string);
 var
   Err: Integer;
 begin
-  Err := cudaDeviceSynchronize;
-
+  Err := cudaGetLastError;
   if Err <> 0 then begin
     Writeln;
-    Writeln('*** CUDA ERROR ***');
-    Writeln('Location : ', Where,' ', 'Error #  : ', Err, ' ', 'Message  : ', StrPas(cudaGetErrorString(Err)));
+    Writeln('CUDA LAUNCH ERROR. Location: ', Where, 'Error # : ', Err, 'Message : ', StrPas(cudaGetErrorString(Err)), '.');
     Pause;
+    Exit;
+  end;
+
+  Err := cudaDeviceSynchronize;
+  if Err <> 0 then begin
+    Writeln;
+    Writeln('CUDA EXECUTION ERROR. Location: ', Where, 'Error # : ', Err, 'Message : ', StrPas(cudaGetErrorString(Err)), '.');
+    Pause;
+  end;
+end;
+
+// Check cuda status.
+procedure CheckCudaStatus(const Status: Integer; const Where: string);
+begin
+  if Status <> 0 then begin
+    Writeln('CUDA error in ', Where, ': ', StrPas(cudaGetErrorString(Status)), '.');
+    Pause;
+    Halt;
   end;
 end;
 
 // Intialize Cuda and Cublas.
 procedure StartCuda(var WModelParams: TWModelParams; var WModelState: TWModelState);
 begin
-  CheckAllDLLs;
   InitializeCublas;
   if not CudaAllocated then
     MAllocCublas(WModelParams, WModelState);
@@ -178,6 +193,57 @@ begin
     MDeallocateCublas(WModelParams, WModelState);
   if CuBLAS_Shutdown then
     Writeln('CuBLAS successfully shut down.')
+end;
+
+// Full compute of trainable parameters.
+procedure FullReportTrainableParameters;
+var
+  EmbeddingParams, AttentionParams, FFNParams, LayerNormParams, BlockParams, TotalParams: Int64;
+begin
+  EmbeddingParams := Int64(nVocab) * ModelDim;
+
+  // Wq, Wk, Wv, W0.
+  AttentionParams := Int64(4) * ModelDim * ModelDim;
+
+  // W1, W2, b1, b2.
+  FFNParams := Int64(2) * ModelDim * ModelDimProj + ModelDimProj + ModelDim;
+
+  // Gamma1, Beta1, Gamma2, Beta2.
+  LayerNormParams := Int64(4) * ModelDim;
+
+  BlockParams := AttentionParams + FFNParams + LayerNormParams;
+  TotalParams := EmbeddingParams + Int64(nBlock) * BlockParams;
+
+  Writeln('Trainable parameters:');
+  Writeln('  Embeddings       = ', EmbeddingParams);
+  Writeln('  Attention/block  = ', AttentionParams);
+  Writeln('  FFN/block        = ', FFNParams);
+  Writeln('  LayerNorm/block  = ', LayerNormParams);
+  Writeln('  Total/block      = ', BlockParams);
+  Writeln('  Blocks           = ', nBlock);
+  Writeln('  Total parameters = ', TotalParams);
+end;
+
+// Short report of trainable parameters.
+function NumberTrainableParameters: Int64;
+var
+  EmbeddingParams, AttentionParams, FFNParams, LayerNormParams, BlockParams, TotalParams: Int64;
+begin
+  EmbeddingParams := Int64(nVocab) * ModelDim;
+
+  // Wq, Wk, Wv, W0.
+  AttentionParams := Int64(4) * ModelDim * ModelDim;
+
+  // W1, W2, b1, b2.
+  FFNParams := Int64(2) * ModelDim * ModelDimProj + ModelDimProj + ModelDim;
+
+  // Gamma1, Beta1, Gamma2, Beta2.
+  LayerNormParams := Int64(4) * ModelDim;
+
+  BlockParams := AttentionParams + FFNParams + LayerNormParams;
+  TotalParams := EmbeddingParams + Int64(nBlock) * BlockParams;
+
+  Result := TotalParams;
 end;
 
 // Saving routines.
@@ -210,7 +276,7 @@ end;
 
 function WorkSymbolFile(const BaseName: string): string;
 begin
-  Result := SymbolDir + ChangeFileExt(ExtractFileName(BaseName), '.sym');
+  Result := SymbolDir + ChangeFileExt(ExtractFileName(BaseName), '.sym.tok');
 end;
 
 function WorkTokenFile(const BaseName: string): string;
@@ -272,22 +338,35 @@ begin
     Write(TC[i], ' ');
   Writeln;
 
+  Write('Detokenized Corpus (in full length of ', Length(TC), '): ');
+  for i := 0 to High(TC) do
+    Write(Decode(TC[i]));
+  Writeln;
+  Pause;
+end;
+{procedure TCFull(const TC: TIVector);
+var
+  i: Integer;
+begin
+  Write('Tokenized Corpus (in full length of ', Length(TC), '): ');
+  for i := 0 to High(TC) do
+    Write(TC[i], ' ');
+  Writeln;
+
   Write('Detokenized Corpus (in full length of ', Length(TC) - 1, '): ');
   for i := 0 to High(TC) do
     Write(SymbolTable[TC[i]]);
   Writeln;
   Pause;
-end;
+end;}
 
 // Decode using symbol table one token.
 function Decode(const x: Integer): UnicodeString;
 begin
   if Tokenizer = WesTokenizer then
-  // WesTokenizer.
-  Result := SymbolTable[x]
-else
-  // GPT2Tokenizer.
-  Result := UTF8Decode(Vocab[x]);
+    Result := UTF8Decode(SymbolTable[x])
+  else
+    Result := UTF8Decode(Vocab[x]);
 end;
 
 // Compute cross-entropy loss.
@@ -313,7 +392,7 @@ begin
 end;
 
 // Scale all the gradients.
-procedure ScaleAllGradients(var WModelParams: TWModelParams; const S: Single);
+{procedure ScaleAllGradients(var WModelParams: TWModelParams; const S: Single);
 var
   k: Integer;
 begin
@@ -337,7 +416,7 @@ begin
     end;
 
   CuScale(CuHandle, DimVocab * ModelDim, S, WModelParams.Embeddings.dGrad);
-end;
+end;}
 
 // Xavier-Glorot initialization on W0 matrix.
 procedure XGUniformW(var W: TWeightMatrix; FanIn, FanOut: Integer);
@@ -355,7 +434,7 @@ begin
 end;
 
 // Xavier-Glorot initialization on WHead matrix.
-procedure XGUniformWHead(var W: TWeightHeadMatrix; FanIn, FanOut: Integer);
+{procedure XGUniformWHead(var W: TWeightHeadMatrix; FanIn, FanOut: Integer);
 var
   Limit, r: Single;
   i, j: Integer;
@@ -367,7 +446,7 @@ begin
       r := Random;              // 0..1.
       W[i, j] := (2 * r - 1) * Limit;
     end;
-end;
+end;}
 
 // Xavier-Glorot initialization on W1 matrix.
 procedure XGUniformW1(var W: TWeightProjMatrix; FanIn, FanOut: Integer);
@@ -405,7 +484,7 @@ procedure MAllocCublas(var WModelParams: TWModelParams; var WModelState: TWModel
 var
   h, k: Integer;
 begin
-  CudaAllocated := True;
+  CudaAllocated := False;
 
   // Input and target tokens.
   cudaMalloc(@dInputTokens, SeqLen * SizeOf(Integer));
@@ -497,6 +576,10 @@ begin
       cudaMalloc(@dXFromLN1, XSize);
     end;
   end;
+  CheckCudaStatus(cudaMalloc(@dInputTokens, SeqLen * SizeOf(Integer)), 'dInputTokens');
+  CheckCudaStatus(cudaMalloc(@dTargetTokens, SeqLen * SizeOf(Integer)), 'dTargetTokens');
+  CheckCudaError('Allocate CUDA memory.');
+  CudaAllocated := True;
 end;
 
 // De-allocate cublas memory.
@@ -603,6 +686,7 @@ begin
       dXFromLN1  := nil;
     end;
   end;
+  ParamsNeedCopyToDevice := True;
 end;
 
 // Copy parameters from host to device.
@@ -636,6 +720,9 @@ begin
       cudaMemcpy(Gamma2.dValue, @Gamma2.Value[0], ModelSize, cudaMemcpyHostToDevice);
       cudaMemcpy(Beta2.dValue,  @Beta2.Value[0],  ModelSize, cudaMemcpyHostToDevice);
   end;
+  ParamsNeedCopyToDevice := False;
+  if DebugCudaChecks then
+    CheckCudaError('Copy model parameters to device.');
 end;
 
 // Copy parameters from device to host (for saving model).
@@ -669,12 +756,16 @@ begin
       cudaMemcpy(@Gamma2.Value[0], Gamma2.dValue, ModelSize, cudaMemcpyDeviceToHost);
       cudaMemcpy(@Beta2.Value[0],  Beta2.dValue,  ModelSize, cudaMemcpyDeviceToHost);
   end;
+  if DebugCudaChecks then
+    CheckCudaError('Copy model parameters to host.');
 end;
 
 // Copy InvFreq from host to device.
 procedure CopyInvFreqToDevice(var WModelState: TWModelState);
 begin
   cudaMemcpy(WModelState.dInvFreq, @WModelState.InvFreq[0], InvFreqSize, cudaMemcpyHostToDevice);
+  if DebugCudaChecks then
+    CheckCudaError('Copy inverse frequencies to device.');
 end;
 
 // Initialize the transformer state.
@@ -686,9 +777,10 @@ begin
   // Do not zero the state values -- that is not necessary.
 
   // Compute InvFreq.
-  SetLength(WModelState.InvFreq, ModelDim div 2);
-  for j := 0 to (ModelDim div 2) - 1 do     // ModelDim must be even.
-    WModelState.InvFreq[j] := Exp( - (2.0 * j) / ModelDim * Ln(10000.0) );
+  SetLength(WModelState.InvFreq, HeadDim div 2);
+
+  for j := 0 to (HeadDim div 2) - 1 do
+    WModelState.InvFreq[j] := Exp(-(2.0 * j) / HeadDim * Ln(10000.0));
 end;
 
 // Initialize the transformer state stage.
@@ -696,7 +788,7 @@ procedure InitializeTransformerParams(var WModelParams: TWModelParams);
 var
   i, j, k: Integer;
 begin
-  // Do not zero the param grads -- thet is done in zero gradient.
+  // Do not zero the param grads -- that is done in zero gradient.
   // As to the param values -- they are zeroed below.
 
   // Initialize embeddings.
@@ -736,106 +828,145 @@ end;
 
 // Zero out all gradients.
 procedure ZeroGradients(var WModelParams: TWModelParams; var WModelState: TWModelState; const Blk: Integer);
+var
+  h: Integer;
 begin
   with WModelState.StateBlock[Blk] do begin
+    // Optional host-side diagnostic buffers.
     FillChar(Hidden1.Grad, HiddenSize, 0);
     FillChar(Hidden2.Grad, HiddenSize, 0);
-    cudaMemset(X.dGrad, 0, XSize);
-    cudaMemset(X1.dGrad, 0, XSize);
-    cudaMemset(X2.dGrad, 0, XSize);
-    cudaMemset(X3.dGrad, 0, XSize);
-    cudaMemset(X4.dGrad, 0, XSize);
-    cudaMemset(X5.dGrad, 0, XSize);
-    cudaMemset(X6.dGrad, 0, XSize);
-    cudaMemset(X7.dGrad, 0, XSize);
-    cudaMemset(X1k.dGrad, 0, XSize);
+
+    // SeqLen x ModelDim state gradients.
+    cudaMemset(X.dGrad,   0, XSize);
+    cudaMemset(X1.dGrad,  0, XSize);
+    cudaMemset(X2.dGrad,  0, XSize);
+    cudaMemset(X3.dGrad,  0, XSize);
+    cudaMemset(X4.dGrad,  0, XSize);
+    cudaMemset(X5.dGrad,  0, XSize);
+    cudaMemset(X6.dGrad,  0, XSize);
+    cudaMemset(X7.dGrad,  0, XSize);
+
+    cudaMemset(Q.dGrad,   0, XSize);
+    cudaMemset(K.dGrad,   0, XSize);
+    cudaMemset(V.dGrad,   0, XSize);
+
     cudaMemset(X1q.dGrad, 0, XSize);
+    cudaMemset(X1k.dGrad, 0, XSize);
     cudaMemset(X1v.dGrad, 0, XSize);
-    cudaMemset(K.dGrad, 0, XSize);
-    cudaMemset(Q.dGrad, 0, XSize);
-    cudaMemset(V.dGrad, 0, XSize);
+
+    // SeqLen x ModelDimProj state gradients.
     cudaMemset(Hidden1.dGrad, 0, HiddenSize);
     cudaMemset(Hidden2.dGrad, 0, HiddenSize);
+
+    // SeqLen x SeqLen attention gradients for each head.
+    for h := 0 to nHead - 1 do begin
+      cudaMemset(ScoresHead1[h].dGrad, 0, ScoresSize);
+      cudaMemset(ScoresHead2[h].dGrad, 0, ScoresSize);
+    end;
   end;
+
+  // Embeddings are shared by all blocks, so clear them once.
   if Blk = 0 then
     cudaMemset(WModelParams.Embeddings.dGrad, 0, EmbeddingsSize);
+
   with WModelParams.ParamBlock[Blk] do begin
-    cudaMemset(Wk.dGrad, 0, WeightSize);
+    // Attention parameters.
     cudaMemset(Wq.dGrad, 0, WeightSize);
+    cudaMemset(Wk.dGrad, 0, WeightSize);
     cudaMemset(Wv.dGrad, 0, WeightSize);
     cudaMemset(W0.dGrad, 0, WeightSize);
+
+    // FFN parameters.
     cudaMemset(W1.dGrad, 0, WeightProjectedSize);
     cudaMemset(W2.dGrad, 0, WeightProjectedSize);
     cudaMemset(b1.dGrad, 0, ProjectedSize);
     cudaMemset(b2.dGrad, 0, ModelSize);
+
+    // Layer-normalization parameters.
     cudaMemset(Gamma1.dGrad, 0, ModelSize);
+    cudaMemset(Beta1.dGrad,  0, ModelSize);
     cudaMemset(Gamma2.dGrad, 0, ModelSize);
-    cudaMemset(Beta1.dGrad, 0, ModelSize);
-    cudaMemset(Beta2.dGrad, 0, ModelSize);
+    cudaMemset(Beta2.dGrad,  0, ModelSize);
   end;
 end;
 
 // Procedures for updating the parameters. Here, with decay.
 procedure CuUpdateParamDecay(Handle: TcublasHandle; const N: Integer; const LearningRate: Single; const Grad: PSingle; Param: PSingle);
+begin
+  CuScale(Handle, N, DecayScale, Param);
+  CuAddScaled(Handle, N, -LearningRate, Grad, Param);
+end;
+
+{procedure CuUpdateParamDecay(Handle: TcublasHandle; const N: Integer; const LearningRate: Single; const Grad: PSingle; Param: PSingle);
 var
   Alpha: Single;
 begin
   CuScale(Handle, N, DecayScale, Param);
   Alpha := -LearningRate;
   cublasSaxpy_v2(Handle, N, @Alpha, Grad, 1, Param, 1);
-end;
+end;}
 
 // Procedures for updating the parameters. Here, without decay.
 procedure CuUpdateParamNoDecay(Handle: TcublasHandle; const N: Integer; const LearningRate: Single; const Grad: PSingle; Param: PSingle);
+begin
+  CuAddScaled(Handle, N, -LearningRate, Grad, Param);
+end;
+{procedure CuUpdateParamNoDecay(Handle: TcublasHandle; const N: Integer; const LearningRate: Single; const Grad: PSingle; Param: PSingle);
 var
   Alpha: Single;
 begin
   Alpha := -LearningRate;
   cublasSaxpy_v2(Handle, N, @Alpha, Grad, 1, Param, 1);
-end;
+end;}
 
-// Update the weights and biases. At some point, eliminate non-cublas updates.
+// Update the weights and biases. .
 procedure Optimization(var WModelParams: TWModelParams; const Blk: Integer);
 begin
   with WModelParams.ParamBlock[Blk] do begin
-    // W weights: main attention output.
+    // W weights: main attention output. Decay.
     CuUpdateParamDecay(CuHandle, ModelDim * ModelDim, LearningRate, W0.dGrad, W0.dValue);
-    // cblas_saxpy(ModelDim * ModelDim, -LearningRate, @W0.Grad[0, 0], 1, @W0.Value[0, 0], 1);
 
-    // Wq, Wk, Wv weights: Q, K, V.
+    // Wq, Wk, Wv weights: Q, K, V. Decay.
     CuUpdateParamDecay(CuHandle, ModelDim * ModelDim, LearningRate, Wq.dGrad, Wq.dValue);
-    // cblas_saxpy(ModelDim * ModelDim, -LearningRate, @Wq.Grad[0, 0], 1, @Wq.Value[0, 0], 1);
     CuUpdateParamDecay(CuHandle, ModelDim * ModelDim, LearningRate, Wk.dGrad, Wk.dValue);
-    // cblas_saxpy(ModelDim * ModelDim, -LearningRate, @Wk.Grad[0, 0], 1, @Wk.Value[0, 0], 1);
     CuUpdateParamDecay(CuHandle, ModelDim * ModelDim, LearningRate, Wv.dGrad, Wv.dValue);
-    // cblas_saxpy(ModelDim * ModelDim, -LearningRate, @Wv.Grad[0, 0], 1, @Wv.Value[0, 0], 1);
 
     CuUpdateParamDecay(CuHandle, ModelDim * ModelDimProj, LearningRate, W1.dGrad, W1.dValue);
-    // cblas_saxpy(ModelDim * ModelDimProj, -LearningRate, @W1.Grad[0, 0], 1, @W1.Value[0, 0], 1);
     CuUpdateParamDecay(CuHandle, ModelDimProj * ModelDim, LearningRate, W2.dGrad, W2.dValue);
-    // cblas_saxpy(ModelDimProj * ModelDim, -LearningRate, @W2.Grad[0, 0], 1, @W2.Value[0, 0], 1);
 
-    // b1, b2: biases.
-    CuUpdateParamDecay(CuHandle, ModelDimProj, LearningRate, b1.dGrad, b1.dValue);
-    // cblas_saxpy(ModelDimProj, -LearningRate, @b1.Grad[0], 1, @b1.Value[0], 1);
-    CuUpdateParamDecay(CuHandle, ModelDim,     LearningRate, b2.dGrad, b2.dValue);
-    // cblas_saxpy(ModelDim, -LearningRate, @b2.Grad[0], 1, @b2.Value[0], 1);
+    // b1, b2: biases. No decay.
+    CuUpdateParamNoDecay(CuHandle, ModelDimProj, LearningRate, b1.dGrad, b1.dValue);
+    CuUpdateParamNoDecay(CuHandle, ModelDim,     LearningRate, b2.dGrad, b2.dValue);
 
-    // Gamma1, Gamm2, Beta1, Beta2: Layer-Norm parameters.
+    // Gamma1, Gamm2, Beta1, Beta2: Layer-Norm parameters. No decay.
     CuUpdateParamNoDecay(CuHandle, ModelDim, LearningRate, Gamma1.dGrad, Gamma1.dValue);
-    // cblas_saxpy(ModelDim, -LearningRate, @Gamma1.Grad[0], 1, @Gamma1.Value[0], 1);
     CuUpdateParamNoDecay(CuHandle, ModelDim, LearningRate, Gamma2.dGrad, Gamma2.dValue);
-    // cblas_saxpy(ModelDim, -LearningRate, @Gamma2.Grad[0], 1, @Gamma2.Value[0], 1);
     CuUpdateParamNoDecay(CuHandle, ModelDim, LearningRate, Beta1.dGrad, Beta1.dValue);
-    // cblas_saxpy(ModelDim, -LearningRate, @Beta1.Grad[0], 1, @Beta1.Value[0], 1);
     CuUpdateParamNoDecay(CuHandle, ModelDim, LearningRate, Beta2.dGrad, Beta2.dValue);
-    // cblas_saxpy(ModelDim, -LearningRate, @Beta2.Grad[0], 1, @Beta2.Value[0], 1);
 
   end;
 end;
 
-// Update Embeddings.
 procedure UpdateEmbeddings(var WModelParams: TWModelParams; var WModelState: TWModelState);
+var
+  EmbeddingScale: Single;
+begin
+  EmbeddingScale := Sqrt(ModelDim);
+
+  // Backpropagate through X = Embedding * sqrt(ModelDim).
+  CuScale(CuHandle, SeqLen * ModelDim, EmbeddingScale, WModelState.StateBlock[0].X.dGrad);
+
+  // Add input-side gradient to existing output-side tied gradient.
+  LaunchAddInputEmbeddingGrad(WModelState.StateBlock[0].X.dGrad, WModelParams.Embeddings.dGrad, dInputTokens, SeqLen, ModelDim, nVocab);
+
+  // Clip the complete tied-embedding gradient.
+  LaunchClipVector(WModelParams.Embeddings.dGrad, nVocab * ModelDim, ClipLimit);
+
+  // Apply total embedding gradient.
+  CuUpdateParamNoDecay(CuHandle, nVocab * ModelDim, LearningRate, WModelParams.Embeddings.dGrad, WModelParams.Embeddings.dValue);
+end;
+
+{procedure UpdateEmbeddings(var WModelParams: TWModelParams; var WModelState: TWModelState);
 begin
   // Add input-side embedding grads into Embeddings.dGrad.
   // Output-side tied gradient is already in Embeddings.dGrad.
@@ -843,7 +974,7 @@ begin
 
   // Apply total embedding gradient.
   CuUpdateParamNoDecay(CuHandle, nVocab * ModelDim, LearningRate, WModelParams.Embeddings.dGrad, WModelParams.Embeddings.dValue);
-end;
+end;}
 
 // Rotary positional encoding. No longer used.
 // Apply RoPE to both Q and K, [0..SeqLen - 1, 0..ModelDim - 1]
@@ -869,174 +1000,10 @@ begin
     end;
 end;
 
-// Simple autoregressive masking. No longer used.
-procedure ApplyAutoregressiveMask(var ScoresHead: TScoresMatrix; const L: Integer);
-var
-  i, j: Integer;
-const
-  NEG_INF: Single = -1e30;
-begin
-  for i := 0 to L - 1 do
-    for j := i + 1 to L - 1 do
-      ScoresHead[i, j] := NEG_INF;
-end;
-
-// Softmax ForwardN. No longer used.
-procedure SoftmaxForwardN(const x: PSingle; y: PSingle; const N: Integer);
-var
-  i: Integer;
-  MaxVal, SumVal, InvT: Single;
-begin
-  if N <= 0 then Exit;
-
-  InvT := 1.0 / Temperature;
-
-  // Find max for numerical stability.
-  MaxVal := x[0] * InvT;
-  for i := 1 to N - 1 do
-    if (x[i] * InvT) > MaxVal then
-      MaxVal := x[i] * InvT;
-
-  // Exp and sum.
-  SumVal := 0.0;
-  for i := 0 to N - 1 do begin
-    y[i] := Exp((x[i] * InvT) - MaxVal);
-    SumVal := SumVal + y[i];
-  end;
-
-  // Normalize.
-  if SumVal <> 0.0 then begin
-    SumVal := 1.0 / SumVal;
-    for i := 0 to N - 1 do
-      y[i] := y[i] * SumVal;
-  end;
-end;
-
+// Softmax Forward.
 procedure LaunchSoftmaxForward(dIn: PSingle; dOut: PSingle; Rows: Integer; N: Integer; Temperature: Single);
 begin
   LaunchSoftmaxForwardStrided(dIn, dOut, Rows, N, N, Temperature);
-end;
-
-// Softmax procedure backward. No longer used.
-procedure SoftmaxBackward(const y, dy:  TFVector; out dx: TFVector);
-var
-  j, D: Integer;
-  dot: Single;
-begin
-  D := Length(y);
-  SetLength(dx, D);
-
-  // dot = sum_j dy[j] * y[j].
-  dot := 0.0;
-  for j := 0 to D - 1 do
-    dot := dot + dy[j] * y[j];
-
-  // dx[j] = y[j] * (dy[j] - dot).
-  for j := 0 to D - 1 do
-    dx[j] := y[j] * (dy[j] - dot);
-end;
-
-// Layer-Norm matrix. No longer used.
-procedure LayerNormForward(const InX: TSeqMatrix; var OutX: TSeqMatrix; SeqLen: Integer;
-  const Gamma, Beta: TSeqVector; var LNXhat: TSeqMatrix; var LNInvStd: TFSVector);
-var
-  i, j: Integer;
-  MeanL, VarL, InvStd: Single;
-const
-  EPS = 1e-5;
-begin
-  for i := 0 to SeqLen - 1 do begin
-    MeanL := 0.0;
-    for j := 0 to ModelDim - 1 do
-      MeanL := MeanL + InX[i, j];
-    MeanL := MeanL / ModelDim;
-
-    VarL := 0.0;
-    for j := 0 to ModelDim - 1 do
-      VarL := VarL + Sqr(InX[i, j] - MeanL);
-    VarL := VarL / ModelDim;
-
-    InvStd := 1.0 / Sqrt(VarL + EPS);
-
-    for j := 0 to ModelDim - 1 do
-      OutX[i, j] := (InX[i, j] - MeanL) * InvStd * Gamma[j] + Beta[j];
-    LNInvStd[i] := InvStd;
-    for j := 0 to ModelDim - 1 do
-      LNXhat[i, j] := (InX[i, j] - MeanL) * InvStd;
-  end;
-end;
-
-// Layer-Norm matrix on back propagation. dY is upstream gradient. dX is output gradient.
-// dGamma, dBeta are accumulated over all rows. No longer used.
-procedure LayerNormBackward(const dY: TSeqMatrix; var dX: TSeqMatrix; var dGamma, dBeta: TSeqVector;
-  SeqLen: Integer; const Gamma: TSeqVector; var LNXhat: TSeqMatrix; var LNInvStd: TFSVector);
-var
-  i, j: Integer;
-  sum1, sum2, scale: Single;
-  dHat: TSeqVector;
-begin
-  for i := 0 to SeqLen - 1 do begin
-    // Step 1: dHat = dY * Gamma.
-    sum1 := 0.0;
-    sum2 := 0.0;
-    for j := 0 to ModelDim - 1 do begin
-      dHat[j] := dY[i, j] * Gamma[j];
-      sum1 := sum1 + dHat[j];
-      sum2 := sum2 + dHat[j] * LNXhat[i][j];
-    end;
-
-    // Step 2: compute dX.
-    scale := LNInvStd[i] / ModelDim;
-    for j := 0 to ModelDim - 1 do
-      dX[i, j] := scale * (ModelDim * dHat[j] - sum1 - LNXhat[i, j] * sum2);
-
-    // Step 3: accumulate dGamma and dBeta.
-    for j := 0 to ModelDim - 1 do begin
-      dGamma[j] := dGamma[j] + dY[i, j] * LNXhat[i][j];
-      dBeta[j]  := dBeta[j]  + dY[i, j];
-    end;
-  end;
-end;
-
-// Calculate cross-entropy gradient from probabilities and target, one-hot. No longer used.
-procedure GradientFromCEProbabilities(var WModelState: TWModelState);
-var
-  i, s: Integer;
-begin
-  with WModelState do
-    for i := 0 to SeqLen - 1 do begin
-      for s := 0 to nVocab - 1 do
-        TopGradient[i, s] := Probs[i, s];
-
-      TopGradient[i, TargetTokens[i]] :=
-        Probs[i, TargetTokens[i]] - 1.0;
-    end;
-end;
-
-// Calculate gradient for KL divergence with one-hot targets: dL/dProbs = Q - P. No longer used.
-procedure GradientFromKLDivergence(var WModelState: TWModelState);
-var
-  i, s: Integer;
-begin
-  with WModelState do
-    for i := 0 to SeqLen - 1 do
-      for s := 0 to nVocab - 1 do
-        if s = TargetTokens[i] then
-          TopGradient[i, s] := Probs[i, s] - 1.0   // Q - 1.
-        else
-          TopGradient[i, s] := Probs[i, s] - 0.0;  // Q - 0.
-end;
-
-// Back propagation addition. No longer used.
-procedure BackpropAdd(const dOut: TSeqMatrix; var dA, dB: TSeqMatrix; const L, D: Integer);
-var
-  i, j: Integer;
-begin
-  for i := 0 to L - 1 do
-    for j := 0 to D - 1 do begin
-      dA[i, j] := dA[i, j] + dOut[i, j];
-      dB[i, j] := dB[i, j] + dOut[i, j];
-    end;
 end;
 
 end.

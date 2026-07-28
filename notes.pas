@@ -63,6 +63,21 @@ Symbolize.
 Should I use clean-up symbols in DisplayByteSymbolTable? Yes, doing so.
 Lengthen tabs in printouts like most frequent symbols.array[ or symboltable...1] of Type = ();
 
+Add one pair at the model level, outside ParamBlock:
+type
+  TWModelParams = record
+    ParamBlock: array of TParamBlock;
+    Embeddings: TWMatrix;
+    FinalGamma: TWVector;
+    FinalBeta: TWVector;
+  end;
+
+Their sizes are:
+SetLength(FinalGamma.Value, ModelDim);
+SetLength(FinalGamma.Grad, ModelDim);
+SetLength(FinalBeta.Value, ModelDim);
+SetLength(FinalBeta.Grad, ModelDim);
+
 Transform/Matrix/Utils.
 
 0. Use CPU/GPU or host/device or cblas/cublas nomenclature?

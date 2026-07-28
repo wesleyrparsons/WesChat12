@@ -246,6 +246,7 @@ void LaunchAutoRegressiveMaskBackward(
 }
 
 // RoPE Forward.
+
 #include <cuda_runtime.h>
 #include <math.h>
 
@@ -254,27 +255,47 @@ void RoPEForwardKernel(
     float* H,
     const float* InvFreq,
     int SeqLen,
-    int ModelDim)
+    int NumHeads,
+    int HeadDim,
+    int RowStride)
 {
-    int row = blockIdx.y * blockDim.y + threadIdx.y;
-    int pair = blockIdx.x * blockDim.x + threadIdx.x;
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
-    int NumPairs = ModelDim / 2;
+    int PairsPerHead = HeadDim / 2;
+    int TotalPairs = SeqLen * NumHeads * PairsPerHead;
 
-    if (row < SeqLen && pair < NumPairs) {
-        float angle = row * InvFreq[pair];
-        float c = cosf(angle);
-        float s = sinf(angle);
+    if (idx >= TotalPairs)
+        return;
 
-        int j0 = row * ModelDim + 2 * pair;
-        int j1 = j0 + 1;
+    // Decompose the linear index into:
+    //   row  = sequence position
+    //   head = attention head
+    //   pair = adjacent RoPE pair within that head
+    int pair = idx % PairsPerHead;
 
-        float x0 = H[j0];
-        float x1 = H[j1];
+    int temp = idx / PairsPerHead;
+    int head = temp % NumHeads;
+    int row  = temp / NumHeads;
 
-        H[j0] = x0 * c - x1 * s;
-        H[j1] = x0 * s + x1 * c;
-    }
+    float angle = static_cast<float>(row) * InvFreq[pair];
+    float c = cosf(angle);
+    float s = sinf(angle);
+
+    // H is physically laid out as:
+    //
+    // H[row, head * HeadDim + dimension]
+    //
+    // RowStride will normally equal ModelDim.
+    int base =
+        row  * RowStride +
+        head * HeadDim +
+        pair * 2;
+
+    float x0 = H[base];
+    float x1 = H[base + 1];
+
+    H[base]     = x0 * c - x1 * s;
+    H[base + 1] = x0 * s + x1 * c;
 }
 
 extern "C" __declspec(dllexport)
@@ -282,59 +303,81 @@ void LaunchRoPEForward(
     float* H,
     const float* InvFreq,
     int SeqLen,
-    int ModelDim)
+    int NumHeads,
+    int HeadDim,
+    int RowStride)
 {
-    int NumPairs = ModelDim / 2;
+    if (H == nullptr ||
+        InvFreq == nullptr ||
+        SeqLen <= 0 ||
+        NumHeads <= 0 ||
+        HeadDim <= 0 ||
+        RowStride <= 0 ||
+        (HeadDim & 1) != 0)
+    {
+        return;
+    }
 
-    dim3 threads(16, 16);
-    dim3 blocks(
-        (NumPairs + threads.x - 1) / threads.x,
-        (SeqLen   + threads.y - 1) / threads.y
-    );
+    int PairsPerHead = HeadDim / 2;
+    int TotalPairs = SeqLen * NumHeads * PairsPerHead;
 
-    RoPEForwardKernel<<<blocks, threads>>>(
+    int Threads = 256;
+    int Blocks = (TotalPairs + Threads - 1) / Threads;
+
+    RoPEForwardKernel<<<Blocks, Threads>>>(
         H,
         InvFreq,
         SeqLen,
-        ModelDim
+        NumHeads,
+        HeadDim,
+        RowStride
     );
 }
 
 // RoPE Backward.
-#include <cuda_runtime.h>
-#include <math.h>
 
 extern "C" __global__
 void RoPEBackwardKernel(
     float* dH,
     const float* InvFreq,
     int SeqLen,
-    int ModelDim)
+    int NumHeads,
+    int HeadDim,
+    int RowStride)
 {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
-    int pairsPerRow = ModelDim / 2;
-    int totalPairs = SeqLen * pairsPerRow;
+    int PairsPerHead = HeadDim / 2;
+    int TotalPairs = SeqLen * NumHeads * PairsPerHead;
 
-    if (idx < totalPairs) {
-        int row = idx / pairsPerRow;
-        int pair = idx - row * pairsPerRow;
+    if (idx >= TotalPairs)
+        return;
 
-        float angle = row * InvFreq[pair];
+    int pair = idx % PairsPerHead;
 
-        // Inverse rotation uses -angle:
-        // cos(-a)=cos(a), sin(-a)=-sin(a)
-        float c = cosf(angle);
-        float s = sinf(angle);
+    int temp = idx / PairsPerHead;
+    int head = temp % NumHeads;
+    int row  = temp / NumHeads;
 
-        int base = row * ModelDim + 2 * pair;
+    float angle = static_cast<float>(row) * InvFreq[pair];
 
-        float g0 = dH[base];
-        float g1 = dH[base + 1];
+    float c = cosf(angle);
+    float s = sinf(angle);
 
-        dH[base]     =  g0 * c + g1 * s;
-        dH[base + 1] = -g0 * s + g1 * c;
-    }
+    int base =
+        row  * RowStride +
+        head * HeadDim +
+        pair * 2;
+
+    float g0 = dH[base];
+    float g1 = dH[base + 1];
+
+    // Backpropagation applies the transpose/inverse rotation:
+    //
+    // [ dx0 ]   [  cos(a)  sin(a) ] [ dg0 ]
+    // [ dx1 ] = [ -sin(a)  cos(a) ] [ dg1 ]
+    dH[base]     =  g0 * c + g1 * s;
+    dH[base + 1] = -g0 * s + g1 * c;
 }
 
 extern "C" __declspec(dllexport)
@@ -342,21 +385,35 @@ void LaunchRoPEBackward(
     float* dH,
     const float* InvFreq,
     int SeqLen,
-    int ModelDim)
+    int NumHeads,
+    int HeadDim,
+    int RowStride)
 {
-    int pairs = SeqLen * (ModelDim / 2);
+    if (dH == nullptr ||
+        InvFreq == nullptr ||
+        SeqLen <= 0 ||
+        NumHeads <= 0 ||
+        HeadDim <= 0 ||
+        RowStride <= 0 ||
+        (HeadDim & 1) != 0)
+    {
+        return;
+    }
 
-    int threads = 256;
-    int blocks = (pairs + threads - 1) / threads;
+    int PairsPerHead = HeadDim / 2;
+    int TotalPairs = SeqLen * NumHeads * PairsPerHead;
 
-    RoPEBackwardKernel<<<blocks, threads>>>(
+    int Threads = 256;
+    int Blocks = (TotalPairs + Threads - 1) / Threads;
+
+    RoPEBackwardKernel<<<Blocks, Threads>>>(
         dH,
         InvFreq,
         SeqLen,
-        ModelDim
+        NumHeads,
+        HeadDim,
+        RowStride
     );
-
-    cudaDeviceSynchronize();
 }
 
 // DropOut.
@@ -462,6 +519,7 @@ void LaunchDropoutBackward(
 }
 
 // ReLU Forward.
+
 #include <cuda_runtime.h>
 
 extern "C" __global__
@@ -494,6 +552,7 @@ void LaunchReLUForward(
 }
 
 // ReLU Backward.
+
 #include <cuda_runtime.h>
 
 extern "C" __global__
@@ -535,7 +594,7 @@ void LaunchReLUBackward(
 }
 
 // Softmax Forward Strided, June 13 2026.
-// Softmax Forward, strided.
+
 #include <math.h>
 #include <float.h>
 
@@ -633,6 +692,7 @@ void LaunchSoftmaxForwardStrided(
 }
 
 // Softmax Backward, strided.
+
 #include <cuda_runtime.h>
 
 extern "C" __global__
@@ -701,7 +761,8 @@ __global__ void CEGradientStridedKernel(
     const int* TargetTokens,
     int Rows,
     int VocabSize,
-    int RowStride)
+    int RowStride,
+    float GradScale)
 {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -713,23 +774,26 @@ __global__ void CEGradientStridedKernel(
     int col = idx % VocabSize;
 
     int target = TargetTokens[row];
-
     int offset = row * RowStride + col;
 
+    // Invalid target row contributes no gradient.
     if (target < 0 || target >= VocabSize) {
         TopGradient[offset] = 0.0f;
         return;
     }
 
     // Cross-entropy gradient after softmax:
+    //
     // dLogits = Probs
     // dLogits[target] -= 1
+    //
+    // GradScale normally averages the gradient over Rows.
     float g = Probs[offset];
 
     if (col == target)
         g -= 1.0f;
 
-    TopGradient[offset] = g;
+    TopGradient[offset] = g * GradScale;
 }
 
 extern "C" __declspec(dllexport)
@@ -739,7 +803,8 @@ void LaunchCEGradientStrided(
     const int* dTargetTokens,
     int Rows,
     int VocabSize,
-    int RowStride)
+    int RowStride,
+    float GradScale)
 {
     int threads = 256;
     int total = Rows * VocabSize;
@@ -751,10 +816,12 @@ void LaunchCEGradientStrided(
         dTargetTokens,
         Rows,
         VocabSize,
-        RowStride);
+        RowStride,
+        GradScale);
 }
 
 // CE Gradient From Probabilities.
+
 #include <cuda_runtime.h>
 
 extern "C" __global__
@@ -884,6 +951,7 @@ void LaunchAddInputEmbeddingGrad(
 }
 
 // Add Bias Rows.
+
 #include <cuda_runtime.h>
 
 extern "C" __global__
@@ -962,6 +1030,7 @@ void LaunchAddBiasRowsBackward(
 }
 
 // Clip Vector.
+
 extern "C" __declspec(dllexport)
 __global__ void ClipVectorKernel(float* X, int N, float Limit)
 {

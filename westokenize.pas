@@ -13,10 +13,8 @@ uses
   Display,
   FileUtil,
   Global,
-  IOHandler,
   Math,
-  SysUtils,
-  Util;
+  SysUtils;
 
 type
   TTokenCount = record                 // Records count of tokens.
@@ -40,13 +38,11 @@ type
 
   TMergedTokenStats = array of TMergedTokenStat;
 var
-  StartSymbol: Integer = 260;                    // UTF-8 0.255, BOS, EOS, PAD, UNK is 259.
-  nCorpus: Integer;
-  ElapsedMS, Hours, Mins: Int64;                 // For timing.
-  Secs, MSecs: Double;                           // For timing.
-  FileName, Reconstructed: String;               // Saving data.
+  ElapsedMS, Hours, Mins: Int64;                      // For timing.
+  Secs, MSecs: Double;                                // For timing.
+  FileName: String;                                   // Saving data.
   Magic: array[0..3] of Char = ('S', 'Y', 'M', 'T');  // For saving symbol table.
-  TrieHead: PTrieNode = nil;                     // Nodes for Trie.
+  TrieHead: PTrieNode = nil;                          // Nodes for Trie.
   MergedTypes, UnmergedTypes: Integer;
   MergedInstances, UnmergedInstances: Integer;
   i: Integer;
@@ -104,6 +100,21 @@ begin
   end;
 end;
 
+// Free trie nodes.
+procedure FreeTrie(var Node: PTrieNode);
+var
+  j: Integer;
+begin
+  if Node = nil then Exit;
+
+  for j := 0 to 255 do
+    if Node^.Children[j] <> nil then
+      FreeTrie(Node^.Children[j]);
+
+  Dispose(Node);
+  Node := nil;
+end;
+
 // Trie procedure: Match longest.
 function MatchLongest(root: PTrieNode;
   const text: TBVector;
@@ -148,34 +159,51 @@ begin
 end;
 
 // Tokenize Corpus from SymbolTable loaded by program. ``
-procedure TokenizeFromSymbolTable(const TextFileName: string; var TokenizedCorpus: TIVector; const Corpus: TBVector);
+procedure TokenizeFromSymbolTable(var TokenizedCorpus: TIVector; const Corpus: TBVector);
 var
   i, BestSym, BestLen: Integer;
 begin
   SetLength(TokenizedCorpus, 1);
-  TokenizedCorpus[0] := 256;
+  TokenizedCorpus[0] := BOS;
   i := 0;
 
   BuildTrie(TrieHead);
 
   while i < nCorpus do begin
+    // Tiny Stories separator byte becomes EOS.
+    if Corpus[i] = 254 then begin
+      SetLength(TokenizedCorpus, Length(TokenizedCorpus) + 1);
+      TokenizedCorpus[High(TokenizedCorpus)] := EOS;
+      Inc(i);
+      Continue;
+    end;
+
     if MatchLongest(TrieHead, Corpus, i, BestSym, BestLen) then begin
       SetLength(TokenizedCorpus, Length(TokenizedCorpus) + 1);
       TokenizedCorpus[High(TokenizedCorpus)] := BestSym;
       Inc(i, BestLen);
     end
     else begin
-      // Fallback: single byte token.
       SetLength(TokenizedCorpus, Length(TokenizedCorpus) + 1);
       TokenizedCorpus[High(TokenizedCorpus)] := Corpus[i];
       Inc(i);
     end;
   end;
 
+  // Add an EOS to the end of TC.
   SetLength(TokenizedCorpus, Length(TokenizedCorpus) + 1);
-  TokenizedCorpus[Length(TokenizedCorpus) - 1] := 257;
+  TokenizedCorpus[High(TokenizedCorpus)] := EOS;
 
+  if TokenizedCorpus[High(TokenizedCorpus)] <> EOS then begin
+    SetLength(TokenizedCorpus, Length(TokenizedCorpus) + 1);
+    TokenizedCorpus[High(TokenizedCorpus)] := EOS;
+  end;
+
+  // Set nTC.
   nTokenizedCorpus := Length(TokenizedCorpus);
+
+  // Free the trie memory.
+  FreeTrie(TrieHead);
 
   if VerboseTokenize then begin
     Write('Input corpus is: ');
@@ -201,18 +229,10 @@ procedure CalculateTimeStatistics;
 var
   RawMS, PauseMS: Int64;
 begin
-  RawMS := MilliSecondsBetween(t1, t0);
-  PauseMS := Round(StopTime);
+  RawMS := MilliSecondsBetween(t0, t1);
+  PauseMS := Round(StopTime * 86400000.0);
 
   ElapsedMS := RawMS - PauseMS;
-
-  {Writeln('DEBUG timing:');
-  Writeln('  t0       = ', DateTimeToStr(t0));
-  Writeln('  t1       = ', DateTimeToStr(t1));
-  Writeln('  RawMS    = ', RawMS);
-  Writeln('  StopTime = ', StopTime:0:4);
-  Writeln('  PauseMS  = ', PauseMS);
-  Writeln('  ElapsedMS= ', ElapsedMS);}
 
   if ElapsedMS <= 0 then
     ElapsedMS := 1;
@@ -282,7 +302,7 @@ begin
 
   // Count symbol types.
   for i := 0 to High(SymbolTable) do
-    if Length(SymbolTable[i]) > 1 then
+    if i >= FirstMergedToken then
       Inc(MergedTypes)
     else
       Inc(UnmergedTypes);
@@ -293,7 +313,8 @@ begin
 
   for i := 0 to High(TokenizedCorpus) do begin
     T := TokenizedCorpus[i];
-    if Length(SymbolTable[T]) > 1 then
+
+    if T >= FirstMergedToken then
       Inc(MergedInstances)
     else
       Inc(UnmergedInstances);
@@ -433,7 +454,6 @@ procedure ReportTokenUsageStatistics;
 var
   Counts: TIVector;
   Stats: TMergedTokenStats;
-  FirstMergedToken: Integer;
 begin
   Writeln('--- Token Statistics ---');
   Writeln('Merged token instances: ', MergedInstances);
@@ -441,7 +461,6 @@ begin
   Writeln('Mean token length: ', nCorpus / nTokenizedCorpus: 6: 4);
   Writeln;
   CountTokenUsage(TokenizedCorpus, Length(SymbolTable), Counts);
-  FirstMergedToken := StartSymbol;  // 260
   BuildMergedTokenStats(Counts, FirstMergedToken, Stats);
   SortMergedTokenStatsByCount(Stats);
 
@@ -480,7 +499,7 @@ begin
   // New code.
   // if ElapsedMS = 0 then ElapsedMS := 1000;
   if not FromSymbolTable then
-    Writeln('Tokens per second: ', nCorpus / (ElapsedMS / 1000): 6: 4);
+    Writeln('Bytes per second: ', nCorpus / (ElapsedMS / 1000): 6: 4);
   Writeln;
 end;
 
@@ -500,15 +519,17 @@ procedure WriteTokenList(const TokenizedCorpus: TIVector; const Part: TPart = B)
 var
   i, iB, iE: Integer;
 begin
-    Case Part of
+  Case Part of
     B: begin
       iB := 0;
-      iE := 99;
+      iE := Min(99, High(TokenizedCorpus));
     end;
+
     E: begin
-      iB := High(TokenizedCorpus) - 99;
+      iB := Max(0, High(TokenizedCorpus) - 99);
       iE := High(TokenizedCorpus);
     end;
+
     F: begin
       iB := 0;
       iE := High(TokenizedCorpus);
@@ -642,7 +663,7 @@ begin
   nCorpus := Length(Corpus);
   if not Training then
     FileName := 'Inference';
-  TokenizeFromSymbolTable(FileName, TokenizedCorpus, Corpus);
+  TokenizeFromSymbolTable(TokenizedCorpus, Corpus);
 
   // Timing.
   t1 := Now;
@@ -659,7 +680,7 @@ begin
     ReportStatistics(TokenizedCorpus);
 
   // Verify by reconstructing.
-  if DisplayVerification and VerboseTokenize and DisplayCorpus then begin
+  if DisplayTokenVerification and VerboseTokenize and DisplayCorpus then begin
     Writeln('--- Reconstructed Corpus, Beginning ---');
     Writeln('Length = ', Length(TokenizedCorpus));
     DetokenizeToDisplay(TokenizedCorpus, B);

@@ -320,7 +320,6 @@ var
   LNInvStd2:  TFSVector;
   LNXhat2:    TSeqMatrix;
   // Other.
-  TestVector: TFSVector;          // Vector for testing. [0..SeqLen] of Single.
   InvFreq:    TFVector;           // For RoPE.
 
 procedure InitializeTransformer;

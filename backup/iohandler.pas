@@ -74,7 +74,7 @@ var
   F: file;
   Magic: array[0..3] of Char;
   S: string;
-  i, Len, OldVersion: Integer;
+  i, Len: Integer;
 begin
   BOS := 256;
   EOS := 257;
@@ -203,7 +203,6 @@ begin
 
   CloseFile(F);
   Writeln('File ', TokenFileName, ' successfully saved.');
-  Writeln;
 end;
 
 // Clear pointers read from Model.ParamBlock.

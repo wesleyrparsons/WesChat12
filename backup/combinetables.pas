@@ -81,9 +81,9 @@ begin                                       // NEED TO SETLENGTH TABLES???
   k := 0;
 
   { 2. Union (deduplicate) }
-  for i := Low(Tables) to High(Tables) do
+  for i := 0 to Count - 1 do
     for j := 0 to High(Tables[i]) do begin
-      s := Tables[i, j];
+      s := Tables[i][j];
       Found := False;
       for Total := 0 to k - 1 do
         if CombinedTable[Total] = s then begin

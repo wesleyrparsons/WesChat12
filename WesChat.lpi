@@ -129,6 +129,11 @@
         <IsPartOfProject Value="True"/>
         <UnitName Value="Infer"/>
       </Unit>
+      <Unit>
+        <Filename Value="outputhead.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="OutputHead"/>
+      </Unit>
     </Units>
   </ProjectOptions>
   <CompilerOptions>

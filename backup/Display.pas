@@ -44,6 +44,9 @@ uses
   Math,
   SysUtils;
 
+var
+  EmbeddingParams, AttentionParams, FFNParams, LayerNormParams, BlockParams, TotalParams: Int64;
+
 // Pause, unconditional.
 procedure HardPause;
 begin
@@ -73,22 +76,60 @@ begin
     Result := #0;   { means: no key }
 end;
 
+// Compute trainable parameters.
+procedure ComputeTrainableParameters;
+begin
+  EmbeddingParams := Int64(nVocab) * ModelDim;
+
+  // Wq, Wk, Wv, W0.
+  AttentionParams := Int64(4) * ModelDim * ModelDim;
+
+  // W1, W2, b1, b2.
+  FFNParams := Int64(2) * ModelDim * ModelDimProj + ModelDimProj + ModelDim;
+
+  // Gamma1, Beta1, Gamma2, Beta2.
+  LayerNormParams := Int64(4) * ModelDim;
+
+  BlockParams := AttentionParams + FFNParams + LayerNormParams;
+  TotalParams := EmbeddingParams + Int64(nBlock) * BlockParams;
+end;
+
+procedure FullReportTrainableParameters;
+var
+  EmbeddingParams, AttentionParams, FFNParams, LayerNormParams, BlockParams, TotalParams: Int64;
+begin
+  ComputeTrainableParameters;
+  Writeln('Trainable parameters:');
+  Writeln('  Embeddings       = ', EmbeddingParams);
+  Writeln('  Attention/block  = ', AttentionParams);
+  Writeln('  FFN/block        = ', FFNParams);
+  Writeln('  LayerNorm/block  = ', LayerNormParams);
+  Writeln('  Total/block      = ', BlockParams);
+  Writeln('  Blocks           = ', nBlock);
+  Writeln('  Total parameters = ', TotalParams);
+end;
+
+// Short report of trainable parameters.
+function NumberTrainableParameters: Int64;
+begin
+  ComputeTrainableParameters;
+  Result := TotalParams;
+end;
+
 // Write key variables in program.
 procedure ReportKeyVariables;
 begin
-  Writeln('Epochs (MaxEpochs): ', MaxEpochs);
+  Writeln('Maximum symbols: ', MaxSymbols, '; Maximum epochs (MaxEpochs): ', MaxEpochs, '.');
   Case LearningStyle of
     SlowLearning:
-      Writeln('Learning rate (slow): ', LearningRate: 9: 7, ' with 0..10: 0.01; 11..20: 0.005; 21..100: 0.0005; 101..300: 0.0001; else 0.00005. ');
+      Writeln('Learning rate (slow): 0..10: 0.01; 11..20: 0.005; 21..100: 0.0005; 101..300: 0.0001; else 0.00005.');
     FastLearning:
-      Writeln('Learning rate (fast): ', LearningRate: 9: 7, ' with 0..30: 0.01; 31..100: 0.005; 101..800: 0.001; else 0.0005. ');
+      Writeln('Learning rate (fast): 0..30: 0.01; 31..100: 0.005; 101..800: 0.001; else 0.0005.');
     RolledOffLearning:
-      Writeln('Learning rate (rolled of): ', LearningRate: 9: 7, ' Floor LR = ', FloorLearningRate: 9: 7, ' Base LR = ', BaseLearningRate: 9: 7, ' LR rolloff = ', RollOff: 9: 7, '.');
+      Writeln('Learning rate (rolled off): Floor LR = ', FloorLearningRate: 9: 7, ' Base LR = ', BaseLearningRate: 9: 7, ' LR rolloff = ', RollOff: 9: 7, '.');
   end;
-  Writeln('Maximum symbols: ', MaxSymbols);
-  Writeln('Weight decay: ', WeightDecay: 9: 7);
-  Writeln('Clip limit: ', ClipLimit: 9: 7);
-  Writeln('Dropouts used: ', Training);
+  Writeln('Weight decay: ', WeightDecay: 9: 7, '; Clip limit: ', ClipLimit: 9: 7, '; Dropouts used: ', Training, '.');
+  Writeln('Number of trainable parameters is ', NumberTrainableParameters);
 end;
 
 // Write information on state of program.
@@ -123,10 +164,11 @@ begin
   Writeln('Current Learning Rate: ', LearningRate: 9: 7);
   Writeln('Weight decay: ', WeightDecay: 9: 7, '; Decay scale = ', DecayScale: 9: 7);
   Writeln('Clip limit: ', ClipLimit: 9: 7);
-  Writeln('Temperature: ', Temperature: 9: 7);
+  Writeln('Temperature: ', TTemperature: 9: 7);
   Writeln('Global step: ', GlobalStep);
   Writeln('Dropouts for Attention, MLP, Residual (A, MLP, RDropout): ', ADropout: 4: 4, ' ', MLPDropout: 4: 4, ' ', RDropout: 4: 4);
   Writeln('Trainable Parameters: Embeddings, Wq, Wk, Wv, W0, W1, b1, W2, b2, gamma1, beta1, gamma2, beta2');
+  FullReportTrainableParameters;
 end;
 
 // Replace unprintable symbols with space.

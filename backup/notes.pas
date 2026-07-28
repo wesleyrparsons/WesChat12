@@ -4,35 +4,31 @@ unit Notes;
 
 { WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wesparsons.com.}
 
-Add lazy heap for pair operations in Symbolize.
+1.  Systematize nTC.
+nRawTokenizedCorpus := Length(TokenizedCorpus);
+PadToSeqMultiple(TokenizedCorpus, SeqLen);
+nTokenizedCorpus := Length(TokenizedCorpus);
 
+2.  Flags for params on device.
 Good flag names:
 ParamsOnDevice: Boolean = False;
 HostParamsChanged: Boolean = False;
-
 Simpler for now:
 if not ParamsOnDevice then begin
   CopyParamsToDevice(WModelParams);
   ParamsOnDevice := True;
 end;
-
 After training updates GPU params, keep:
 ParamsOnDevice := True;
-
 After loading model:
 ParamsOnDevice := False;
 
-General
-1. Replace nSymbols with nVocab.
+3. Replace nSymbols with nVocab.
    UsenTokenizedCorpus instead of Length(TC)
 
-1a. If displaysubstageVVerbose, also displaystage.
+4. Fix GPT2 in infer unit.
 
-2. Fix GPT2 in infer unit.
-
-4. In main program: Read Corpus, Read Files (vocab and merge), Tokenize, Embed, Transform.
-One proc: display merge/token info. One proc: display transform/embed info.
-
+5. Notes on file naming.
   Proc          Input                      Output
   LoadCorpus    CorpusFileName             Corpus
   Symbolize     CorpusFileName             SymbolTable
@@ -47,55 +43,49 @@ One proc: display merge/token info. One proc: display transform/embed info.
 
 Tokenize
 
-1. Add a max-heap helps for “what is the most frequent pair right now?”
-Instead of scanning all pairs every iteration, keep a heap ordered by count.
-But because counts change after merges, you usually do lazy heap updates:
-push updated (pair, count, version) records
-when popping, discard stale entries. What heap unit to use in FPC?
+1. Where does nCorpus live?
 
-2. Where does nCorpus live?
+2. Do not use Float instead of Single. Need to use compiler directive.
 
-3. Do not use Float instead of Single. Need to use compiler directive.
+3. Corpus array of byte. Use RawByteString. Done, but check.
 
-4. Corpus array of byte. Use RawByteString. Done, but check.
+4. Drop linked lists. So if you later optimize training hard, use
+Tok[i], Prev[i], Next[i], Alive[i]. Not do this now.
 
-5. Drop linked lists. So if you later optimize training hard, use
-Tok[i], Prev[i], Next[i], Alive[i].
+5. Drop Head or Tail form linked lists.
 
-6. Avoid repeated trie rebuilds.
-If the symbol table is fixed, build the trie once after loading. ??
+6. Use nSymbols, except use nVocab in Transform. Done.
 
-7. Use nSymbols, except use nVocab in Transform. Done.
-
-8. Add a regex pretokenizer. Nope, not necessary.
+7. Add a regex pretokenizer. Nope, not necessary.
 
 Symbolize.
 
 Should I use clean-up symbols in DisplayByteSymbolTable? Yes, doing so.
 Lengthen tabs in printouts like most frequent symbols.array[ or symboltable...1] of Type = ();
 
-Embed.
+Add one pair at the model level, outside ParamBlock:
+type
+  TWModelParams = record
+    ParamBlock: array of TParamBlock;
+    Embeddings: TWMatrix;
+    FinalGamma: TWVector;
+    FinalBeta: TWVector;
+  end;
 
-The name RunEmbed understates what it does. It seems to:
-initialize embeddings, initialize transformer, create training windows,
-build input and targets, and run transformer blocks.
-No, keep it as Embed.
+Their sizes are:
+SetLength(FinalGamma.Value, ModelDim);
+SetLength(FinalGamma.Grad, ModelDim);
+SetLength(FinalBeta.Value, ModelDim);
+SetLength(FinalBeta.Grad, ModelDim);
 
 Transform/Matrix/Utils.
 
-a. Is InvFreq dimmed as ModelDim or HeadDim?
+0. Use CPU/GPU or host/device or cblas/cublas nomenclature?
 
-b. Eliminate non-cublas optimization in Util.
+1. ApplyRope inside each rather than across all model.
 
-c. Use CPU/GPU or host/device or cblas/cublas nomenclature?
-
-0. ApplyRope inside each rather than across all model.
-
-1. Many models reuse the embedding matrix for output projection.
+2. Many models reuse the embedding matrix for output projection.
 This is called weight tying. WVocab not needed. I am doing it.
-
-2. What to do with nTokens and append proc.
-Store attention softmax outputs. Do I need them intact for backprop through softmax.
 
 3. Put Hidden on the heap; make it a dynamically allocated variable. No. cblas will not work.
 

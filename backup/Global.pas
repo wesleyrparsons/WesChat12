@@ -16,22 +16,22 @@ var
   TrainSuccess: Boolean = False;            // Training successful and proceed to inference.
   DisplayCorpus: Boolean = False;           // One set for real tokenizing and one set for debug.
   DisplayWindow: Boolean = False;           // Display the SeqLen window.
-  VerboseTokenize: Boolean = False;         // Verbose in Tokenize units.
+  VerboseTokenize: Boolean = True;         // Display steps in Tokenize and Symbolize units.
   VerboseTransform: Boolean = False;        // Displays X, Q, ScoresHead1, etc. in Transform units.
+  VerboseInfer: Boolean = True;             // Displays steps in Infer unit.
   VeryVerboseTokenize: Boolean = False;     // Very verbose in Tokenize units.
   DisplayTokenWork: Boolean = False;        // Show token work in Tokenize units.
-  DisplayMergeWork: Boolean = False;         // Show merge work in Tokenize units.
+  DisplayMergeWork: Boolean = False;        // Show merge work in Tokenize units.
   DisplayVerification: Boolean = False;     // Verify by rebuilding corpus in WesTokenize or displaying in GPT.
   DisplayEachByteRead: Boolean = False;     // Verify reading of bytes.
   SaveFiles: Boolean = True;                // Save various files, otherwise not saved.
   SaveTokenizationFiles: Boolean = True;    // Fave tokenization files (false for inference).
-  MaxSymbols: Integer = 10000;              // Maximum number of symbols.
-  MaxMerges: Integer = 20000;               // Maximum number of merges.
+  MaxMerges: Integer = 60000;               // Maximum number of merges.
   MaxPairCount: Integer = 800000;           // Maximum number of pair in BPE.
 
 const
   // Model constants.
-  MaxEpochs = 8000000;             // Number of epochs, loops over tokenized corpus.
+  MaxEpochs = 1000000;            // Number of epochs, loops over tokenized corpus.
   ModelDim = 192;                 // Number of loadings for a symbol.
   Proj = 4;                       // Projection to Hidden arrays.
   ModelDimProj = ModelDim * Proj; // Dimension of model of projected X matrix.
@@ -41,17 +41,16 @@ const
   nHead = 8;                      // Number of heads for multi-headed attention.
   HeadDim = ModelDim div nHead;   // Length of one head.
   nBlock = 6;                     // Number of blocks in transformer.
-  ADropOut = 0.05;                 // Probability of attention dropout.
-  MLPDropOut = 0.05;               // Probability of MLP dropout.
-  RDropout = 0.05;                 // Probability of residual dropout.
-  DimVocab = 20000;               // Need maximum of vocab symbols to dimension array. Needed for Embeddings.
+  ADropOut = 0.05;                // Probability of attention dropout. Set to 0.0 for no dropout.
+  MLPDropOut = 0.05;              // Probability of MLP dropout.       Even if Training is True.
+  RDropout = 0.05;                // Probability of residual dropout.
+  MaxSymbols = 10000;             // Maximum WesTokenizer symbol count during BPE construction.
+  DimVocab   = 52000;             // Physical model vocabulary capacity; must be >= nVocab.
+  // Other constants.
   RecentCount = 10;               // Rolling means in training.
   Version: shortstring = '1.2';   // Version 1.2.
-  // Transform constants.
   InvSqrtHeadDim: Single = 1 / Sqrt(HeadDim);         // Used in softmax.
-  RowMajor = 101;                 // Row Major.
-  NoTrans  = 111;                 // No transposition.
-  Trans    = 112;                 // Transposition.
+  FirstMergedToken = 260;         // First token after all extended ASCII and 4 specials.
 
 type                                                                           // SeqLen = L, ModelDim = D, ModelDim/nHead = H, DB is Proj*D, DV is DimVocab.
   // cublas type.
@@ -66,9 +65,9 @@ type                                                                           /
   THeadVector = array[0..HeadDim - 1] of Single;                               // H (H is like D)
   TVocabVector = array[0..DimVocab - 1] of Single;                             // DV (DV like L)
   TSeqMatrix = array[0..SeqLen - 1] of TSeqVector;                             // L x D
-  TSeqHeadMatrix = array[0..SeqLen - 1] of THeadVector;                        // L x H
+  // TSeqHeadMatrix = array[0..SeqLen - 1] of THeadVector;                        // L x H
   TWeightMatrix = array[0..ModelDim - 1] of TSeqVector;                        // D x D
-  TWeightHeadMatrix = array[0..HeadDim - 1] of THeadVector;                    // H x H        ?
+  // TWeightHeadMatrix = array[0..HeadDim - 1] of THeadVector;                    // H x H        ?
   TWeightProjMatrix = array[0..ModelDim - 1] of TSeqVectorProj;                // D x DB
   TWeightProjMatrixT = array[0..ModelDimProj - 1] of TSeqVector;               // DB x D
   THiddenMatrix = array[0..SeqLen - 1] of TSeqVectorProj;                      // L x DB
@@ -81,10 +80,10 @@ type                                                                           /
     Value, Grad:  TSeqMatrix;
     dValue, dGrad:  PSingle;
   end;
-  TSeqHeadTensor = record
+  {TSeqHeadTensor = record
     Value, Grad:  TSeqHeadMatrix;
     dValue, dGrad:  PSingle;
-  end;
+  end;}
   TSeqVectorTensor = record
     Value, Grad:  TSeqVector;
     dValue, dGrad:  PSingle;
@@ -101,10 +100,10 @@ type                                                                           /
     Value, Grad:  TWeightMatrix;
     dValue, dGrad:  PSingle;
   end;
-  TWeightHeadTensor = record
+  {TWeightHeadTensor = record
     Value, Grad:  TWeightHeadMatrix;
     dValue, dGrad:  PSingle;
-  end;
+  end;}
   TWeightProjTensor = record
     Value, Grad:  TWeightProjMatrix;
     dValue, dGrad:  PSingle;
@@ -147,13 +146,13 @@ type                                                                           /
     Embeddings:                     TEmbeddingsTensor;     // Embeddings cannot be dynamic, CBLAS will not work.
     ParamBlock:                     TParamBlock;
   end;
-  TStateBlock = array[0..nBlock - 1] of record                  // Model of non-trainable parameters.
+  TStateBlock = array[0..nBlock - 1] of record             // Model of non-trainable parameters.
     // Matrices for neural net.
-    X, X1, X2, X3, X4, X5, X6, X7:  TSeqTensor;                 // X's at all stages.
-    X1q, X1v, X1k:                  TSeqTensor;                 // X's for Q, K, V.
-    Q, K, V:                        TSeqTensor;                 // Q is X*Wq, K is X*Wk, V is X*Wv.
+    X, X1, X2, X3, X4, X5, X6, X7:  TSeqTensor;            // X's at all stages.
+    X1q, X1v, X1k:                  TSeqTensor;            // X's for Q, K, V. Actaully, don't need dValue. Can simplify.
+    Q, K, V:                        TSeqTensor;            // Q is X*Wq, K is X*Wk, V is X*Wv.
     ScoresHead1, ScoresHead2:       array[0..nHead - 1] of TScoresHeadTensor;  // Scores partitioned into nHeads.
-    Hidden1, Hidden2:               THiddenTensor;              // Neural net layer.
+    Hidden1, Hidden2:               THiddenTensor;         // Neural net layer.
     // Caches for LayerNorm.
     LNInvStd1:  TFSVector;                                 // Cache for inverse standard deviation in LayerNorm.
     dLNInvStd1: PSingle;
@@ -171,11 +170,11 @@ type                                                                           /
     dX4FromLN2:           PSingle;
     dXFromLN1:            PSingle;
   end;
-  TWModelState = record                                         // Model of non-trainable parameters.
+  TWModelState = record                                    // Model of non-trainable parameters.
     StateBlock:                     TStateBlock;
-    InvFreq:                        TFVector;                   // Rope.
+    InvFreq:                        TFVector;              // Rope.
     dInvFreq:                       PSingle;
-    Probs, TopGradient:             TSeqVocabMatrix;            // Logit and Gradient.
+    Probs, TopGradient:             TSeqVocabMatrix;       // Logit and Gradient.
     dProbs, dTopGradient:           PSingle;
   end;
 
@@ -183,13 +182,15 @@ var
   // cublas vars.
   CuHandle: TcublasHandle;
   CudaAllocated: Boolean = False;
+  DebugCudaChecks: Boolean = False;              // Do checks on cuda -- this will slow execution.
   // DLL accessibility vars.
-  CublasPresent: Boolean;
-  CudartPresent: Boolean;
-  WesChatKernelPresent: Boolean;
+  CublasPresent: Boolean;                        // Is cublas present?
+  CudartPresent: Boolean;                        // Is cudart present?
+  WesChatKernelPresent: Boolean;                 // Is my kernel present?
   // Tokenize vars.                              // Need in order to use in decoding in Infer.
-  Vocab: TStringList;
+  Vocab: TStringList;                            // Vocabulary for ChatGPT.
   // Corpus vars.
+  nCorpus: Integer;                              // Length of corpus.
   CorpusFileNames: TSVector;                     // Name of corpus file.
   SymbolTable: TSymbolTable;                     // Symbol table.
   WorkingName, WorkingDir: string;               // Saving data.
@@ -207,7 +208,7 @@ var
   PAD: Integer = 258;                            // Padding to bring up to SeqLen.
   UNK: Integer = 259;                            // Unknown.
   // Model settings vars.
-  Training:             Boolean = True;          // In training as opposed to inference mode. For dropouts also.
+  Training:             Boolean = False;         // True = training mode: training temperature and dropout enabled.
   LearningStyle:        TLearning = SlowLearning;     // Style of learning.
   ShuffleWindows:       Boolean = False;         // Shuffle the windows each epoch.
   BaseLearningRate:     Double = 0.01000;        // Base learning rate for Gradient.
@@ -218,8 +219,9 @@ var
   DecayScale:           Double;                  // 1.0 - LearningRate * WeightDecay.
   LearningRate:         Double;                  // Derived learningRate for Gradient.
   GlobalStep:           Int64;                   // Increments once per window.
-  Temperature:          Double = 1.00000;        // Temperature for softmax.
-  ClipLimit:            Double = 0.40000;        // Clips gradients.
+  TTemperature:         Single = 1.00000;        // Training temperature for softmax.
+  ITemperature:         Single = 1.00000;        // Inference temperature for softmax.
+  ClipLimit:            Single = 0.40000;        // Clips gradients.
   // Staging and epoch vars.
   DisplayStage:    Boolean = False;              // Display progress by stage in train and transform.
   DisplaySubstage: Boolean = False;              // Display progress by stage in train and transform.
@@ -240,12 +242,12 @@ var
   Mt0, Mt1, t0, t1, StopTime: TDateTime;         // For timing.
   FromSymbolTable: Boolean = False;              // Operating from input Symbol Table rather than from tokenization.
   GlobalSeed: UInt64;                            // Initialize random sequence.
-  nSymbols: Integer;                             // Number of symbols = Length(SymbolTable);
-  nVocab: Integer;                               // nVocab is also nSymbol. Number of symbol items.
+  nSymbols: Integer;                             // Number of symbols produced/loaded by tokenizer.
+  nVocab: Integer;                               // Active model vocabulary size; normally set from nSymbols.
   TokenID: TIVector;                             // Same as TokenizedCorpus.
   Tokenizer: TTokenizer;                         // WesChat or GPT2Chat tokenizer;
   NewModel: Boolean = True;                      // If new model, initialize params.
-  ParamsNeedCopyToDevice: Boolean = False;       // Start of infer.
+  ParamsNeedCopyToDevice: Boolean = True;        // True  = host parameters need to be sent to GPU. False = current parameters are already on GPU
   CorpusPresent: Boolean = False;                // Parts of program present.
   SymbolTablePresent: Boolean = False;           // Do I need these?
   MergeTablePresent: Boolean = False;

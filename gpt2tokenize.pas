@@ -316,7 +316,77 @@ begin
   end;
 end;
 
+// Load vocab1.json.
 procedure LoadVocab(const FileName: string; Vocab: TStringList);
+var
+  Raw: RawByteString;
+  JSON: TJSONData;
+  Obj: TJSONObject;
+  FS: TFileStream;
+  i, TokenID, MaxTokenID: Integer;
+begin
+  Vocab.Clear;
+  Vocab.Sorted := False;
+  Vocab.Duplicates := dupAccept;
+  Vocab.CaseSensitive := True;
+  Vocab.OwnsObjects := False;
+
+  if not FileExists(FileName) then begin
+    Writeln('ERROR: Vocabulary file not found: ', FileName);
+    Exit;
+  end;
+
+  FS := TFileStream.Create(FileName, fmOpenRead or fmShareDenyNone);
+  try
+    SetLength(Raw, FS.Size);
+
+    if FS.Size > 0 then
+      FS.ReadBuffer(Raw[1], FS.Size);
+  finally
+    FS.Free;
+  end;
+
+  JSON := GetJSON(Raw);
+  try
+    if not (JSON is TJSONObject) then begin
+      Writeln('Invalid vocabulary JSON.');
+      Exit;
+    end;
+
+    Obj := TJSONObject(JSON);
+
+    // Find the largest token ID.
+    MaxTokenID := -1;
+
+    for i := 0 to Obj.Count - 1 do begin
+      TokenID := Obj.Items[i].AsInteger;
+
+      if TokenID > MaxTokenID then
+        MaxTokenID := TokenID;
+    end;
+
+    // Create one list position for every token ID.
+    Vocab.Capacity := MaxTokenID + 1;
+
+    for i := 0 to MaxTokenID do
+      Vocab.Add('');
+
+    // Place each token at its actual ID.
+    for i := 0 to Obj.Count - 1 do begin
+      TokenID := Obj.Items[i].AsInteger;
+
+      if (TokenID >= 0) and (TokenID <= MaxTokenID) then
+        Vocab[TokenID] := Obj.Names[i];
+    end;
+
+  finally
+    JSON.Free;
+  end;
+
+  Writeln('End of loading vocabulary. Length of Vocab: ', Vocab.Count);
+end;
+
+{procedure LoadVocab(const FileName: string; Vocab: TStringList);
 var
   Raw: RawByteString;
   JSON: TJSONData;
@@ -367,7 +437,7 @@ begin
     DisplayVocab(288, 301);
     if VeryVerboseTokenize then Pause;
   end;
-end;
+end;}
 
 procedure LoadMerges(const FileName: string; Merges: TStringList);
 var
@@ -585,11 +655,19 @@ begin
 
     for k := 0 to High(Pieces) do begin
       idx := Vocab.IndexOf(Pieces[k]);
+
+      if idx >= 0 then begin
+        Inc(Count);
+        SetLength(TokenIDs, Count);
+        TokenIDs[Count - 1] := idx;
+      end;
+
+      {idx := Vocab.IndexOf(Pieces[k]);
       if idx >= 0 then begin
         Inc(Count);
         SetLength(TokenIDs, Count);
         TokenIDs[Count - 1] := PtrInt(Vocab.Objects[idx]);
-      end;
+      end;}
     end;
   end;
 end;
@@ -722,17 +800,12 @@ begin
   Writeln;
   if VeryVerboseTokenize then Pause;
 
-  if VerboseTokenize then begin
-    Writeln('Decoded First 100 TokenizedCorpus:');
-    for i := 0 to 99 do
+  if DisplayCorpusVerification then Begin
+    Write('First ', DisplayLength, ' tokens of detokenized corpus: ');
+    for i := 0 to DisplayLength do
       Write(DisplayToken(UTF8Decode(Vocab[TokenizedCorpus[i]])));
     Writeln;
-    if VeryVerboseTokenize then Pause;
-
-    Writeln('Decoded Last 100 TokenizedCorpus:');
-    for i := Max(0, Length(TokenizedCorpus) - 100) to High(TokenizedCorpus) do
-      Write(DisplayToken(UTF8Decode(Vocab[TokenizedCorpus[i]])));
-    Writeln;
+    Pause;
   end;
 
   Merges.Free;

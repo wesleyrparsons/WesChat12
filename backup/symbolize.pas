@@ -113,9 +113,9 @@ begin
   end;
   CloseFile(F);
 
-  if VerboseTokenize then begin
-    Writeln('ReadByteFile: ');
-    for i := 0 to Min(150, High(OneCorpus)) do
+  if DisplayCorpus then begin
+    Writeln('First ' DisplayLength, ' bytes of corpus): ');
+    for i := 0 to Min(DisplayLength, High(OneCorpus)) do
       Write(OneCorpus[i], ' ');
     Pause;
     Writeln;
@@ -611,8 +611,10 @@ var
         ReportProgramInfo;
         Pause;
       end;
-      'p', 'P':
+      'p', 'P': begin        // Pause work.
+        Writeln('Paused...');
         Pause;
+      end;
       'm', 'M': begin
         Writeln;
         Writeln('Maximum symbols = ', MaxSymbols, '. Current symbols = ', Length(SymbolTable),
@@ -886,18 +888,13 @@ begin
     Writeln(CorpusFileNames[i], '  ');
   Writeln;
 
-  Writeln('--- Token Statistics ---');
-  Writeln('Final BPE tokens: ', FinalTokenCount);
-  Writeln('Bytes per token: ', nCorpus / FinalTokenCount:0:4);
-  Writeln('Token count / original bytes: ', FinalTokenCount / nCorpus:0:4);
-
   Writeln('--- Time Statistics ---');
   Writeln('Start time: ', DateTimetoStr(t0), '     End time: ', DateTimeToStr(t1));
   Writeln('Total elapsed time: ', Hours, ' hours, ', Mins, ' min ', Secs: 4: 4, ' sec');
   Writeln('Number of symbols: ', nSymbols);
-  Writeln('Original text size (bytes/tokens): ', nCorpus);
+  Writeln('Corpus size: ', nCorpus, ' bytes');
   if not FromSymbolTable then begin
-    Writeln('Tokens per second (total): ', nCorpus / (ElapsedMS / 1000): 6: 4);
+    Writeln('Bytes processed per second: ', nCorpus / (ElapsedMS / 1000): 6: 4);
     Writeln;
   end;
 end;

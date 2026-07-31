@@ -28,14 +28,44 @@ implementation
 
 const
   Scale = Sqrt(ModelDim);         // Transformer-style embedding scaling by sqrt(d_model).
+type
+  TRowLossVector = array[0..SeqLen - 1] of Single;    // For computing CELoss on cuda.
 var
   LastBestSaveEpoch: Integer;     // Saving models.
   AutoSaveEpoch: Integer;         // At this epoch, start saving new minimum loss models.
   BestSavedLoss: Double;
   MinSaveGap: Integer;
   MinSaveDelta: Double;
+  RowLoss: TRowLossVector;
 
-// Compute the CE loss.
+  // Compute the CELoss with kernel routine.
+function ComputeCELossGPU(dProbs: PSingle; dTargetTokens: PInteger; dRowLoss: PSingle; var RowLoss: TRowLossVector): Double;
+  var
+    i: Integer;
+  begin
+    LaunchCELossRows(dProbs, dTargetTokens, dRowLoss, SeqLen, nVocab, DimVocab);
+
+    if DebugCudaChecks then
+      CheckCudaError('Launch CELossRows.');
+
+    cudaMemcpy(@RowLoss[0], dRowLoss, SeqLen * SizeOf(Single), cudaMemcpyDeviceToHost);
+
+    if DebugCudaChecks then
+      CheckCudaError('Copy CE row losses.');
+
+    Result := 0.0;
+
+    for i := 0 to SeqLen - 1 do begin
+      if IsNan(RowLoss[i]) or IsInfinite(RowLoss[i]) then
+        raise Exception.CreateFmt('ComputeCELossGPU: invalid row loss at position %d.', [i]);
+
+      Result := Result + RowLoss[i];
+    end;
+
+    Result := Result / SeqLen;
+  end;
+
+{// Compute the CE loss.
 function ComputeCELoss(const Probs: TSeqVocabMatrix; const TargetTokens: TIDimVector): Double;
 const
   Eps = 1.0e-12;
@@ -96,15 +126,16 @@ begin
   Result := Result / SeqLen;
 
   if TinyCount > 48 then begin
-    Writeln('Warning: ', TinyCount, ' probabilities were below epsilon of ', Eps: 9: 7, ' in this CE loss.  Pausing...');
-    Pause;
+    Writeln('Warning: ', TinyCount, ' probabilities were below epsilon of ', Eps: 9: 7, ' in this CE loss.');
+    // Pause;
   end;
-end;
+end;}
 
 // Compute the CE loss only.
 function ComputeLossOnly(var WModelParams: TWModelParams; var WModelState: TWModelState; const InputTokens, TargetTokens: TIDimVector): Double;
 var
   Blk: Integer;
+  RowLoss: TRowLossVector;
 begin
   with WModelParams do with WModelState do begin
 
@@ -123,12 +154,21 @@ begin
         cudaMemcpy(StateBlock[Blk + 1].X.dValue, StateBlock[Blk].X7.dValue, XSize, cudaMemcpyDeviceToDevice);
     end;
 
+    cudaMemcpy(dTargetTokens, @TargetTokens[0], SeqLen * SizeOf(Integer), cudaMemcpyHostToDevice);
+
+    if DebugCudaChecks then
+      CheckCudaError('Copy diagnostic target tokens.');
+
     RunOutputForward(WModelParams, WModelState);
+
+    Result := ComputeCELossGPU(dProbs, dTargetTokens, dRowLoss, RowLoss);
+
+    {RunOutputForward(WModelParams, WModelState);
     cudaMemcpy(@Probs[0, 0], dProbs, ProbsSize, cudaMemcpyDeviceToHost);
     if DebugCudaChecks then
       CheckCudaError('Copy probabilities for diagnostic loss.');
 
-    Result := ComputeCELoss(Probs, TargetTokens);
+    Result := ComputeCELoss(Probs, TargetTokens);}
   end;
 end;
 
@@ -251,23 +291,22 @@ var
         VerboseTransform := not VerboseTransform;
         Writeln('Very verbose transform mode: ', VerboseTransform);
       end;
-      'w', 'W': begin        // Report program info.
-        Writeln;
-        ReportProgramInfo;
-        Pause;
+      'p', 'P': begin        // Pause work.
+        Writeln('Paused...');
+        PauseNNL;
       end;
-      'p', 'P':              // Pause work.
-        Pause;
       'l', 'L': begin        // Override learning rate.
         Write('Enter override learning rate: ');
         Readln(OverrideLearningRate);
       end;
       'i', 'I': begin        // Display training info.
+        ReportProgramInfo;
         Writeln('Training. Work = ', ExtractFileName(ExcludeTrailingPathDelimiter(WorkingDir)), '; nTC = ', Length(TokenizedCorpus), ',  nVocab = ', nVocab, '; DimVocab = ', DimVocab,
-          '; Seqlen = ', SeqLen, '; Stride = ', Stride, '; ModelDim = ', ModelDim, '; nHead = ', nHead, '; nBlock = ', nBlock, '; Proj = ', Proj, '; DropOut = ', Training, '.');
-        Write(DateTimeToStr(Now), '  X = Exit training. N = go to iNference. V = toggle Verbose mode.  ');
-        Writeln('I = program Information. P = Pause. L = set Learning rate. S = Save. Training...');
-        Pause;
+          '; Seqlen = ', SeqLen, '; Stride = ', Stride, '; ModelDim = ', ModelDim, '; nHead = ', nHead, '; nBlock = ', nBlock, '; Proj = ', Proj,
+          '; DropOut = ', Training, '; Shuffling = ', ShuffleWindows, '.');
+        Write(DateTimeToStr(Now), '  X = eXit training. N = go to iNference. V = toggle Verbose mode.  ');
+        Writeln('I = get program Information. P = Pause. L = set Learning rate. S = Save. Training...');
+        PauseNNL;
       end;
       's', 'S': begin        // Save model.
         Write('Enter model filename, blank for automatic checkpoint: ');
@@ -293,7 +332,7 @@ var
           Writeln('File ', ModelFileName, ' successfully saved.')
         else
           Writeln('File not saved.');
-        Pause;
+        PauseNNL;
       end;
 
     end;
@@ -339,8 +378,13 @@ begin
   InitializeTransformerState(WModelState);
 
   // Initialize params if new model.
-  if NewModel then
+  NeedParamCopy := (not CudaAllocated) or ParamsNeedCopyToDevice or NewModel;
+
+  if NewModel then begin
     InitializeTransformerParams(WModelParams);
+    GlobalStep := 0;
+    NewModel := False;
+  end;
 
   NeedParamCopy := (not CudaAllocated) or ParamsNeedCopyToDevice or NewModel;
 
@@ -359,10 +403,12 @@ begin
     // Initialize epoch/sequence loop.
     Epoch := 0;
     Start := 0;
-    GlobalStep := 0;
+    if NewModel then
+      GlobalStep := 0;
     Writeln('Training started.');
-    Write(DateTimeToStr(Now), '  X = Exit training. N = go to iNference. V = toggle Verbose mode.  ');
-    Writeln('I = program Information. P = Pause. L = set Learning rate. S = Save. Training...');
+    Writeln;
+    Write(DateTimeToStr(Now), '  X = eXit training. N = go to iNference. V = toggle Verbose mode.  ');
+    Writeln('I = get program Information. P = Pause. L = set Learning rate. S = Save. Training...');
 
     // Display embeddings.
     if VerboseTransform then begin
@@ -541,6 +587,15 @@ begin
         end; // End gradient stage.}
 
         // Run the output-head forward pass.
+        RunOutputForward(WModelParams, WModelState);
+
+        // Compute mean cross-entropy loss on the GPU and copy only SeqLen losses.
+        Loss := ComputeCELossGPU(dProbs, dTargetTokens, dRowLoss, RowLoss);
+
+        // Compute the logit gradient, X7 gradient, and output-side tied-embedding gradient.
+        RunOutputBackward(WModelParams, WModelState);
+
+        {// Run the output-head forward pass.
         // This produces probabilities in dProbs.
         RunOutputForward(WModelParams, WModelState);
 
@@ -553,7 +608,7 @@ begin
         Loss := ComputeCELoss(Probs, TargetTokens);
 
         // Compute the logit gradient, X7 gradient, and output-side tied-embedding gradient.
-        RunOutputBackward(WModelParams, WModelState);
+        RunOutputBackward(WModelParams, WModelState);}
 
         if VerboseTransform then
           Writeln('            Switch from Forward to Backprop');
@@ -587,6 +642,15 @@ begin
           end;
         if DebugCudaChecks then
           CheckCudaError('Gradient clipping.');
+
+        if VerboseTransform then begin
+          cudaMemcpy(@Probs[0, 0], dProbs, ProbsSize, cudaMemcpyDeviceToHost);
+
+          if DebugCudaChecks then
+            CheckCudaError('Copy probabilities for verbose display.');
+
+          VTPDisplayX('Display Probs after softmax.', Probs, B);
+        end;
 
         // Use schedule to calculate learning rate. Remember Training may be False (affects dropouts).
         Case LearningStyle of
@@ -630,7 +694,7 @@ begin
         UpdateEmbeddings(wModelParams, WModelState);
 
         // Diagnostic check for pre- versus post-update losses.
-        {PostUpdateLoss := ComputeLossOnly(WModelParams, WModelState, InputTokens, TargetTokens, Start);
+        {PostUpdateLoss := ComputeLossOnly(WModelParams, WModelState, InputTokens, TargetTokens);
         Writeln('Pre update loss  = ', PreUpdateLoss:10:8);
         Writeln('Post update loss = ', PostUpdateLoss:10:8);
         Pause;}
@@ -681,46 +745,14 @@ begin
 
       if StopTraining then Exit;
 
-      // Display loss progress.
+      // Compute StartLoss.
       if Epoch = 0 then
         StartLoss := MEL;
-      if (Epoch mod 10) = 1 then begin
-
-        // Parameters.
-        Write('>> Work = ', ExtractFileName(ExcludeTrailingPathDelimiter(WorkingDir)), '; nTC = ', Length(TokenizedCorpus), '; nVocab = ', nVocab, '; DimVocab = ', DimVocab,
-          '; Seqlen = ', SeqLen, '; Stride = ', Stride, '; ModelDim = ', ModelDim, '; nHead = ', nHead, '; nBlock = ', nBlock, '; Proj = ', Proj, '; DropOut = ', Training);
-        if Training then
-          Writeln(' (', ADropOut: 4: 3, ' ', MLPDropOut: 4: 3, ' ', RDropOut: 4: 3, ').')
-        else
-          Writeln('.');
-
-        if OverrideLearningRate = -1.0 then begin
-          // Not override learning rate.
-          Case LearningStyle of
-            SlowLearning:
-              // Display slow learning rate schedule.
-              Write('>> Learning rate (slow) = ', LearningRate: 9: 7, ' with 0..10: 0.01; 11..20: 0.005; 21..100: 0.0005; 101..1000: 0.0001; else 0.00005. ');
-            FastLearning:
-              // Display fast learning rate schedule.
-              Write('>> Learning rate (fast) = ', LearningRate: 9: 7, ' with 0..30: 0.01; 31..100: 0.005; 101..400: 401..800: .0005; else 0.0001. ');
-            RolledOffLearning:
-              // Learning Rolled off learning rate.
-              Write('>> Learning rate (rolled of) = ', LearningRate: 9: 7, ' Floor LR = ', FloorLearningRate: 9: 7, ' Base LR = ', BaseLearningRate: 9: 7, ' LR rolloff = ', RollOff: 9: 7, '.');
-          end;
-        end
-        else
-        // Display override learning rate.
-        Write('>> Learning rate (override) = ', LearningRate: 9: 7, '. ');
-
-        Writeln('Weight decay = ', WeightDecay: 9: 7, '; Decay scale = ', DecayScale: 9: 7, '; Perplexity = ', exp(MEL): 9: 7,'.');
-        Writeln('>> Temperature = ', TTemperature: 9: 7, '; Clip limit = ', ClipLimit: 9: 7, '; Global step = ', GlobalStep, '.');
-      end;
 
       // Save best model subject to conditions.
       if MEL < MinLoss then begin
         MinLoss := MEL;
         MinLossEpoch := Epoch;
-        // Writeln('New minimum loss in Epoch ', Epoch, '. MinLoss = ', MinLoss: 9: 7);
 
         if (Epoch >= AutoSaveEpoch) and ((Epoch - LastBestSaveEpoch) >= MinSaveGap) and
           ((BestSavedLoss = MaxDouble) or ((BestSavedLoss - MEL) >= MinSaveDelta)) then begin
@@ -745,10 +777,8 @@ begin
         Write('^^')
       else
         Write('--');
-      Write('Epoch ', Epoch, ' ended. LR = ', LearningRate: 10 :8, '. Window count = ', WindowCount, '. Mean loss: Start = ', StartLoss: 9: 7, '; Minimum = ',
-        MinLoss: 9: 7, ' in epoch ', MinLossEpoch, '; Current = ', MEL: 9: 7);
-      Write('; Rolling', RecentLossCount, ' = ', MeanRunningLoss: 9: 7);
-
+      Write('Epoch ', Epoch, ' ended. LR = ', LearningRate: 10 :8, '. Window # = ', WindowCount, '. Mean loss: Start = ', StartLoss: 9: 7, '; Minimum = ',
+        MinLoss: 9: 7, ' in epoch ', MinLossEpoch, '; Online training = ', MEL: 9: 7, '; Rolling', RecentLossCount, ' = ', MeanRunningLoss: 9: 7);
       if Epoch > 0 then begin
         if DiffLoss > 0 then
           Write('; Better by ', DiffLoss: 9: 7)
@@ -757,6 +787,39 @@ begin
       end;
       Writeln('.');
 
+      // Display loss progress.
+      if (Epoch > 0) and ((Epoch mod 10) = 0) then begin
+
+        // Parameters.
+        Write('>> Work = ', ExtractFileName(ExcludeTrailingPathDelimiter(WorkingDir)), '; nTC = ', Length(TokenizedCorpus), '; nVocab = ', nVocab, '; DimVocab = ', DimVocab,
+          '; Seqlen = ', SeqLen, '; Stride = ', Stride, '; ModelDim = ', ModelDim, '; nHead = ', nHead, '; nBlock = ', nBlock, '; Proj = ', Proj, '; Shuffling = ', ShuffleWindows,
+          '; DropOut = ', Training);
+        if Training then
+          Writeln(' (', ADropOut: 4: 3, ' ', MLPDropOut: 4: 3, ' ', RDropOut: 4: 3, ').')
+        else
+          Writeln('.');
+
+        if OverrideLearningRate = -1.0 then begin
+          // Not override learning rate.
+          Case LearningStyle of
+            SlowLearning:
+              // Display slow learning rate schedule.
+              Writeln('>> Learning rate (slow) = ', LearningRate: 9: 7, ' with 0..10: 0.01; 11..20: 0.005; 21..100: 0.0005; 101..1000: 0.0001; else 0.00005. ');
+            FastLearning:
+              // Display fast learning rate schedule.
+              Writeln('>> Learning rate (fast) = ', LearningRate: 9: 7, ' with 0..30: 0.01; 31..100: 0.005; 101..400: 0.001; 401..800: 0.0005; else 0.0001.');
+            RolledOffLearning:
+              // Learning Rolled off learning rate.
+              Writeln('>> Learning rate (rolled of) = ', LearningRate: 9: 7, ' Floor LR = ', FloorLearningRate: 9: 7, ' Base LR = ', BaseLearningRate: 9: 7, ' LR rolloff = ', RollOff: 9: 7, '.');
+          end;
+        end
+        else
+        // Display override learning rate.
+        Writeln('>> Learning rate (override) = ', LearningRate: 9: 7, '. ');
+
+        Writeln('>> Weight decay = ', WeightDecay: 9: 7, '; Decay scale = ', DecayScale: 9: 7, '; Temperature = ', TTemperature: 9: 7,
+          '; Clip limit = ', ClipLimit: 9: 7, '; Global step = ', GlobalStep, '; Online training perplexity = ', exp(MEL): 9: 7, '.');
+      end;
     end;      // End epoch loop.
   except
     on E: Exception do begin

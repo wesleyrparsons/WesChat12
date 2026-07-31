@@ -47,11 +47,17 @@ uses
 var
   EmbeddingParams, AttentionParams, FFNParams, LayerNormParams, BlockParams, TotalParams: Int64;
 
-// Pause, unconditional.
-procedure HardPause;
+// Pause, unconditional, no new line.
+procedure HardPauseNNL;
 begin
   Write('Hit <CR> to continue.... ');
   Readln;
+end;
+
+// Pause, unconditional, new line.
+procedure HardPause;
+begin
+  HardPauseNNL;
   Writeln;
 end;
 
@@ -63,6 +69,18 @@ begin
   if not DoNotPause then begin
     tt := Now;
     HardPause;
+    Stoptime := StopTime + Now - tt;
+  end;
+end;
+
+// Pause, subject to DoNotPause, no new line.
+procedure PauseNNL;
+var
+  tt: TDateTime;
+begin
+  if not DoNotPause then begin
+    tt := Now;
+    HardPauseNNL;
     Stoptime := StopTime + Now - tt;
   end;
 end;
@@ -95,8 +113,6 @@ begin
 end;
 
 procedure FullReportTrainableParameters;
-var
-  EmbeddingParams, AttentionParams, FFNParams, LayerNormParams, BlockParams, TotalParams: Int64;
 begin
   ComputeTrainableParameters;
   Writeln('Trainable parameters:');
@@ -204,9 +220,7 @@ begin
     if (i mod 5) = 4 then Writeln;
     if (i > 0) and (i mod 100 = 99) then Pause;
   end;
-  Writeln;
   Writeln('Symbol table length = ', Length(SymbolTable));
-  Writeln;
 end;
 
 // Display a vector, character by character, then pause.

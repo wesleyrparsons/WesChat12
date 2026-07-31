@@ -10,24 +10,25 @@ uses Classes;
 
 var
 { Place all verbosity and control options at start }
-  DoNotPause: Boolean = False;              // Pause disabled.
-  PauseIfKeyPressed: Boolean = True;        // Pause if a key is pressed.
-  StopTraining: Boolean;                    // Happens if KeyPressed, to perform options.
-  TrainSuccess: Boolean = False;            // Training successful and proceed to inference.
-  DisplayCorpus: Boolean = False;           // One set for real tokenizing and one set for debug.
-  DisplayWindow: Boolean = False;           // Display the SeqLen window.
-  VerboseTokenize: Boolean = True;         // Display steps in Tokenize and Symbolize units.
+  DoNotPause: Boolean = False;                   // Pause disabled.
+  PauseIfKeyPressed: Boolean = True;             // Pause if a key is pressed.
+  StopTraining: Boolean;                         // Happens if KeyPressed, to perform options.
+  TrainSuccess: Boolean = False;                 // Training successful and proceed to inference.
+  DisplayCorpus: Boolean = False;                // One set for real tokenizing and one set for debug.
+  DisplayWindow: Boolean = False;                // Display the SeqLen window.
+  VerboseTokenize: Boolean = True;               // Display steps in Tokenize and Symbolize units.
   VerboseTransform: Boolean = False;        // Displays X, Q, ScoresHead1, etc. in Transform units.
   VerboseInfer: Boolean = True;             // Displays steps in Infer unit.
   VeryVerboseTokenize: Boolean = False;     // Very verbose in Tokenize units.
   DisplayTokenWork: Boolean = False;        // Show token work in Tokenize units.
   DisplayMergeWork: Boolean = False;        // Show merge work in Tokenize units.
-  DisplayVerification: Boolean = False;     // Verify by rebuilding corpus in WesTokenize or displaying in GPT.
-  DisplayEachByteRead: Boolean = False;     // Verify reading of bytes.
-  SaveFiles: Boolean = True;                // Save various files, otherwise not saved.
-  SaveTokenizationFiles: Boolean = True;    // Fave tokenization files (false for inference).
-  MaxMerges: Integer = 60000;               // Maximum number of merges.
-  MaxPairCount: Integer = 800000;           // Maximum number of pair in BPE.
+  DisplayCorpusVerification: Boolean = True;     // Verify by rebuilding corpus in WesTokenize or displaying in GPT.
+  DisplayTokenVerification: Boolean = True;      // Verify by rebuilding corpus in WesTokenize or displaying in GPT.
+  DisplayEachByteRead: Boolean = False;          // Verify reading of bytes.
+  SaveFiles: Boolean = True;                     // Save various files, otherwise not saved.
+  SaveTokenizationFiles: Boolean = True;         // Save tokenization files (false for inference).
+  MaxMerges: Integer = 60000;                    // Maximum number of merges.
+  MaxPairCount: Integer = 800000;                // Maximum number of pair in BPE.
 
 const
   // Model constants.
@@ -45,13 +46,20 @@ const
   MLPDropOut = 0.05;              // Probability of MLP dropout.       Even if Training is True.
   RDropout = 0.05;                // Probability of residual dropout.
   MaxSymbols = 10000;             // Maximum WesTokenizer symbol count during BPE construction.
-  DimVocab   = 52000;             // Physical model vocabulary capacity; must be >= nVocab.
+  DimVocab   = 50260;             // Physical model vocabulary capacity; must be >= nVocab. Use 50260 for GPT2.
+  // GPT2 constants.
+  GPT2BaseVocabSize = 50257;
+  GPT2EOS = 50256;                // Official GPT-2 end-of-text token.
+  GPT2PAD = 50257;                // WesChat extension.
+  GPT2BOS = 50258;                // WesChat extension.
+  GPT2UNK = 50259;                // WesChat extension; normally never needed.
+  GPT2ModelVocabSize = 50260;
   // Other constants.
   RecentCount = 10;               // Rolling means in training.
   Version: shortstring = '1.2';   // Version 1.2.
   InvSqrtHeadDim: Single = 1 / Sqrt(HeadDim);         // Used in softmax.
   FirstMergedToken = 260;         // First token after all extended ASCII and 4 specials.
-
+  DisplayLength = 100;            // Length of diaplying corpus or tokens.
 type                                                                           // SeqLen = L, ModelDim = D, ModelDim/nHead = H, DB is Proj*D, DV is DimVocab.
   // cublas type.
   TcublasHandle = Pointer;
@@ -65,9 +73,7 @@ type                                                                           /
   THeadVector = array[0..HeadDim - 1] of Single;                               // H (H is like D)
   TVocabVector = array[0..DimVocab - 1] of Single;                             // DV (DV like L)
   TSeqMatrix = array[0..SeqLen - 1] of TSeqVector;                             // L x D
-  // TSeqHeadMatrix = array[0..SeqLen - 1] of THeadVector;                        // L x H
   TWeightMatrix = array[0..ModelDim - 1] of TSeqVector;                        // D x D
-  // TWeightHeadMatrix = array[0..HeadDim - 1] of THeadVector;                    // H x H        ?
   TWeightProjMatrix = array[0..ModelDim - 1] of TSeqVectorProj;                // D x DB
   TWeightProjMatrixT = array[0..ModelDimProj - 1] of TSeqVector;               // DB x D
   THiddenMatrix = array[0..SeqLen - 1] of TSeqVectorProj;                      // L x DB
@@ -80,10 +86,6 @@ type                                                                           /
     Value, Grad:  TSeqMatrix;
     dValue, dGrad:  PSingle;
   end;
-  {TSeqHeadTensor = record
-    Value, Grad:  TSeqHeadMatrix;
-    dValue, dGrad:  PSingle;
-  end;}
   TSeqVectorTensor = record
     Value, Grad:  TSeqVector;
     dValue, dGrad:  PSingle;
@@ -100,10 +102,6 @@ type                                                                           /
     Value, Grad:  TWeightMatrix;
     dValue, dGrad:  PSingle;
   end;
-  {TWeightHeadTensor = record
-    Value, Grad:  TWeightHeadMatrix;
-    dValue, dGrad:  PSingle;
-  end;}
   TWeightProjTensor = record
     Value, Grad:  TWeightProjMatrix;
     dValue, dGrad:  PSingle;
@@ -166,7 +164,7 @@ type                                                                           /
     ADropoutSeed:         UInt64;                          // Seeds for dropouts.
     MLPDropoutSeed:       UInt64;
     RDropoutSeed:         UInt64;
-    //
+    // Gradients for backprop.
     dX4FromLN2:           PSingle;
     dXFromLN1:            PSingle;
   end;
@@ -176,6 +174,7 @@ type                                                                           /
     dInvFreq:                       PSingle;
     Probs, TopGradient:             TSeqVocabMatrix;       // Logit and Gradient.
     dProbs, dTopGradient:           PSingle;
+    dRowLoss:                       PSingle;
   end;
 
 var
@@ -210,12 +209,12 @@ var
   // Model settings vars.
   Training:             Boolean = False;         // True = training mode: training temperature and dropout enabled.
   LearningStyle:        TLearning = SlowLearning;     // Style of learning.
-  ShuffleWindows:       Boolean = False;         // Shuffle the windows each epoch.
+  ShuffleWindows:       Boolean = True;         // Shuffle the windows each epoch.
   BaseLearningRate:     Double = 0.01000;        // Base learning rate for Gradient.
   FloorLearningRate:    Double = 0.00010;        // Floor learning rate for Gradient.
   OverrideLearningRate: Double =-1.00000;        // Override learning rate for Gradient.
   RollOff:              Double = 0.99990;        // Reduction in learning rate.
-  WeightDecay:          Double = 0.00001;        // Decay (multiplicative) for learning rate.
+  WeightDecay:          Double = 0.00100;        // Decay (multiplicative) for learning rate.
   DecayScale:           Double;                  // 1.0 - LearningRate * WeightDecay.
   LearningRate:         Double;                  // Derived learningRate for Gradient.
   GlobalStep:           Int64;                   // Increments once per window.

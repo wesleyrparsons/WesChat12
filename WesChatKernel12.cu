@@ -1057,3 +1057,44 @@ void LaunchClipVector(float* X, int N, float Limit)
 
     ClipVectorKernel<<<blocks, threads>>>(X, N, Limit);
 }
+
+// CELossRows.
+#include <cuda_runtime.h>
+#include <math.h>
+
+__global__ void CELossRows(const float* Probs, const int* Targets, float* RowLoss, int Rows, int VocabSize, int RowStride)
+{
+    int Row = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (Row >= Rows)
+        return;
+
+    int Target = Targets[Row];
+
+    if ((Target < 0) || (Target >= VocabSize)) {
+        RowLoss[Row] = NAN;
+        return;
+    }
+
+    float P = Probs[Row * RowStride + Target];
+
+    if (!isfinite(P)) {
+        RowLoss[Row] = NAN;
+        return;
+    }
+
+    if (P < 1.0e-12f)
+        P = 1.0e-12f;
+    else if (P > 1.0f)
+        P = 1.0f;
+
+    RowLoss[Row] = -logf(P);
+}
+
+extern "C" __declspec(dllexport) void LaunchCELossRows(const float* Probs, const int* Targets, float* RowLoss, int Rows, int VocabSize, int RowStride)
+{
+    const int Threads = 256;
+    const int Blocks = (Rows + Threads - 1) / Threads;
+
+    CELossRows<<<Blocks, Threads>>>(Probs, Targets, RowLoss, Rows, VocabSize, RowStride);
+}

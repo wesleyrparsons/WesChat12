@@ -253,6 +253,30 @@ begin
   Writeln('Log written: ', LogName);
 end;
 
+// Set tokenizer as WesTokenize or GPT2TTokenize.
+procedure SetTokenizerMode(const NewTokenizer: TTokenizer);
+begin
+  Tokenizer := NewTokenizer;
+
+  case Tokenizer of
+    WesTokenizer: begin
+      BOS := 256;
+      EOS := 257;
+      PAD := 258;
+      UNK := 259;
+      nVocab := nSymbols;
+    end;
+
+    GPT2Tokenizer: begin
+      BOS := GPT2BOS;
+      EOS := GPT2EOS;
+      PAD := GPT2PAD;
+      UNK := GPT2UNK;
+      nVocab := GPT2ModelVocabSize;
+    end;
+  end;
+end;
+
 // General helpers.
 function AskYesNo(const Prompt: string; DefaultYes: Boolean = True): Boolean;
 var
@@ -428,6 +452,7 @@ begin
 
   FromSymbolTable := True;
   LoadSymbolTable(SymbolFileName, SymbolTable);
+  ResetWesTrie;
 
   if Length(SymbolTable) < MinSymbols then begin
     Writeln('Too few symbols found. Length(SymbolTable) = ', Length(SymbolTable));
@@ -620,6 +645,7 @@ begin
     SetLength(SymbolTable, 0);
 
     RunSymbolizeNoAutoSave(Corpus);
+    ResetWesTrie;
 
     nSymbols := Length(SymbolTable);
     nVocab := nSymbols;
@@ -633,7 +659,7 @@ begin
       SaveSymbolizationFilesDefault(CurrentBaseName);
   end;
 
-  Tokenizer := WesTokenizer;
+  SetTokenizerMode(WesTokenizer);
   Writeln('Tokenizing with WesChat...');
   RunWesTokenizeNoAutoSave(Corpus, TokenizedCorpus);
 
@@ -659,7 +685,7 @@ begin
 
   if not ReadCorpusFilePrompt(CorpusFileName, Corpus) then Exit;
 
-  Tokenizer := GPT2Tokenizer;
+  SetTokenizerMode(GPT2Tokenizer);
   RunGPT2TokenizeNoAutoSave(CorpusFileName, TokenizedCorpus);
 
   RawTokenCount := Length(TokenizedCorpus);
@@ -736,7 +762,7 @@ begin
 
   CloseFile(F);
 
-  Tokenizer := GPT2Tokenizer;
+  SetTokenizerMode(GPT2Tokenizer);
   PadToSeqMultiple(TokenizedCorpus, SeqLen);
   nTokenizedCorpus := Length(TokenizedCorpus);
 
@@ -856,7 +882,7 @@ begin
   if not LoadModelPrompt then Exit;
   if not LoadSymbolTablePrompt then Exit;
 
-  Tokenizer := WesTokenizer;
+  SetTokenizerMode(WesTokenizer);
 
   ParamsNeedCopyToDevice := True;
   RunInfer(WModelParams, WModelState);
@@ -888,6 +914,7 @@ begin
       Writeln('File ', SymbolFileName, ' successfully saved.');
     end;
   end;
+  ResetWesTrie;
 end;
 
 // Folder utilities.
@@ -1042,10 +1069,11 @@ begin
   CorpusFileNames[0] := CorpusFileName;
 
   LoadSymbolTable(SymbolFileName, SymbolTable);
+  ResetWesTrie;
   nSymbols := Length(SymbolTable);
   nVocab := nSymbols;
 
-  Tokenizer := WesTokenizer;
+  SetTokenizerMode(WesTokenizer);
   NewModel := True;
   ParamsNeedCopyToDevice := True;
 
@@ -1103,10 +1131,11 @@ begin
 
   FromSymbolTable := True;
   LoadSymbolTable(SymbolFileName, SymbolTable);
+  ResetWesTrie;
   nSymbols := Length(SymbolTable);
   nVocab := nSymbols;
 
-  Tokenizer := WesTokenizer;
+  SetTokenizerMode(WesTokenizer);
   NewModel := True;
   ParamsNeedCopyToDevice := True;
   Writeln('Damned Thing data loaded. Tokens = ', Length(TokenizedCorpus), ' Symbols = ', nSymbols, '.');
@@ -1153,10 +1182,11 @@ begin
 
   FromSymbolTable := True;
   LoadSymbolTable(SymbolFileName, SymbolTable);
+  ResetWesTrie;
   nSymbols := Length(SymbolTable);
   nVocab := nSymbols;
 
-  Tokenizer := WesTokenizer;
+  SetTokenizerMode(WesTokenizer);
   NewModel := True;
   ParamsNeedCopyToDevice := True;
 

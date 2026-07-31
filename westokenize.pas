@@ -47,6 +47,7 @@ var
   MergedInstances, UnmergedInstances: Integer;
   i: Integer;
 
+procedure ResetWesTrie;
 procedure WriteTokenList(const TokenizedCorpus: TIVector; const Part: TPart = B);
 procedure BuildTrie(out Root: PTrieNode);
 function MatchLongest(root: PTrieNode; const text: TBVector; startPos: Integer;
@@ -54,6 +55,7 @@ function MatchLongest(root: PTrieNode; const text: TBVector; startPos: Integer;
 procedure ReportStatistics(const TokenizedCorpus: TIVector);
 procedure DetokenizeToDisplay(const TokenizedCorpus: TIVector; const Part: TPart = B);
 procedure SaveTokenizationLog(const TokenizedCorpus: TIVector; const LogFileName: string);
+procedure TokenizeWesBytes(const Corpus: TBVector; var Tokens: TIVector);
 procedure RunWesTokenize(const Corpus: TBVector; var TokenizedCorpus: TIVector);
 
 implementation
@@ -82,8 +84,34 @@ begin
   node^.TokenID := id;  // mark terminal
 end;
 
+// For core tokenizer.
+procedure EnsureWesTrie;
+begin
+  if TrieHead = nil then
+    BuildTrie(TrieHead);
+end;
+
 // Trie procedure: Build trie.
 procedure BuildTrie(out Root: PTrieNode);
+var
+  i: Integer;
+begin
+  New(Root);
+  FillChar(Root^, SizeOf(TTrieNode), 0);
+  Root^.TokenID := -1;
+
+  for i := 0 to High(SymbolTable) do begin
+    if (i = BOS) or (i = EOS) or (i = PAD) or (i = UNK) then
+      Continue;
+
+    if SymbolTable[i] = '' then
+      Continue;
+
+    InsertTrieSymbol(Root, SymbolTable[i], i);
+  end;
+end;
+
+{procedure BuildTrie(out Root: PTrieNode);
 var
   i: Integer;
 begin
@@ -98,10 +126,30 @@ begin
 
     InsertTrieSymbol(Root, SymbolTable[i], i);
   end;
-end;
+end;}
 
 // Free trie nodes.
 procedure FreeTrie(var Node: PTrieNode);
+var
+  i: Integer;
+begin
+  if Node = nil then
+    Exit;
+
+  for i := 0 to 255 do
+    FreeTrie(Node^.Children[i]);
+
+  Dispose(Node);
+  Node := nil;
+end;
+
+// Invalidate the trie after SymbolTable changes.
+procedure ResetWesTrie;
+begin
+  FreeTrie(TrieHead);
+end;
+
+{procedure FreeTrie(var Node: PTrieNode);
 var
   j: Integer;
 begin
@@ -113,7 +161,7 @@ begin
 
   Dispose(Node);
   Node := nil;
-end;
+end;}
 
 // Trie procedure: Match longest.
 function MatchLongest(root: PTrieNode;
@@ -167,9 +215,9 @@ begin
   TokenizedCorpus[0] := BOS;
   i := 0;
 
-  BuildTrie(TrieHead);
+  EnsureWesTrie;
 
-  while i < nCorpus do begin
+  while i < Length(Corpus) do begin
     // Tiny Stories separator byte becomes EOS.
     if Corpus[i] = 254 then begin
       SetLength(TokenizedCorpus, Length(TokenizedCorpus) + 1);
@@ -206,8 +254,8 @@ begin
   FreeTrie(TrieHead);
 
   if VerboseTokenize then begin
-    Write('Input corpus is: ');
-    for i := 0 to Length(Corpus) - 1 do
+    Write('Input corpus (first ', DisplayLength, ' bytes) is: ');
+    for i := 0 to Min(High(Corpus), DisplayLength) do
       Write(Corpus[i], ' ');
     Writeln;
   end;
@@ -491,15 +539,12 @@ end;
 // Report BPE statistics.
 procedure ReportBPEStatistics;
 begin
-  Writeln('--- BPE Statistics ---');
-  Writeln('Original text size (bytes/tokens): ', nCorpus);
-  Writeln('Encoded text size (bytes/tokens): ', nTokenizedCorpus);
-  Writeln('Compression ratio: ', nCorpus   / nTokenizedCorpus:0: 4);
-
-  // New code.
-  // if ElapsedMS = 0 then ElapsedMS := 1000;
+  Writeln('--- Tokenization Statistics ---');
+  Writeln('Original corpus size: ', nCorpus, ' bytes.');
+  Writeln('Encoded token count: ', nTokenizedCorpus);
+  Writeln('Bytes per token: ', nCorpus / nTokenizedCorpus:0:4);
   if not FromSymbolTable then
-    Writeln('Bytes per second: ', nCorpus / (ElapsedMS / 1000): 6: 4);
+    Writeln('Input bytes per second: ', nCorpus / (ElapsedMS / 1000):6:4);
   Writeln;
 end;
 
@@ -652,8 +697,88 @@ begin
   end;
 end;
 
+// Run core tokenizer.
+procedure TokenizeWesBytes(const Corpus: TBVector; var Tokens: TIVector);
+var
+  i, BestSym, BestLen: Integer;
+begin
+  EnsureWesTrie;
+
+  SetLength(Tokens, 1);
+  Tokens[0] := BOS;
+
+  i := 0;
+  while i < Length(Corpus) do begin
+    // Tiny Stories separator byte becomes EOS.
+    if Corpus[i] = 254 then begin
+      SetLength(Tokens, Length(Tokens) + 1);
+      Tokens[High(Tokens)] := EOS;
+      Inc(i);
+      Continue;
+    end;
+
+    if MatchLongest(TrieHead, Corpus, i, BestSym, BestLen) then begin
+      SetLength(Tokens, Length(Tokens) + 1);
+      Tokens[High(Tokens)] := BestSym;
+      Inc(i, BestLen);
+    end
+    else begin
+      SetLength(Tokens, Length(Tokens) + 1);
+      Tokens[High(Tokens)] := Corpus[i];
+      Inc(i);
+    end;
+  end;
+
+  SetLength(Tokens, Length(Tokens) + 1);
+  Tokens[High(Tokens)] := EOS;
+end;
+
 // Run the tokenizer.
 procedure RunWesTokenize(const Corpus: TBVector; var TokenizedCorpus: TIVector);
+begin
+  t0 := Now;
+  StopTime := 0;
+
+  nCorpus := Length(Corpus);
+
+  if not Training then
+    FileName := 'Inference';
+
+  TokenizeWesBytes(Corpus, TokenizedCorpus);
+
+  nTokenizedCorpus := Length(TokenizedCorpus);
+  nSymbols := Length(SymbolTable);
+
+  Writeln('Created ', nTokenizedCorpus, ' tokens.');
+
+  t1 := Now;
+
+  if DisplayTokenWork and VerboseTokenize then begin
+    Writeln('--- Token Frequencies ---');
+    CountSymbols(TokenizedCorpus);
+  end;
+
+  if VerboseTokenize then
+    ReportStatistics(TokenizedCorpus);
+
+  // Verify by reconstructing.
+  if DisplayCorpusVerification then begin
+     Writeln('--- Reconstructed Corpus, Beginning 500 bytes---');
+     Writeln('Length = ', Length(TokenizedCorpus));
+     DetokenizeToDisplay(TokenizedCorpus, B);
+     Writeln;
+   end;
+
+   if DisplayTokenVerification then Begin
+     Write('First ', DisplayLength, ' tokens of tokenized corpus: ');
+     for i := 0 to Min(DisplayLength, High(TokenizedCorpus)) do
+       Write(TokenizedCorpus[i], ' ');
+     Writeln;
+     Pause;
+   end;
+end;
+
+{procedure RunWesTokenize(const Corpus: TBVector; var TokenizedCorpus: TIVector);
 begin
   // Timing.
   t0 := Now;       // Start of timing for entire tokenization;
@@ -679,22 +804,25 @@ begin
   if VerboseTokenize then
     ReportStatistics(TokenizedCorpus);
 
-  // Verify by reconstructing.
-  if DisplayTokenVerification and VerboseTokenize and DisplayCorpus then begin
-    Writeln('--- Reconstructed Corpus, Beginning ---');
+ // Verify by reconstructing.
+ if DisplayCorpusVerification then begin
+    Writeln('--- Reconstructed Corpus, Beginning 500 bytes---');
     Writeln('Length = ', Length(TokenizedCorpus));
     DetokenizeToDisplay(TokenizedCorpus, B);
     Writeln;
   end;
 
-  if VerboseTokenize then Begin
-    Writeln('First 150 tokens of tokenized corpus:');
-    for i := 0 to Min(149, High(TokenizedCorpus)) do
+  if DisplayTokenVerification then Begin
+    Write('First ', DisplayLength, ' tokens of detokenized corpus: ');
+    for i := 0 to Min(DisplayLength, High(TokenizedCorpus)) do
       Write(TokenizedCorpus[i], ' ');
     Writeln;
     Pause;
   end;
-end;
+end;}
+
+finalization
+  FreeTrie(TrieHead);
 
 end.
 

@@ -101,7 +101,8 @@ procedure LaunchAddBiasRows(X: PSingle; Bias: PSingle; Rows: Integer; Cols: Inte
   cdecl; external 'WesChatKernel12.dll';
 procedure LaunchAddBiasRowsBackward(dX: PSingle; dBias: PSingle; Rows: Integer; Cols: Integer);
   cdecl; external 'WesChatKernel12.dll';
-
+procedure LaunchCELossRows(Probs: PSingle; Targets: PInteger; RowLoss: PSingle; Rows, VocabSize, RowStride: Integer);
+  cdecl; external 'WesChatKernel12.dll';
 implementation
 
 // Check existence of any DLL.
@@ -360,15 +361,24 @@ begin
   Pause;
 end;}
 
-// Decode using symbol table one token.
+// Decode for WesTokenize and GPT2Tokenize, using symbol table, for one token.
 function Decode(const x: Integer): UnicodeString;
 begin
-  if Tokenizer = WesTokenizer then
-  // WesTokenizer.
-  Result := SymbolTable[x]
-else
-  // GPT2Tokenizer.
-  Result := UTF8Decode(Vocab[x]);
+  if Tokenizer = WesTokenizer then begin
+    Result := UTF8Decode(SymbolTable[x]);
+    Exit;
+  end;
+
+  if x = GPT2BOS then
+    Result := '<BOS>'
+  else if x = GPT2EOS then
+    Result := '<EOS>'
+  else if x = GPT2PAD then
+    Result := '<PAD>'
+  else if x = GPT2UNK then
+    Result := '<UNK>'
+  else
+    Result := UTF8Decode(Vocab[x]);
 end;
 
 // Compute cross-entropy loss.

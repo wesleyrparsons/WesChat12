@@ -282,6 +282,7 @@ const
   MaxNewTokens = 500;                  // Limit on new tokens produced.
 var
   i, Step, QueryToken: Integer;
+  OldNVocab: Integer;
   OldTraining, OldVerboseTransform, OldSaveTokenizationFiles, OwnsCuda: Boolean;
   QueryTokenized, WorkTokens, QueryOutput: TIVector;
   QueryProb: Single;
@@ -291,13 +292,16 @@ begin
   OldTraining := Training;             // Save status of training.
   OldVerboseTransform := VerboseTransform;
   OldSaveTokenizationFiles := SaveTokenizationFiles;
+  OldNVocab := nVocab;
+
   Training := False;                   // Disable transformer dropout during inference.
+  VerboseTransform := False;           // Select verbosity during inference.
+  SaveTokenizationFiles := False;      // Don't save files when go to Tokenize.
   nVocab := nSymbols;                  // Same variable.
   if nVocab > DimVocab then begin
     Writeln('nVocab > DimVocab. Aborting inference...');
     Exit;
-  end;  VerboseTransform := False;           // Select verbosity during inference.
-  SaveTokenizationFiles := False;      // Don't save files when go to Tokenize.
+  end;
 
   // Initialize transformer state.
   InitializeTransformerState(WModelState);
@@ -338,7 +342,7 @@ begin
       end;
 
       if Tokenizer = WesTokenizer then
-        RunWesTokenize(QueryInput, QueryTokenized)
+        TokenizeWesBytes(QueryInput, QueryTokenized)
       else
         RunGPT2Tokenize(QueryString, QueryTokenized);
 
@@ -425,6 +429,7 @@ begin
     Training := OldTraining;
     VerboseTransform := OldVerboseTransform;
     SaveTokenizationFiles := OldSaveTokenizationFiles;
+    nVocab := OldNVocab;
 
     if OwnsCuda then
       EndCuda(WModelParams, WModelState);

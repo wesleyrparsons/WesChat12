@@ -32,6 +32,7 @@ procedure CheckCudaError(const Where: string);
 procedure StartCuda(var WModelParams: TWModelParams; var WModelState: TWModelState);
 procedure EndCuda(var WModelParams: TWModelParams; var WModelState: TWModelState);
 // Word procedures and functions.
+function IsAbsolutePath(const FolderName: string): Boolean;
 procedure InitWorkFolders(const Root: string);
 function CleanBaseName(const FileName: string): string;
 function WorkSymbolFile(const BaseName: string): string;
@@ -248,6 +249,12 @@ begin
 end;
 
 // Saving routines.
+function IsAbsolutePath(const FolderName: string): Boolean;
+begin
+  Result := (ExtractFileDrive(FolderName) <> '') or
+    ((Length(FolderName) >= 2) and (FolderName[1] = DirectorySeparator) and (FolderName[2] = DirectorySeparator));
+end;
+
 procedure InitWorkFolders(const Root: string);
 begin
   WorkRoot := IncludeTrailingPathDelimiter(ExpandFileName(Root));

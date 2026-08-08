@@ -510,6 +510,8 @@ begin
   with WModelState do begin
     cudaMalloc(@dInvFreq, InvFreqSize);
     cudaMalloc(@dProbs, ProbsSize);
+    dRowLoss := nil;
+    cudaMalloc(@dRowLoss, SeqSize);
     cudaMalloc(@dTopGradient, ProbsSize);
   end;
 
@@ -612,6 +614,10 @@ begin
   with WModelState do begin
     cudaFree(dInvFreq);     dInvFreq     := nil;
     cudaFree(dProbs);       dProbs       := nil;
+    if dRowLoss <> nil then begin
+      cudaFree(dRowLoss);
+      dRowLoss := nil;
+    end;
     cudaFree(dTopGradient); dTopGradient := nil;
   end;
 

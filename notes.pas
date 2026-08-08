@@ -9,22 +9,9 @@ nRawTokenizedCorpus := Length(TokenizedCorpus);
 PadToSeqMultiple(TokenizedCorpus, SeqLen);
 nTokenizedCorpus := Length(TokenizedCorpus);
 
-2.  Flags for params on device.
-Good flag names:
-ParamsOnDevice: Boolean = False;
-HostParamsChanged: Boolean = False;
-Simpler for now:
-if not ParamsOnDevice then begin
-  CopyParamsToDevice(WModelParams);
-  ParamsOnDevice := True;
-end;
-After training updates GPU params, keep:
-ParamsOnDevice := True;
-After loading model:
-ParamsOnDevice := False;
 
 3. Replace nSymbols with nVocab.
-   UsenTokenizedCorpus instead of Length(TC)
+   Use nTokenizedCorpus instead of Length(TC)
 
 4. Fix GPT2 in infer unit.
 
@@ -42,8 +29,6 @@ ParamsOnDevice := False;
   RunForward    UserInput                  Output
 
 Tokenize
-
-1. Where does nCorpus live?
 
 2. Do not use Float instead of Single. Need to use compiler directive.
 
@@ -81,8 +66,6 @@ SetLength(FinalBeta.Grad, ModelDim);
 Transform/Matrix/Utils.
 
 0. Use CPU/GPU or host/device or cblas/cublas nomenclature?
-
-1. ApplyRope inside each rather than across all model.
 
 2. Many models reuse the embedding matrix for output projection.
 This is called weight tying. WVocab not needed. I am doing it.

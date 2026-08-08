@@ -63,49 +63,49 @@ begin
   ShellExecute(0, 'open', PChar(WorkRoot), nil, nil, SW_SHOWNORMAL);
 end;
 
-{function AddSlash(const S: string): string;
+procedure NormalizeExistingWorkRoot;
 begin
-  Result := IncludeTrailingPathDelimiter(S);
+  ExistingWorkRoot := Trim(ExistingWorkRoot);
+
+  if ExistingWorkRoot = '' then
+    ExistingWorkRoot := 'C:\wc\';
+
+  ExistingWorkRoot := IncludeTrailingPathDelimiter(ExpandFileName(ExistingWorkRoot));
 end;
 
-function CleanBaseName(const FileName: string): string;
+function ResolveWorkFolder(const FolderName: string): string;
+var
+  S: string;
 begin
-  Result := ChangeFileExt(ExtractFileName(FileName), '');
+  NormalizeExistingWorkRoot;
 
-  if Result = '' then
-    Result := 'weschat';
-end;}
+  S := Trim(FolderName);
+
+  if S = '' then
+    S := 'WesChatWork';
+
+  if IsAbsolutePath(S) then
+    Result := ExpandFileName(S)
+  else
+    Result := ExpandFileName(ExistingWorkRoot + S);
+end;
 
 function TimeStamp: string;
 begin
   Result := FormatDateTime('yyyy-mm-dd_hhnnss', Now);
 end;
 
-{procedure InitWorkFolders(const Root: string);
+// Use the existing work root set above.
+procedure SelectExistingWork(const FolderName, BaseName: string);
 begin
-  WorkRoot := AddSlash(ExpandFileName(Root));
-  CorpusDir  := WorkRoot + 'corpus'  + DirectorySeparator;
-  SymbolDir  := WorkRoot + 'symbols' + DirectorySeparator;
-  MergeDir   := WorkRoot + 'merges'  + DirectorySeparator;
-  TokenDir   := WorkRoot + 'tokens'  + DirectorySeparator;
-  ModelDir   := WorkRoot + 'models'  + DirectorySeparator;
-  LogDir     := WorkRoot + 'logs'    + DirectorySeparator;
-  ListDir    := WorkRoot + 'lists'   + DirectorySeparator;
-  ScratchDir := WorkRoot + 'scratch' + DirectorySeparator;
-  ForceDirectories(WorkRoot);
-  ForceDirectories(CorpusDir);
-  ForceDirectories(SymbolDir);
-  ForceDirectories(MergeDir);
-  ForceDirectories(TokenDir);
-  ForceDirectories(ModelDir);
-  ForceDirectories(LogDir);
-  ForceDirectories(ListDir);
-  ForceDirectories(ScratchDir);
+  WorkingDir := ResolveWorkFolder(FolderName);
+  InitWorkFolders(WorkingDir);
 
-  // Compatibility with older units that still look at WorkingDir/WorkingName.
-  WorkingDir := WorkRoot;
-  WorkingName := 'weschat';
-end;}
+  CurrentBaseName := BaseName;
+  WorkingName := BaseName;
+
+  Writeln('Using predefined work folder: ', WorkRoot);
+end;
 
 function PathHasDirectory(const S: string): Boolean;
 begin
@@ -452,6 +452,7 @@ begin
 
   FromSymbolTable := True;
   LoadSymbolTable(SymbolFileName, SymbolTable);
+  ResetWesTrie;
 
   if Length(SymbolTable) < MinSymbols then begin
     Writeln('Too few symbols found. Length(SymbolTable) = ', Length(SymbolTable));
@@ -500,22 +501,22 @@ begin
   Write('Enter model file name: ');
   Readln(ModelFileName);
 
-  if not RequireExistingFile(ModelFileName, ModelDir) then
-    Exit;
+  if not RequireExistingFile(ModelFileName, ModelDir) then Exit;
 
-  if CudaAllocated then                               // Change to same shutdwn code at end?
-    MDeallocateCublas(WModelParams, WModelState);
+  if CudaAllocated or (CuHandle <> nil) then
+    EndCuda(WModelParams, WModelState);
+  {if CudaAllocated then
+    MDeallocateCublas(WModelParams, WModelState);}
 
   if LoadModel(ModelFileName, WModelParams) then begin
-    Writeln('File ', ModelFileName, ' loaded.');
+    Write('Loading model: ', ModelFileName);
+    Write('; Model size: ', FileSize(ModelFileName), ' bytes');
+    Writeln('; Model date: ', DateTimeToStr(FileDateToDateTime(FileAge(ModelFileName))), '.');
     NewModel := False;
     ParamsNeedCopyToDevice := True;
-    CurrentBaseName := CleanBaseName(ModelFileName);
     Result := True;
   end
-  else begin
-    Writeln('File not loaded.');
-  end;
+  else Writeln('File not loaded.');
 end;
 
 // Save helpers.
@@ -644,6 +645,7 @@ begin
     SetLength(SymbolTable, 0);
 
     RunSymbolizeNoAutoSave(Corpus);
+    ResetWesTrie;
 
     nSymbols := Length(SymbolTable);
     nVocab := nSymbols;
@@ -692,8 +694,8 @@ begin
   nTokenizedCorpus := Length(TokenizedCorpus);
 
   Write('GPT tokenization complete.');
-  Writeln(' Raw tokens = ', RawTokenCount, '; Padded tokens = ', PaddedTokenCount, '; Padding added = ', PaddedTokenCount - RawTokenCount, '; Symbols = ', nSymbols, '.');
-  Writeln('GPT tokenization complete. Tokens = ', Length(TokenizedCorpus), '.');
+  Writeln(' Raw tokens = ', RawTokenCount, '; Padded tokens = ', PaddedTokenCount, '; Padding added = ', PaddedTokenCount - RawTokenCount,
+    '; Vocabulary = ', nVocab, '.');
 
   MaybeSaveTokenList;
 end;
@@ -800,6 +802,7 @@ begin
     if AskYesNo('Proceed to training now?', True) then begin
       NewModel := True;
       ParamsNeedCopyToDevice := True;
+      WorkingName := CurrentBaseName;
 
       RunTrain(WModelParams, WModelState, TokenizedCorpus);
 
@@ -859,6 +862,7 @@ begin
     nVocab := nSymbols;
   end;
 
+  WorkingName := CurrentBaseName;
   RunTrain(WModelParams, WModelState, TokenizedCorpus);
 
   if TrainSuccess then begin
@@ -877,10 +881,21 @@ begin
   Writeln('Required: model and matching symbol table.');
   Writeln;
 
-  if not LoadModelPrompt then Exit;
-  if not LoadSymbolTablePrompt then Exit;
+  // Establish tokenizer and symbol-table information first.
+  if not LoadSymbolTablePrompt then
+    Exit;
 
   SetTokenizerMode(WesTokenizer);
+
+  // LoadModel now restores the saved model nVocab.
+  if not LoadModelPrompt then Exit;
+
+  if nVocab <> nSymbols then begin
+    Writeln('Vocabulary mismatch. Inference aborted.');
+    Writeln('Model nVocab       = ', nVocab);
+    Writeln('Symbol table count = ', nSymbols);
+    Exit;
+  end;
 
   ParamsNeedCopyToDevice := True;
   RunInfer(WModelParams, WModelState);
@@ -912,6 +927,7 @@ begin
       Writeln('File ', SymbolFileName, ' successfully saved.');
     end;
   end;
+  ResetWesTrie;
 end;
 
 // Folder utilities.
@@ -919,15 +935,17 @@ procedure ShowWorkFolders;
 begin
   Writeln;
   Writeln('--- Current Work Folders ---');
-  Writeln('WorkingDir = ', WorkingDir);
-  Writeln('WorkRoot   = ', WorkRoot);
-  Writeln('CorpusDir  = ', CorpusDir);
-  Writeln('SymbolDir  = ', SymbolDir);
-  Writeln('MergeDir   = ', MergeDir);
-  Writeln('TokenDir   = ', TokenDir);
-  Writeln('ModelDir   = ', ModelDir);
-  Writeln('LogDir     = ', LogDir);
-  Writeln('ScratchDir = ', ScratchDir);
+  Writeln('ExistingWorkRoot = ', ExistingWorkRoot);
+  Writeln('WorkingDir       = ', WorkingDir);
+  Writeln('WorkRoot         = ', WorkRoot);
+  Writeln('CorpusDir        = ', CorpusDir);
+  Writeln('SymbolDir        = ', SymbolDir);
+  Writeln('MergeDir         = ', MergeDir);
+  Writeln('TokenDir         = ', TokenDir);
+  Writeln('ModelDir         = ', ModelDir);
+  Writeln('LogDir           = ', LogDir);
+  Writeln('ListDir          = ', ListDir);
+  Writeln('ScratchDir       = ', ScratchDir);
 end;
 
 function CountFilesInDir(const DirName: string): Integer;
@@ -981,6 +999,45 @@ begin
   Writeln('scratch : ', ScratchDir);
 end;
 
+procedure ChangeExistingWorkRoot;
+var
+  NewDir, OldDir: string;
+begin
+  Writeln;
+  Writeln('Current predefined-work root: ', ExistingWorkRoot);
+  Write('Enter new predefined-work root, blank to cancel: ');
+  Readln(NewDir);
+
+  NewDir := Trim(NewDir);
+
+  if NewDir = '' then begin
+    Writeln('Predefined-work root unchanged.');
+    Exit;
+  end;
+
+  OldDir := ExistingWorkRoot;
+  ExistingWorkRoot := NewDir;
+  NormalizeExistingWorkRoot;
+
+  if not DirectoryExists(ExistingWorkRoot) then begin
+    if AskYesNo('Folder does not exist. Create it?', True) then begin
+      if not ForceDirectories(ExistingWorkRoot) then begin
+        Writeln('Unable to create folder: ', ExistingWorkRoot);
+        ExistingWorkRoot := OldDir;
+        Exit;
+      end;
+    end
+    else begin
+      ExistingWorkRoot := OldDir;
+      Writeln('Predefined-work root unchanged.');
+      Exit;
+    end;
+  end;
+
+  Writeln('Predefined-work root changed to: ', ExistingWorkRoot);
+  Writeln('The current active work folder remains: ', WorkRoot);
+end;
+
 procedure ChangeWorkFolder;
 var
   NewDir: string;
@@ -996,7 +1053,7 @@ begin
     Exit;
   end;
 
-  WorkingDir := NewDir;
+  WorkingDir := ResolveWorkFolder(NewDir);
   InitWorkFolders(WorkingDir);
 
   Writeln('Work folder changed.');
@@ -1010,7 +1067,8 @@ begin
   repeat
     Writeln;
     Writeln('--- File/Folder Utilities ---');
-    Writeln('C: Change work folder');
+    Writeln('C: Change current work folder');
+    Writeln('E: Change existing/predefined work root');
     Writeln('L: List work folder subfolders');
     Writeln('S: Show current folder settings');
     Writeln('D: Show file counts in work folders');
@@ -1018,13 +1076,15 @@ begin
     Writeln('X: Return to main menu');
     Writeln;
 
-    Choice := AskChoice('Folder command', 'C/L/S/D/O/X');
+    Choice := AskChoice('Folder command', 'C/E/L/S/D/O/X');
 
     case Choice of
       'C': ChangeWorkFolder;
+      'E': ChangeExistingWorkRoot;
       'L': ListWorkFolderSubfolders;
-      'O': OpenWorkFolderInExplorer;
+      'S': ShowWorkFolders;
       'D': ShowWorkFolderFileCounts;
+      'O': OpenWorkFolderInExplorer;
     end;
 
     if Choice <> 'X' then Pause;
@@ -1032,29 +1092,27 @@ begin
   until Choice = 'X';
 end;
 
-// Main workflow: B / DT = Existing Models
+// Main workflow for Bela.
 procedure DoBelaModel;
 begin
   Writeln;
-  Writeln('--- Bela Model ---');
+  Writeln('--- Bela Corpus ---');
 
-  WorkingDir := 'bela';
-  InitWorkFolders(WorkingDir);
-  CurrentBaseName := 'bela';
-  WorkingName := 'bela';
-  Writeln('Using Bela work folder: ', WorkRoot);
+  SelectExistingWork('bela', 'bela');
+  TokenizedCorpusPresent := False;
+  SymbolTablePresent := False;
+  ModelPresent := False;
 
   CorpusFileName := ResolveInputFile('bela.txt', CorpusDir);
   SymbolFileName := ResolveInputFile('bela.sym', SymbolDir);
-  CurrentBaseName := 'bela';
 
   if not FileExists(CorpusFileName) then begin
-    Writeln('File not found: bela.txt');
+    Writeln('File not found: ', CorpusFileName);
     Exit;
   end;
 
   if not FileExists(SymbolFileName) then begin
-    Writeln('File not found: bela.sym');
+    Writeln('File not found: ', SymbolFileName);
     Exit;
   end;
 
@@ -1066,10 +1124,11 @@ begin
   CorpusFileNames[0] := CorpusFileName;
 
   LoadSymbolTable(SymbolFileName, SymbolTable);
-  nSymbols := Length(SymbolTable);
-  nVocab := nSymbols;
+  ResetWesTrie;
 
+  nSymbols := Length(SymbolTable);
   SetTokenizerMode(WesTokenizer);
+
   NewModel := True;
   ParamsNeedCopyToDevice := True;
 
@@ -1077,14 +1136,17 @@ begin
 
   PadToSeqMultiple(TokenizedCorpus, SeqLen);
   nTokenizedCorpus := Length(TokenizedCorpus);
+  TokenizedCorpusPresent := True;
+  SymbolTablePresent := True;
+  ModelPresent := False;
 
-  Writeln('Bela tokenization complete. Tokens = ', Length(TokenizedCorpus),
-    ' Symbols = ', nSymbols, '.');
+  Writeln('Bela tokenization complete. Tokens = ', Length(TokenizedCorpus), '; Symbols = ', nSymbols, '.');
 
   if AskYesNo('Save refreshed Bela token list?', False) then
     SaveCurrentTokenListDefault;
 
   if AskYesNo('Proceed to training?', True) then begin
+    WorkingName := CurrentBaseName;
     RunTrain(WModelParams, WModelState, TokenizedCorpus);
 
     if TrainSuccess then begin
@@ -1096,46 +1158,52 @@ begin
   end;
 end;
 
+// Main work flow: Damned Thing.
 procedure DoDamnedThingModel;
 begin
   Writeln;
-  Writeln('--- Damned Thing Model ---');
+  Writeln('--- Damned Thing Corpus ---');
 
-  WorkingDir := 'dt327';
-  InitWorkFolders(WorkingDir);
-  CurrentBaseName := 'dt327';
-  WorkingName := 'dt327';
-  Writeln('Using Damned Thing work folder: ', WorkRoot);
+  SelectExistingWork('dt327', 'dt327');
+  TokenizedCorpusPresent := False;
+  SymbolTablePresent := False;
+  ModelPresent := False;
 
   TokenFileName := ResolveInputFile('dt327.tok', TokenDir);
   SymbolFileName := ResolveInputFile('dt327.sym', SymbolDir);
-  CurrentBaseName := 'dt327';
 
   if not FileExists(TokenFileName) then begin
-    Writeln('File not found: dt327.tok');
+    Writeln('File not found: ', TokenFileName);
     Exit;
   end;
 
   if not FileExists(SymbolFileName) then begin
-    Writeln('File not found: dt327.sym');
+    Writeln('File not found: ', SymbolFileName);
     Exit;
   end;
 
   IOHandler.LoadTokenList(TokenFileName, TokenizedCorpus);
   PadToSeqMultiple(TokenizedCorpus, SeqLen);
   nTokenizedCorpus := Length(TokenizedCorpus);
+  TokenizedCorpusPresent := True;
+  SymbolTablePresent := True;
+  ModelPresent := False;
 
   FromSymbolTable := True;
   LoadSymbolTable(SymbolFileName, SymbolTable);
-  nSymbols := Length(SymbolTable);
-  nVocab := nSymbols;
+  ResetWesTrie;
 
+  nSymbols := Length(SymbolTable);
   SetTokenizerMode(WesTokenizer);
+
   NewModel := True;
   ParamsNeedCopyToDevice := True;
-  Writeln('Damned Thing data loaded. Tokens = ', Length(TokenizedCorpus), ' Symbols = ', nSymbols, '.');
+
+  Writeln('Damned Thing data loaded. Tokens = ', Length(TokenizedCorpus),
+    '; Symbols = ', nSymbols, '.');
 
   if AskYesNo('Proceed to training?', True) then begin
+    WorkingName := CurrentBaseName;
     RunTrain(WModelParams, WModelState, TokenizedCorpus);
 
     if TrainSuccess then begin
@@ -1147,76 +1215,164 @@ begin
   end;
 end;
 
-procedure DoChurchillModel;
+procedure DoResumeBestModel(const ModelTitle, FolderName, DataBaseName: string);
 begin
   Writeln;
-  Writeln('--- Churchill Model ---');
+  Writeln('--- ', ModelTitle, ' ---');
 
-  WorkingDir := 'churchill';
-  InitWorkFolders(WorkingDir);
-  CurrentBaseName := 'churchill';
-  WorkingName := 'churchill';
-  Writeln('Using Churchill work folder: ', WorkRoot);
+  SelectExistingWork(FolderName, DataBaseName);
 
-  TokenFileName := ResolveInputFile('churchill.tok', TokenDir);
-  SymbolFileName := ResolveInputFile('churchill.sym', SymbolDir);
+  TokenizedCorpusPresent := False;
+  SymbolTablePresent := False;
+  ModelPresent := False;
 
+  TokenFileName := TokenDir + DataBaseName + '.tok';
+  SymbolFileName := SymbolDir + DataBaseName + '.sym';
+  ModelFileName := ModelDir + 'weschat_best.model';
+
+  // Verify all required files before replacing in-memory data.
   if not FileExists(TokenFileName) then begin
-    Writeln('File not found: churchill.tok');
+    Writeln('Token file not found: ', TokenFileName);
     Exit;
   end;
 
   if not FileExists(SymbolFileName) then begin
-    Writeln('File not found: churchill.sym');
+    Writeln('Symbol table not found: ', SymbolFileName);
     Exit;
   end;
 
+  if not FileExists(ModelFileName) then begin
+    Writeln('Model file not found: ', ModelFileName);
+    Exit;
+  end;
+
+  // Load tokenized corpus.
+  SetLength(TokenizedCorpus, 0);
   IOHandler.LoadTokenList(TokenFileName, TokenizedCorpus);
+
+  if Length(TokenizedCorpus) < MinTokens then begin
+    Writeln('Token list is too small. Length = ', Length(TokenizedCorpus), '.');
+    Exit;
+  end;
+
   PadToSeqMultiple(TokenizedCorpus, SeqLen);
   nTokenizedCorpus := Length(TokenizedCorpus);
 
+  // Load matching Wes symbol table.
+  ResetWesTrie;
+  SetLength(SymbolTable, 0);
+
   FromSymbolTable := True;
   LoadSymbolTable(SymbolFileName, SymbolTable);
-  nSymbols := Length(SymbolTable);
-  nVocab := nSymbols;
 
+  if Length(SymbolTable) < MinSymbols then begin
+    Writeln('Symbol table is too small. Length = ', Length(SymbolTable), '.');
+    Exit;
+  end;
+
+  nSymbols := Length(SymbolTable);
   SetTokenizerMode(WesTokenizer);
-  NewModel := True;
+
+  // Discard CUDA storage belonging to the preceding model.
+  if CudaAllocated or (CuHandle <> nil) then
+    EndCuda(WModelParams, WModelState);
+
+  // Load saved parameters and model information.
+  if not LoadModel(ModelFileName, WModelParams) then begin
+    Writeln('Model not loaded: ', ModelFileName);
+    Exit;
+  end;
+
+  NewModel := False;
   ParamsNeedCopyToDevice := True;
 
-  Writeln('Churchill data loaded. Tokens = ', Length(TokenizedCorpus), ' Symbols = ', nSymbols, '.');
+  // LoadModel should have restored nVocab.
+  if nVocab <> nSymbols then begin
+    Writeln('Vocabulary mismatch. Training aborted.');
+    Writeln('Model nVocab       = ', nVocab);
+    Writeln('Symbol table count = ', nSymbols);
+    Exit;
+  end;
 
-  if AskYesNo('Proceed to training?', True) then begin
-    RunTrain(WModelParams, WModelState, TokenizedCorpus);
+  if nVocab > DimVocab then begin
+    Writeln('Model vocabulary exceeds DimVocab. Training aborted.');
+    Writeln('nVocab   = ', nVocab);
+    Writeln('DimVocab = ', DimVocab);
+    Exit;
+  end;
 
-    if TrainSuccess then begin
+  TokenizedCorpusPresent := True;
+  SymbolTablePresent := True;
+  ModelPresent := True;
+
+  Writeln;
+  Write('Loaded Token list = ', TokenFileName);
+  Write('; Symbol table = ', SymbolFileName);
+  Write('; Model = ', ModelFileName);
+  Write('; Tokens = ', nTokenizedCorpus);
+  Write('; Symbols = ', nSymbols);
+  Write('; nVocab = ', nVocab, '.');
+
+  if not AskYesNo('Proceed to resumed training?', True) then Exit;
+
+  // Preserve weschat_best.model and save new best models under the corpus name.
+  WorkingName := CurrentBaseName;
+
+  Writeln('Loaded checkpoint remains: ', ModelFileName);
+  Writeln('New automatic best model: ', ModelDir + WorkingName + '_best.model');
+
+  RunTrain(WModelParams, WModelState, TokenizedCorpus);
+
+  if TrainSuccess then begin
+    if AskYesNo('Save an additional model?', False) then
       MaybeSaveModel;
 
-      if AskYesNo('Proceed to inference?', False) then
-        RunInfer(WModelParams, WModelState);
-    end;
+    if AskYesNo('Proceed to inference?', False) then
+      RunInfer(WModelParams, WModelState);
   end;
 end;
 
-procedure DoExistingModels;
+procedure DoGibbon731bModel;
+begin
+  DoResumeBestModel('Gibbon 731b Best Model', 'gibbon731b', 'gibbon');
+end;
+
+procedure DoLocke730Model;
+begin
+  DoResumeBestModel('Locke 730 Best Model', 'locke730', 'locke');
+end;
+
+procedure DoChurchill801Model;
+begin
+  DoResumeBestModel('Churchill 801 Best Model', 'churchill801', 'churchill');
+end;
+
+procedure DoPredefinedWork;
 var
   TChoice: string;
 begin
-  Writeln;
-  Writeln('--- Existing Models ---');
-  Writeln('B: Bela corpus');
-  Writeln('D: Damned Thing token list');
-  Writeln('C: Churchill token list');
-  Writeln('X: Return to main menu');
-  Writeln;
+  repeat
+    Writeln;
+    Writeln('--- Predefined Corpora and Models ---');
+    Writeln('B: Train a new model on the Bela corpus');
+    Writeln('D: Train a new model on the Damned Thing token list');
+    Writeln('G: Resume the Gibbon 731b best model');
+    Writeln('C: Resume the Churchill 801 best model');
+    Writeln('L: Resume the Locke 730 best model');
+    Writeln('X: Return to main menu');
+    Writeln;
 
-  TChoice := AskChoice('Model', 'B/D/C/X');
+    TChoice := AskChoice('Selection', 'B/D/G/C/L/X');
 
-  case TChoice of
-    'B': DoBelaModel;
-    'D', 'DT': DoDamnedThingModel;
-    'C': DoChurchillModel;
-  end;
+    case TChoice of
+      'B', 'BELA': DoBelaModel;
+      'D', 'DT': DoDamnedThingModel;
+      'G', 'GIBBON': DoGibbon731bModel;
+      'C', 'CHURCHILL': DoChurchill801Model;
+      'L', 'LOCKE': DoLocke730Model;
+    end;
+
+  until TChoice = 'X';
 end;
 
 // Display / menu.
@@ -1238,7 +1394,7 @@ begin
   Writeln('  J: Join symbol tables.');
   Writeln('     Requires two symbol tables.');
   Writeln;
-  Writeln('  M: Use existing models -- Bela, Damned Thing, and Churchill.');
+  Writeln('  M: Do predefined work -- train corpora or resume models: Bela, Damned Thing, Gibbon, Locke, or Churchill.');
   Writeln('  F: File/folder utilities.');
   Writeln('  P: Program information.');
   Writeln('  H: Help and options.');
@@ -1350,6 +1506,14 @@ begin
       DisplayStage := False;
       DisplaySubstage := False;
     end;
+    'VI':   begin
+      VerboseInfer := True;
+      Writeln('Verbose infer is ', VerboseInfer);
+    end;
+    'NVI':   begin
+      VerboseInfer := False;
+      Writeln('Verbose infer is ', VerboseInfer);
+    end;
     'DS': begin
       DisplayStage := True;
       DisplayEpoch := True;
@@ -1422,12 +1586,13 @@ begin
   ReportKeyVariables;
   Writeln;
 
-  Write('Enter WesChat work folder, blank for .\WesChatWork: ');
+  NormalizeExistingWorkRoot;
+
+  Writeln('Work folders are normally created under ', ExistingWorkRoot);
+  Write('Enter work folder name, blank for WesChatWork: ');
   Readln(WorkingDir);
 
-  if Trim(WorkingDir) = '' then
-    WorkingDir := 'WesChatWork';
-
+  WorkingDir := ResolveWorkFolder(WorkingDir);
   InitWorkFolders(WorkingDir);
 
   Writeln('Work folder: ', WorkRoot);
@@ -1444,15 +1609,15 @@ begin
       'R': DoTrain;
       'I': DoInfer;
       'J': DoJoinSymbolTables;
-      'M': DoExistingModels;
+      'M': DoPredefinedWork;
       'F': DoFolderUtilities;
       'P': ReportProgramInfo;
       'H': Help;
       'X', 'EXIT': Break;
 
       'VTO', 'NVTO', 'DC', 'NDC', 'DTW', 'NDTW',
-      'DMW', 'NDMW', 'DV', 'NDV', 'DEBR', 'NDEBR',
-      'VTR', 'NVTR',
+      'DMW', 'NDMW', 'DTV', 'NDTV', 'DEBR', 'NDEBR',
+      'VTR', 'NVTR', 'VI', 'NVI',
       'DE', 'DS', 'DSS', 'ND',
       'DW', 'NDW', 'DNP', 'DP', 'SF', 'NSF',
       'TEMP', 'LR', 'MM', 'PC':

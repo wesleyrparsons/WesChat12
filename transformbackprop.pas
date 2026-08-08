@@ -246,7 +246,10 @@ begin
     end;
 
     // 1A. Backprop Layer-Norm: Input X1.Value, X1.Grad. Output X.Grad, Gamma1.Grad, Beta1.Grad.
-    if DisplaySubstage then Writeln('': Stage, '1A. Transform Backprop, Layer Norm X1');
+    if DisplaySubstage then begin
+      Writeln('': Stage, '1A. Transform Backprop, Layer Norm X1');
+      PauseNNL
+    end;
 
     // Equation: X.Grad, Gamma1.Grad, Beta1.Grad = LayerNorm(X1.Value, X1.Grad, Gamma1.Value, Beta1.Value). X.Grad, X1.Grad in R^{L x D}. Gamma1.Grad, Beta1.Grad in R^{D}.
     LaunchLayerNormBackward(X1.dGrad, dXFromLN1, Gamma1.dValue, dLNXHat1, dLNInvStd1, Gamma1.dGrad, Beta1.dGrad, SeqLen, ModelDim);

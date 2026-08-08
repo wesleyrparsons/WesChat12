@@ -21,6 +21,8 @@ procedure RunGPT2Tokenize(const FileName: string; var TokenizedCorpus: TIVector)
 procedure EnsureGPT2VocabLoaded;
 procedure LoadVocab(const FileName: string; Vocab: TStringList);
 function DisplayToken(const S: UnicodeString): AnsiString;
+function DecodeGPT2Token(const TokenID: Integer): UnicodeString;
+function DecodeGPT2Tokens(const Tokens: TIVector): UnicodeString;
 
 implementation
 
@@ -86,6 +88,69 @@ begin
       Inc(n);
 
   Result := WideChar(256 + n);
+end;
+
+// Decode GPT2 tokens.
+function GPT2UnicodeToByte(const C: WideChar; out B: Byte): Boolean;
+var
+  i: Integer;
+begin
+  for i := 0 to 255 do
+    if GPT2ByteToUnicode(Byte(i)) = C then begin
+      B := Byte(i);
+      Result := True;
+      Exit;
+    end;
+
+  B := 0;
+  Result := False;
+end;
+
+function DecodeGPT2Tokens(const Tokens: TIVector): UnicodeString;
+var
+  Raw: RawByteString;
+  PieceUTF8: UTF8String;
+  PieceUnicode: UnicodeString;
+  i, j, TokenID: Integer;
+  B: Byte;
+begin
+  Raw := '';
+
+  if not Assigned(Vocab) then begin
+    Result := '<VOCAB NOT LOADED>';
+    Exit;
+  end;
+
+  for i := 0 to High(Tokens) do begin
+    TokenID := Tokens[i];
+
+    if (TokenID < 0) or (TokenID >= Vocab.Count) then begin
+      Raw := Raw + UTF8Encode('<BADTOKEN:' + IntToStr(TokenID) + '>');
+      Continue;
+    end;
+
+    PieceUTF8 := UTF8String(Vocab[TokenID]);
+    PieceUnicode := UTF8Decode(PieceUTF8);
+
+    for j := 1 to Length(PieceUnicode) do begin
+      if GPT2UnicodeToByte(PieceUnicode[j], B) then
+        Raw := Raw + AnsiChar(B)
+      else
+        Raw := Raw + UTF8Encode(PieceUnicode[j]);
+    end;
+  end;
+
+  Result := UTF8Decode(UTF8String(Raw));
+end;
+
+function DecodeGPT2Token(const TokenID: Integer): UnicodeString;
+var
+  OneToken: TIVector;
+begin
+  SetLength(OneToken, 1);
+  OneToken[0] := TokenID;
+
+  Result := DecodeGPT2Tokens(OneToken);
 end;
 
 function EncodeBytesToUnicode(const x: RawByteString): UnicodeString;

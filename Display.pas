@@ -116,16 +116,43 @@ begin
 end;
 
 procedure FullReportTrainableParameters;
+var
+  AllBlockParams: Int64;
 begin
   ComputeTrainableParameters;
-  Writeln('Trainable parameters:');
-  Writeln('  Embeddings       = ', EmbeddingParams);
-  Writeln('  Attention/block  = ', AttentionParams);
-  Writeln('  FFN/block        = ', FFNParams);
-  Writeln('  LayerNorm/block  = ', LayerNormParams);
-  Writeln('  Total/block      = ', BlockParams);
-  Writeln('  Blocks           = ', nBlock);
-  Writeln('  Total parameters = ', TotalParams);
+  AllBlockParams := Int64(nBlock) * BlockParams;
+
+  Writeln('--- Trainable Parameter Calculation ---');
+  Writeln('nVocab        = ', nVocab);
+  Writeln('ModelDim      = ', ModelDim);
+  Writeln('ModelDimProj  = ', ModelDimProj);
+  Writeln('nBlock        = ', nBlock);
+
+  Writeln('Embeddings:');
+  Writeln('  nVocab * ModelDim');
+  Writeln('  ', nVocab, ' * ', ModelDim, ' = ', EmbeddingParams);
+  Writeln;
+
+  Writeln('Attention parameters per block:');
+  Writeln('  4 * ModelDim * ModelDim');
+  Writeln('  4 * ', ModelDim, ' * ', ModelDim, ' = ', AttentionParams, ' (Includes Wq, Wk, Wv, and W0).');
+  Writeln('FFN parameters per block:');
+  Writeln('  2 * ModelDim * ModelDimProj + ModelDimProj + ModelDim');
+  Writeln('  2 * ', ModelDim, ' * ', ModelDimProj, ' + ', ModelDimProj, ' + ', ModelDim, ' = ', FFNParams);
+  Writeln('  Includes W1, W2, b1, and b2.');
+  Writeln('LayerNorm parameters per block:');
+  Writeln('  4 * ModelDim');
+  Writeln('  4 * ', ModelDim, ' = ', LayerNormParams);
+  Writeln('  Includes Gamma1, Beta1, Gamma2, and Beta2.');
+  Writeln('Total parameters per transformer block:');
+  Writeln('  Attention + FFN + LayerNorm');
+  Writeln('  ', AttentionParams, ' + ', FFNParams, ' + ', LayerNormParams, ' = ', BlockParams);
+  Writeln('All transformer blocks:');
+  Writeln('  nBlock * BlockParams');
+  Writeln('  ', nBlock, ' * ', BlockParams, ' = ', AllBlockParams);
+  Writeln('Total trainable parameters:');
+  Writeln('  Embeddings + all transformer blocks');
+  Writeln('  ', EmbeddingParams, ' + ', AllBlockParams, ' = ', TotalParams);
 end;
 
 // Short report of trainable parameters.
@@ -151,6 +178,15 @@ begin
   Writeln('Number of trainable parameters is ', NumberTrainableParameters);
 end;
 
+// Report path.
+procedure ReportPath(const PathLabel, PathValue: string);
+begin
+  if Trim(PathValue) = '' then
+    Writeln('  ', PathLabel, ': (none)')
+  else
+    Writeln('  ', PathLabel, ': ', PathValue);
+end;
+
 // Write information on state of program.
 procedure ReportProgramInfo;
 begin
@@ -158,8 +194,12 @@ begin
   Writeln('WesChat, Version: ', Version);
   Writeln('Author: Wesley R. Parsons');
   Writeln('Date: begun January 10, 2026');
-  Writeln('Sequence Length (SeqLen): ', SeqLen);
-  Writeln('Stride: ', Stride);
+  Writeln('--- Folder Paths ---');
+  ReportPath('Existing work root', ExistingWorkRoot);
+  ReportPath('Working directory', WorkingDir);
+  ReportPath('Work root', WorkRoot);  Writeln('Sequence Length (SeqLen): ', SeqLen);
+  Writeln('--- Model Dimensions ---');
+  Writeln('Stride: (Stride) ', Stride);
   Writeln('Model Dimensions (ModelDim): ', ModelDim);
   Writeln('Dimensional Projections (Proj): ', Proj);
   Writeln('Heads (nHead): ', nHead);
@@ -167,6 +207,7 @@ begin
   Writeln('Epochs (MaxEpochs): ', MaxEpochs);
   Writeln('Maximum Vocabulary (MaxVocab): ', DimVocab);
   Writeln('Number of Vocabulary (nVocab): ', nVocab);
+  Writeln('--- Model Specs ---');
   Case LearningStyle of
     SlowLearning:
       // Display slow learning rate schedule.
@@ -179,13 +220,14 @@ begin
       Writeln('Learning rate (rolled of): ', LearningRate: 9: 7, ' Floor LR = ', FloorLearningRate: 9: 7, ' Base LR = ', BaseLearningRate: 9: 7, ' LR rolloff = ', RollOff: 9: 7, '.');
   end;
   if OverrideLearningRate <> -1.0 then
-    Writeln('Override LR: ', OverrideLearningRate: 9 :7);
+    Writeln('Override Learning Rate: ', OverrideLearningRate: 9 :7);
   Writeln('Current Learning Rate: ', LearningRate: 9: 7);
-  Writeln('Weight decay: ', WeightDecay: 9: 7, '; Decay scale = ', DecayScale: 9: 7);
+  Writeln('Weight decay: ', WeightDecay: 9: 7);
   Writeln('Clip limit: ', ClipLimit: 9: 7);
   Writeln('Temperature: ', TTemperature: 9: 7);
   Writeln('Global step: ', GlobalStep);
   Writeln('Dropouts for Attention, MLP, Residual (A, MLP, RDropout): ', ADropout: 4: 4, ' ', MLPDropout: 4: 4, ' ', RDropout: 4: 4);
+  Writeln('--- Parameter Specs ---');
   Writeln('Trainable Parameters: Embeddings, Wq, Wk, Wv, W0, W1, b1, W2, b2, gamma1, beta1, gamma2, beta2');
   FullReportTrainableParameters;
 end;

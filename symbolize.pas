@@ -106,12 +106,14 @@ begin
 
     if VerboseTokenize then
       if DisplayEachByteRead then
-        if B < 32 then
+        {if B < 32 then
           Write('<', B, '>')
-        else
+        else}
           Write(Chr(B));
   end;
   CloseFile(F);
+  if VerboseTokenize then
+    Writeln;
 
   if DisplayCorpus then begin
     Writeln('First ', DisplayLength, ' bytes of corpus): ');
@@ -592,27 +594,13 @@ var
   begin
     key := CheckForControlKey;
     case key of
-      'x', 'X': begin
-        Writeln('Exit requested. Stopping execution.');
-        Pause;
-        Halt;
-      end;
       'b', 'B': begin
         Writeln('Break requested. Exiting loop.');
         BreakRequested := True;
       end;
-      'v', 'V': begin
-        VerboseTokenize := not VerboseTokenize;
-        Writeln('Verbose tokenize mode: ', VerboseTokenize);
-        Pause;
-      end;
       'i', 'I': begin
         Writeln;
         ReportProgramInfo;
-        Pause;
-      end;
-      'p', 'P': begin        // Pause work.
-        Writeln('Paused...');
         Pause;
       end;
       'm', 'M': begin
@@ -621,6 +609,10 @@ var
           '. Maximum merges = ', MaxMerges, '. Hash capacity = ', H.Capacity, '. Used slots = ', H.Used, '. Heap entries = ', Heap.Count, '. Best count = ', BestCount, '.');
         Write(DateTimeToStr(Now), '  X = Exit program. B = Break out of merge loop. V = toggle Verbose mode. I = program Information. ');
         Writeln('P = Pause. M = Merging information. S = Save. Symbolizing and merging...');
+        Pause;
+      end;
+      'p', 'P': begin        // Pause work.
+        Writeln('Paused...');
         Pause;
       end;
       's', 'S': begin
@@ -665,6 +657,16 @@ var
           end;
         end;
       end;
+      'v', 'V': begin
+        VerboseTokenize := not VerboseTokenize;
+        Writeln('Verbose tokenize mode: ', VerboseTokenize);
+        Pause;
+      end;
+      'x', 'X': begin
+        Writeln('Exit requested. Stopping execution.');
+        Pause;
+        Halt;
+      end;
     end;
   end;
 
@@ -672,8 +674,8 @@ begin
   MergeCount := 0;
   BreakRequested := False;
 
-  Write(DateTimeToStr(Now), '  X = Exit program. B = Break out of merge loop. V = toggle Verbose mode. I = program Information. ');
-  Writeln('P = Pause. M = Merging information. S = Save. Symbolizing and merging...');
+  Write(DateTimeToStr(Now), '  B = Break out of merge loop. I = program Information. M = Merging information. P = Pause. ');
+  Writeln('S = Save. V = toggle Verbose mode. X = Exit program. Symbolizing and merging...');
   Writeln;
 
   if DisplayMergeWork then
@@ -746,9 +748,17 @@ end;
 { Computations and reports }
 // Calculate time statistics.
 procedure CalculateTimeStatistics;
+var
+  PauseMS: Int64;
 begin
-  // Total elapsed time.
-  ElapsedMS := MilliSecondsBetween(t0, t1) - Round(StopTime * 86400000.0);
+  // StopTime is a TDateTime measured in days.
+  PauseMS := Round(StopTime * 86400000.0);
+
+  ElapsedMS := MilliSecondsBetween(t0, t1) - PauseMS;
+
+  if ElapsedMS < 1 then
+    ElapsedMS := 1;
+
   Hours := ElapsedMS div 3600000;
   Mins := (ElapsedMS mod 3600000) div 60000;
   Secs := (ElapsedMS mod 60000) / 1000.0;
@@ -902,10 +912,10 @@ end;
 // Report all statistics.
 procedure ReportStatistics;
 begin
-  CalculateTimeStatistics;
   ReportBasicStatistics;
   SymbolStats;
   ReportSymbolLengths;
+
   if VerboseTokenize and (TextRec(Output).Handle = StdOutputHandle) then
     Pause;
 end;
@@ -1084,9 +1094,10 @@ begin
   FinalTokenCount := CountTokenNodes(Head);
 
   // Timing.
+  // Finish and freeze timing before any reports or pauses.
   t1 := Now;
+  CalculateTimeStatistics;
 
-  //nSymbols := Length(SymbolTable);
   // Display symbol table.
   if VerboseTokenize then
     DisplayByteSymbolTable(SymbolTable);

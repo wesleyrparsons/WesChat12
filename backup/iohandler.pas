@@ -20,14 +20,13 @@ procedure LoadSymbolTable(const FileName: string; var SymbolTable: TSymbolTable)
 procedure LoadTokenList(const TokenFileName: string; var TokenizedCorpus: TIVector);
 procedure SaveSymbolTable(const SymbolFileName: string; const SymbolTable: TSymbolTable);
 procedure SaveTokenList(const TokenizedCorpus: TIVector; const TokenFileName: String);
+procedure RestoreTrainingCheckpoint(const C: TTrainingCheckpoint);
 function SaveModel(const FileName: string; var Model: TWModelParams): Boolean;
 function LoadModel(const FileName: string; var Model: TWModelParams): Boolean;
 
 implementation
 
-var
-  Magic: array[0..3] of Char = ('S', 'Y', 'M', 'T');  // Magic, for saving symbol table.
-
+// Read file of raw bytes, one by one.
 procedure ReadFileBytes(const FileName: String; var OneCorpus: TBVector);
 var
   F: File;
@@ -120,7 +119,6 @@ begin
   Close(F);
   nSymbols := Length(SymbolTable);
   Writeln('Loaded ', nSymbols, ' symbols from ', FileName, '.');
-  Pause;
 end;
 
 // Save symbol table.
@@ -134,7 +132,7 @@ begin
   ReWrite(F, 1);
 
   // Magic.
-  BlockWrite(F, Magic, SizeOf(Magic));
+  BlockWrite(F, SymbolMagic, SizeOf(SymbolMagic));
 
   // Version.
   BlockWrite(F, Version, 16);
@@ -231,67 +229,67 @@ begin
   end;
 end;
 
-{function SaveModel(const FileName: string; var Model: TWModelParams): Boolean;
-var
-  F: file of TWModelParams;
-  IOModelDim: Integer;
-
+// Capture and restore variables to save.
+procedure CaptureTrainingCheckpoint(out C: TTrainingCheckpoint);
 begin
-  // Copy all the weights in cublas to RAM.
-  if CudaAllocated then
-    CopyParamsToHost(Model);
+  C.GlobalStep := GlobalStep;
+  C.CompletedEpochs := CompletedEpochs;
 
-  Assign(F, FileName);
-  Result := False;
-  IOModelDim := ModelDim;
-  try
-    Rewrite(F, 1);
-    BlockWrite(F, 'WES1', 4);
-    BlockWrite(F, Version, 16);
-    BlockWrite(F, IOModelDim, SizeOf(Integer));
-    BlockWrite(F, nVocab, SizeOf(Integer));
-    Write(F, Model);
-    Result := True;
-    Close(F);
-    Result := False;
-    Close(F);
-    Result := True;
-  except
-    Close(F);
-  end;
+  C.LearningStyle := LearningStyle;
+  C.LearningRate := LearningRate;
+  C.OverrideLearningRate := OverrideLearningRate;
+  C.BaseLearningRate := BaseLearningRate;
+  C.FloorLearningRate := FloorLearningRate;
+  C.RollOff := RollOff;
+
+  C.WeightDecay := WeightDecay;
+  C.ClipLimit := ClipLimit;
+  C.TTemperature := TTemperature;
+
+  C.ADropOut := ADropOut;
+  C.RDropOut := RDropOut;
+  C.MLPDropOut := MLPDropOut;
+
+  if ShuffleWindows then
+    C.ShuffleWindows := True
+  else
+    C.ShuffleWindows := False;
+
+  C.Stride := Stride;
+  C.StartStride := StartStride;
+  C.GlobalSeed := GlobalSeed;
 end;
 
-// Load a model.
-function LoadModel(const FileName: string; var Model: TWModelParams): Boolean;
-var
-  F: file;
-  Magic: array[0..3] of Char;
-  IOModelDim: Integer;
-  nVocabRead: Integer;
+procedure RestoreTrainingCheckpoint(const C: TTrainingCheckpoint);
 begin
-  Assign(F, FileName);
-  Result := False;
-  try
-    Reset(F, 1);
-    BlockRead(F, Magic, 4);
-    BlockWrite(F, Version, 16);
-    BlockRead(F, IOModelDim, SizeOf(Integer));
-    BlockRead(F, nVocabRead, SizeOf(Integer));
-    Close(F);
-    Result := True;
-  except
-    Close(F);
-  end;
-  ClearDevicePointers(Model);
-end;}
+  GlobalStep := C.GlobalStep;
+  CompletedEpochs := C.CompletedEpochs;
+  LearningStyle := C.LearningStyle;
+  LearningRate := C.LearningRate;
+  OverrideLearningRate := C.OverrideLearningRate;
+  BaseLearningRate := C.BaseLearningRate;
+  FloorLearningRate := C.FloorLearningRate;
+  RollOff := C.RollOff;
+  WeightDecay := C.WeightDecay;
+  ClipLimit := C.ClipLimit;
+  TTemperature := C.TTemperature;
+  ADropOut := C.ADropOut;
+  RDropOut := C.RDropOut;
+  MLPDropOut := C.MLPDropOut;
+  ShuffleWindows := C.ShuffleWindows;
+  Stride := C.Stride;
+  StartStride := C.StartStride;
+  GlobalSeed := C.GlobalSeed;
+  DecayScale := 1.0 - LearningRate * WeightDecay;       // Derived value.
+end;
 
 // Save a model.
 function SaveModel(const FileName: string; var Model: TWModelParams): Boolean;
 var
   F: file;
-  Magic: array[0..3] of Char = ('W', 'E', 'S', '1');
   IOModelDim, IONVocab, IONBlock, IOSeqLen,
     IODimVocab, IOModelDimProj, IOProj, IONHead: Integer;
+  Checkpoint: TTrainingCheckpoint;
 begin
   Result := False;
 
@@ -307,11 +305,13 @@ begin
   IONHead        := nHead;
   IOSeqLen       := SeqLen;
 
+  CaptureTrainingCheckpoint(Checkpoint);
+
   AssignFile(F, FileName);
   try
     Rewrite(F, 1);
 
-    BlockWrite(F, Magic, SizeOf(Magic));
+    BlockWrite(F, SymbolMagic, SizeOf(SymbolMagic));
     BlockWrite(F, Version, SizeOf(Version));
     BlockWrite(F, IOModelDim,     SizeOf(IOModelDim));
     BlockWrite(F, IOModelDimProj, SizeOf(IOModelDimProj));
@@ -321,8 +321,9 @@ begin
     BlockWrite(F, IONBlock,       SizeOf(IONBlock));
     BlockWrite(F, IONHead,        SizeOf(IONHead));
     BlockWrite(F, IOSeqLen,       SizeOf(IOSeqLen));
-    BlockWrite(F, Model, SizeOf(Model));
 
+    BlockWrite(F, Model, SizeOf(Model));
+    BlockWrite(F, Checkpoint, SizeOf(Checkpoint));
     CloseFile(F);
     Result := True;
   except
@@ -338,9 +339,12 @@ end;
 function LoadModel(const FileName: string; var Model: TWModelParams): Boolean;
 var
   F: file;
-  Magic: array[0..3] of Char;
+var
+  FileMagic: array[0..3] of Char;
   IOModelDim, IONVocab, IONBlock, IOSeqLen,
     IODimVocab, IOModelDimProj, IOProj, IONHead: Integer;
+  Checkpoint: TTrainingCheckpoint;
+  HasTrainingCheckpoint: Boolean;
 begin
   Result := False;
 
@@ -348,9 +352,14 @@ begin
   try
     Reset(F, 1);
 
-    BlockRead(F, Magic, SizeOf(Magic));
-    if (Magic[0] <> 'W') or (Magic[1] <> 'E') or (Magic[2] <> 'S') or (Magic[3] <> '1') then begin
+    BlockRead(F, FileMagic, SizeOf(FileMagic));
+    HasTrainingCheckpoint := False;
+
+    if (FileMagic[0] = 'W') and (FileMagic[1] = 'E') and (FileMagic[2] = 'S') and (FileMagic[3] = '2') then
+      HasTrainingCheckpoint := True
+    else if not ((FileMagic[0] = 'W') and (FileMagic[1] = 'E') and (FileMagic[2] = 'S') and (FileMagic[3] = '1')) then begin
       CloseFile(F);
+      Writeln('Invalid model file.');
       Exit;
     end;
 
@@ -366,53 +375,68 @@ begin
 
     if IOModelDim <> ModelDim then begin
       CloseFile(F);
-      Writeln('ModelDim mismatch. File=', IOModelDim, ' Program=', ModelDim);
+      Writeln('ModelDim mismatch. File = ', IOModelDim, ' Program = ', ModelDim);
       Exit;
     end;
 
     if IONBlock <> nBlock then begin
       CloseFile(F);
-      Writeln('nBlock mismatch. File=', IONBlock, ' Program=', nBlock);
+      Writeln('nBlock mismatch. File = ', IONBlock, ' Program = ', nBlock);
       Exit;
     end;
 
     if IOModelDimProj <> ModelDimProj then begin
-      Writeln('ModelDimProj mismatch. File=', IOModelDimProj, ' Program=', ModelDimProj);
+      Writeln('ModelDimProj mismatch. File = ', IOModelDimProj, ' Program = ', ModelDimProj);
       CloseFile(F);
       Exit;
     end;
 
     if IOProj <> Proj then begin
-      Writeln('Proj mismatch. File=', IOProj, ' Program=', Proj);
+      Writeln('Proj mismatch. File = ', IOProj, ' Program = ', Proj);
       CloseFile(F);
       Exit;
     end;
 
     if IODimVocab <> DimVocab then begin
-      Writeln('DimVocab mismatch. File=', IODimVocab, ' Program=', DimVocab);
+      Writeln('DimVocab mismatch. File = ', IODimVocab, ' Program = ', DimVocab);
       CloseFile(F);
       Exit;
     end;
 
     if IONVocab > DimVocab then begin
-      Writeln('nVocab in file exceeds DimVocab. File=', IONVocab, ' Program DimVocab=', DimVocab);
+      Writeln('nVocab in file exceeds DimVocab. File = ', IONVocab, ' Program DimVocab = ', DimVocab);
       CloseFile(F);
       Exit;
     end;
 
     if IONHead <> nHead then begin
-      Writeln('nHead mismatch. File=', IONHead, ' Program=', nHead);
+      Writeln('nHead mismatch. File = ', IONHead, ' Program = ', nHead);
       CloseFile(F);
       Exit;
     end;
 
     if IOSeqLen <> SeqLen then begin
-      Writeln('SeqLen mismatch. File=', IOSeqLen, ' Program=', SeqLen);
+      Writeln('SeqLen mismatch. File = ', IOSeqLen, ' Program = ', SeqLen);
       CloseFile(F);
       Exit;
     end;
 
     BlockRead(F, Model, SizeOf(Model));
+
+    if HasTrainingCheckpoint then begin
+      BlockRead(F, Checkpoint, SizeOf(Checkpoint));
+      RestoreTrainingCheckpoint(Checkpoint)
+    end
+    else begin
+      // Old WES1 model: training state was not stored.
+      GlobalStep := 0;
+      CompletedEpochs := 0;
+
+      Writeln('Old WES1 model loaded.');
+      Writeln('Training settings were not stored in this model.');
+      Writeln('Current program training settings will be used.');
+    end;
+
     CloseFile(F);
 
     nVocab := IONVocab;
@@ -427,5 +451,4 @@ begin
     Result := False;
   end;
 end;
-
 end.

@@ -86,8 +86,8 @@ begin
     // ApplyRoPE(Q.Value, WModelState.InvFreq, SeqLen, ModelDim);
     // ApplyRoPE(K.Value, WModelState.InvFreq, SeqLen, ModelDim);
     if DisplaySubstage then Writeln('' : Stage, '1D. Transform Forward 1D, RoPE Q and K');
-    LaunchRoPEForward(Q.dValue, WModelState.dInvFreq, SeqLen, ModelDim);
-    LaunchRoPEForward(K.dValue, WModelState.dInvFreq, SeqLen, ModelDim);
+    LaunchRoPEForward(Q.dValue, WModelState.dInvFreq, SeqLen, nHead, HeadDim, ModelDim);
+    LaunchRoPEForward(K.dValue, WModelState.dInvFreq, SeqLen, nHead, HeadDim, ModelDim);
 
     if DisplaySubstage then Writeln('' : Stage, '1E-G. Transform Forward, Obtain Scores1, Autoregressive mask, obtain Scores2, Softmax, ADropout');
 

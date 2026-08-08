@@ -26,6 +26,27 @@ procedure RunInfer(var WModelParams: TWModelParams; var WModelState: TWModelStat
 
 implementation
 
+// Decode tokens for inference.
+function DecodeInferenceToken(const TokenID: Integer): UnicodeString;
+begin
+  if Tokenizer = WesTokenizer then
+    Result := Decode(TokenID)
+  else
+    Result := DecodeGPT2Token(TokenID);
+end;
+
+procedure WriteInferenceTokens(const Tokens: TIVector);
+var
+  i: Integer;
+begin
+  if Tokenizer = WesTokenizer then begin
+    for i := 0 to High(Tokens) do
+      Write(UTF8Encode(Decode(Tokens[i])));
+  end
+  else
+    Write(UTF8Encode(DecodeGPT2Tokens(Tokens)));
+end;
+
 // Sameple the top probs.
 function SampleTopK(const TopTokVector: array of Integer; const TopProbVector: array of Single;
     out TopTok: Integer; out TopKSampleProb: Single): Integer;
@@ -150,17 +171,22 @@ var
 
     // Optionally display the top picks.
     if VerboseInfer then begin
-      Writeln('Top probability candidates: ');
+      Write('Top probability candidates: ');
       for j := 0 to KSample - 1 do begin
         Write(TopProbVector[j]: 9: 7, ' ', TopTokVector[j], ' ');
 
-        if Tokenizer = WesTokenizer then
+        if TopTokVector[j] >= 0 then
+          Write(UTF8Encode(DecodeInferenceToken(TopTokVector[j])))
+        else
+          Write('BADTOKEN');
+
+        {if Tokenizer = WesTokenizer then
           Write(Decode(TopTokVector[j]))
         else
           if Assigned(Vocab) and (TopTokVector[j] >= 0) and (TopTokVector[j] < Vocab.Count) then
             Write(DisplayToken(UTF8Decode(Vocab[TopTokVector[j]])))
         else
-          Write('BADTOKEN');
+          Write('BADTOKEN');}
         Write('  ');
       end;
 
@@ -186,7 +212,7 @@ begin
     BuildInferenceInputTokens(InputTokens, QueryTokenized, SeqLen, LastPos);
 
     if VerboseInfer then begin
-      Writeln('Infer step Length(QueryTokenized)=', Length(QueryTokenized), ' LastPos=', LastPos);
+      Write('Step ', LastPos, '. Length(QueryTokenized) = ', Length(QueryTokenized), '.');
       Write('Last 20 InputTokens: ');
       for j := Max(0, LastPos - 19) to LastPos do
         Write(InputTokens[j], ' ');
@@ -228,10 +254,27 @@ begin
       CheckCudaError('Copy final probability row for inference.');
 
     // Set special tokens to zero probability.
-    Probs[LastPos, BOS] := 0.0;
+    if Tokenizer = WesTokenizer then begin
+      Probs[LastPos, BOS] := 0.0;
+      Probs[LastPos, PAD] := 0.0;
+      Probs[LastPos, UNK] := 0.0;
+    end
+    else begin
+      // Suppress only GPT-2-specific custom special IDs that really exist
+      // in this model's vocabulary.
+      if (GPT2BOS >= 0) and (GPT2BOS < nVocab) then
+        Probs[LastPos, GPT2BOS] := 0.0;
+
+      if (GPT2PAD >= 0) and (GPT2PAD < nVocab) then
+        Probs[LastPos, GPT2PAD] := 0.0;
+
+      if (GPT2UNK >= 0) and (GPT2UNK < nVocab) then
+        Probs[LastPos, GPT2UNK] := 0.0;
+    end;
+{    Probs[LastPos, BOS] := 0.0;
     Probs[LastPos, PAD] := 0.0;
     Probs[LastPos, UNK] := 0.0;
-    // Don't zero EOS, need to stop.
+    // Don't zero EOS, need to stop.}
 
     // Check that probs are changing.
     if VerboseInfer then begin
@@ -277,7 +320,7 @@ end;
 // QueryOutput is the output tokens from the model.
 // QueryTokenized is the tokenization of QueryInput, like TokenizedCorpus.
 // QueryToken is the single next token produced by the infer proc.
-procedure RunInfer(var WModelParams: TWModelParams; var WModelState: TWModelState);
+{procedure RunInfer(var WModelParams: TWModelParams; var WModelState: TWModelState);
 const
   MaxNewTokens = 500;                  // Limit on new tokens produced.
 var
@@ -320,20 +363,89 @@ begin
     if OwnsCuda or ParamsNeedCopyToDevice then
       CopyParamsToDevice(WModelParams);
 
+    CopyInvFreqToDevice(WModelState);}
+
+procedure RunInfer(var WModelParams: TWModelParams; var WModelState: TWModelState);
+const
+  MaxNewTokens = 500;
+var
+  i, Step, QueryToken: Integer;
+  OldNVocab: Integer;
+  OldTraining, OldVerboseTransform, OldSaveTokenizationFiles: Boolean;
+  OwnsCuda, StartedCudaHere: Boolean;
+  QueryTokenized, WorkTokens, QueryOutput: TIVector;
+  QueryProb: Single;
+  QueryInput: TBVector;
+  QueryString: string;
+begin
+  OldTraining := Training;
+  OldVerboseTransform := VerboseTransform;
+  OldSaveTokenizationFiles := SaveTokenizationFiles;
+  OldNVocab := nVocab;
+
+  OwnsCuda := False;
+  StartedCudaHere := False;
+
+  try
+    Training := False;
+    VerboseTransform := False;
+    SaveTokenizationFiles := False;
+
+    if Tokenizer = WesTokenizer then
+      if nVocab <> Length(SymbolTable) then
+        raise Exception.CreateFmt('Inference vocabulary mismatch: model nVocab=%d, symbol table length=%d.', [nVocab, Length(SymbolTable)]);
+
+    if nVocab > DimVocab then begin
+      Writeln('nVocab > DimVocab. Aborting inference...');
+      Exit;
+    end;
+
+    InitializeTransformerState(WModelState);
+
+    OwnsCuda := not CudaAllocated;
+
+    if OwnsCuda then begin
+      StartCuda(WModelParams, WModelState);
+      StartedCudaHere := True;
+    end;
+
+    if OwnsCuda or ParamsNeedCopyToDevice then begin
+      CopyParamsToDevice(WModelParams);
+
+      // Keep this only if CopyParamsToDevice does not already do it.
+      ParamsNeedCopyToDevice := False;
+    end;
+
     CopyInvFreqToDevice(WModelState);
 
-    begin // Run one query. (Later, repeat loop.)
-      // Get a query from user.
-      Write('Enter query: ');
-      Readln(QueryString);
-      // Test query.
-      // QueryString := 'political power';
-      Writeln('Query string: ', QueryString);
+    // Query loop.
+    while True do begin
 
-      if QueryString = EmptyStr then begin
-        Writeln('Query is empty.');
-        Exit;
+        // Get a query from user.
+      Write('Enter query, blank to return: ');
+      Readln(QueryString);
+
+      if UpCase(QueryString) = 'V' then begin
+        VerboseInfer := not (VerboseInfer);
+        Writeln('Verbose infer = ', VerboseInfer);
       end;
+
+      if (QueryString = EmptyStr) or (UpCase(QueryString) = 'X') or (UpCase(QueryString) = 'EXIT') then begin
+        Writeln('Leaving inference.');
+        Break;
+      end;
+
+      if (QueryString = '?') or (UpCase(QueryString) = 'H') or (UpCase(QueryString) = 'HELP') then begin
+        Write(DateTimeToStr(Now), '  X = Exit program. V = toggle Verbose mode. I = program Information. ');
+      end;
+
+      if (QueryString = 'I') or (UpCase(QueryString) = 'INFO') then begin
+        ReportProgramInfo;
+        Writeln('nVocab = ', nVocab, ' DimVocab = ', DimVocab, ' Seqlen = ', SeqLen, ' ModelDim = ', ModelDim, ' Projection = ', Proj,
+          ' Epoch = ', MaxEpochs, ' Blocks = ', nBlock, ' Heads = ', nHead);
+      end;
+
+      Writeln('Query string: ', QueryString);
 
       SetLength(QueryInput, Length(QueryString));
       for i := 0 to Length(QueryString) - 1 do
@@ -349,7 +461,7 @@ begin
       if Tokenizer = WesTokenizer then
         TokenizeWesBytes(QueryInput, QueryTokenized)
       else
-        RunGPT2Tokenize(QueryString, QueryTokenized);
+        RunGPT2Tokenize(QueryString, QueryTokenized); // This is wrong.
 
       if (Length(QueryTokenized) > 0) and (QueryTokenized[High(QueryTokenized)] = EOS) then
         SetLength(QueryTokenized, Length(QueryTokenized) - 1);
@@ -381,6 +493,9 @@ begin
         WorkTokens[High(WorkTokens)] := QueryToken;
 
         if VerboseInfer then begin
+          Writeln('Single query token number = ', QueryToken, '. Probability = ', QueryProb: 6: 6, '. Decoded = <<', UTF8Encode(DecodeInferenceToken(QueryToken)), '>>.');
+        end;
+        {if VerboseInfer then begin
           if Tokenizer = WesTokenizer then
             // WesTokenizer.
             Writeln('Single Query Token Number = ', QueryToken, ' Probability = ', QueryProb: 6: 6,
@@ -397,20 +512,25 @@ begin
               // WesTokenizer.
               // Write(SymbolTable[QueryOutput[i]]);
               Write(Decode(QueryOutput[i]));
-            Writeln;}
+            Writeln;}}
 
             Write('WorkTokens: <<');
+            WriteInferenceTokens(WorkTokens);
+            Writeln('>>');
+            {Write('WorkTokens: <<');
             for i := 0 to High(WorkTokens) do
               Write(Decode(WorkTokens[i]));
-            Writeln('>>');
+            Writeln('>>');}
           Pause;
-        end;
       end;
 
-      Write('Query token output: ');
+      Write('Query decoded token output: ');
+      WriteInferenceTokens(QueryOutput);
+      Writeln;
+      {Write('Query token output: ');
       for i := 0 to High(QueryOutput) do
         Write(QueryOutput[i], ' ');
-      Writeln;
+      Writeln;}
 
       if Tokenizer = GPT2Tokenizer then begin
         // GPT2.
@@ -429,8 +549,19 @@ begin
         Writeln;
       end;
       Writeln;
-    end; // Run query once.
+    end;
   finally
+    try
+      if StartedCudaHere then
+        EndCuda(WModelParams, WModelState);
+    finally
+      Training := OldTraining;
+      VerboseTransform := OldVerboseTransform;
+      SaveTokenizationFiles := OldSaveTokenizationFiles;
+      nVocab := OldNVocab;
+    end;
+  end;
+  {finally
     Training := OldTraining;
     VerboseTransform := OldVerboseTransform;
     SaveTokenizationFiles := OldSaveTokenizationFiles;
@@ -438,7 +569,7 @@ begin
 
     if OwnsCuda then
       EndCuda(WModelParams, WModelState);
-  end;
+  end;}
 end;
 
 end.

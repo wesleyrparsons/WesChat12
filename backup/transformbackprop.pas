@@ -193,8 +193,8 @@ begin
     // 1D. RoPE Backward.
     if DisplaySubstage then Writeln('': Stage, '1D. Transform Backprop, RoPE');
 
-    LaunchRoPEBackward(Q.dGrad, WModelState.dInvFreq, SeqLen, ModelDim);
-    LaunchRoPEBackward(K.dGrad, WModelState.dInvFreq, SeqLen, ModelDim);
+    LaunchRoPEBackward(Q.dGrad, WModelState.dInvFreq, SeqLen, nHead, HeadDim, ModelDim);
+    LaunchRoPEBackward(K.dGrad, WModelState.dInvFreq, SeqLen, nHead, HeadDim, ModelDim);
 
     // 1C. Backprop multiplication/overwrite. Obtain W_.Grad and X1_q.Grad for Q, K, and V.
     if DisplaySubstage then Writeln('': Stage, '1C. Transform Backprop, Obtain W_.Grad and X1_q.Grad for Q, K, and V');

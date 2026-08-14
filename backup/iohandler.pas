@@ -21,8 +21,8 @@ procedure LoadTokenList(const TokenFileName: string; var TokenizedCorpus: TIVect
 procedure SaveSymbolTable(const SymbolFileName: string; const SymbolTable: TSymbolTable);
 procedure SaveTokenList(const TokenizedCorpus: TIVector; const TokenFileName: String);
 procedure RestoreTrainingCheckpoint(const C: TTrainingCheckpoint);
-function SaveModel(const FileName: string; var Model: TWModelParams): Boolean;
-function LoadModel(const FileName: string; var Model: TWModelParams): Boolean;
+function SaveModel(const FileName: string; var Model: TWModelParams; var AdamWState: TWAdamState): Boolean;
+function LoadModel(const FileName: string; var Model: TWModelParams; var AdamWState: TWAdamState): Boolean;
 
 implementation
 
@@ -245,6 +245,7 @@ begin
   C.WeightDecay := WeightDecay;
   C.ClipLimit := ClipLimit;
   C.TTemperature := TTemperature;
+  C.ITemperature := ITemperature;
 
   C.ADropOut := ADropOut;
   C.RDropOut := RDropOut;
@@ -258,6 +259,10 @@ begin
   C.Stride := Stride;
   C.StartStride := StartStride;
   C.GlobalSeed := GlobalSeed;
+  C.AdamWStep := AdamWStep;
+  C.AdamBeta1 := AdamBeta1;
+  C.AdamBeta2 := AdamBeta2;
+  C.AdamEpsilon := AdamEpsilon;
 end;
 
 procedure RestoreTrainingCheckpoint(const C: TTrainingCheckpoint);
@@ -273,6 +278,7 @@ begin
   WeightDecay := C.WeightDecay;
   ClipLimit := C.ClipLimit;
   TTemperature := C.TTemperature;
+  ITemperature := C.ITemperature;
   ADropOut := C.ADropOut;
   RDropOut := C.RDropOut;
   MLPDropOut := C.MLPDropOut;
@@ -280,11 +286,74 @@ begin
   Stride := C.Stride;
   StartStride := C.StartStride;
   GlobalSeed := C.GlobalSeed;
+  AdamWStep := C.AdamWStep;
+  AdamBeta1 := C.AdamBeta1;
+  AdamBeta2 := C.AdamBeta2;
+  AdamEpsilon := C.AdamEpsilon;
   DecayScale := 1.0 - LearningRate * WeightDecay;       // Derived value.
 end;
 
+// Save AdamW first and second moments.
+// Only host M and V arrays are written; CUDA pointers are not written.
+procedure SaveAdamWState(var F: file; const WAdamState: TWAdamState);
+var
+  k: Integer;
+begin
+  // Tied embeddings.
+  with WAdamState.Embeddings do begin
+    BlockWrite(F, M, EmbeddingsSize);
+    BlockWrite(F, V, EmbeddingsSize);
+  end;
+
+  // Per-block AdamW state.
+  for k := 0 to nBlock - 1 do
+    with WAdamState.ParamBlock[k] do begin
+
+      // Attention weights.
+      BlockWrite(F, Wq.M, WeightSize);
+      BlockWrite(F, Wq.V, WeightSize);
+
+      BlockWrite(F, Wk.M, WeightSize);
+      BlockWrite(F, Wk.V, WeightSize);
+
+      BlockWrite(F, Wv.M, WeightSize);
+      BlockWrite(F, Wv.V, WeightSize);
+
+      BlockWrite(F, W0.M, WeightSize);
+      BlockWrite(F, W0.V, WeightSize);
+
+      // MLP weights.
+      BlockWrite(F, W1.M, WeightProjectedSize);
+      BlockWrite(F, W1.V, WeightProjectedSize);
+
+      BlockWrite(F, W2.M, WeightProjectedSize);
+      BlockWrite(F, W2.V, WeightProjectedSize);
+
+      // Biases.
+      BlockWrite(F, b1.M, ProjectedSize);
+      BlockWrite(F, b1.V, ProjectedSize);
+
+      BlockWrite(F, b2.M, ModelSize);
+      BlockWrite(F, b2.V, ModelSize);
+
+      // LayerNorm 1.
+      BlockWrite(F, Gamma1.M, ModelSize);
+      BlockWrite(F, Gamma1.V, ModelSize);
+
+      BlockWrite(F, Beta1.M, ModelSize);
+      BlockWrite(F, Beta1.V, ModelSize);
+
+      // LayerNorm 2.
+      BlockWrite(F, Gamma2.M, ModelSize);
+      BlockWrite(F, Gamma2.V, ModelSize);
+
+      BlockWrite(F, Beta2.M, ModelSize);
+      BlockWrite(F, Beta2.V, ModelSize);
+    end;
+end;
+
 // Save a model.
-function SaveModel(const FileName: string; var Model: TWModelParams): Boolean;
+function SaveModel(const FileName: string; var Model: TWModelParams; var AdamWState: TWAdamState): Boolean;
 var
   F: file;
   IOModelDim, IONVocab, IONBlock, IOSeqLen,
@@ -293,8 +362,10 @@ var
 begin
   Result := False;
 
-  if CudaAllocated then
+  if CudaAllocated then begin
     CopyParamsToHost(Model);
+    CopyAdamWStateToHost(AdamWState);
+  end;
 
   IOModelDim     := ModelDim;
   IOModelDimProj := ModelDimProj;
@@ -324,6 +395,7 @@ begin
 
     BlockWrite(F, Model, SizeOf(Model));
     BlockWrite(F, Checkpoint, SizeOf(Checkpoint));
+    SaveAdamWState(F, AdamWState);
     CloseFile(F);
     Result := True;
   except
@@ -335,8 +407,66 @@ begin
   end;
 end;
 
+// Load AdamW first and second moments.
+// CUDA dM and dV pointers are allocated separately by MAllocCublas.
+procedure LoadAdamWState(var F: file; var WAdamState: TWAdamState);
+var
+  k: Integer;
+begin
+  // Tied embeddings.
+  with WAdamState.Embeddings do begin
+    BlockRead(F, M, EmbeddingsSize);
+    BlockRead(F, V, EmbeddingsSize);
+  end;
+
+  // Per-block AdamW state.
+  for k := 0 to nBlock - 1 do
+    with WAdamState.ParamBlock[k] do begin
+
+      // Attention weights.
+      BlockRead(F, Wq.M, WeightSize);
+      BlockRead(F, Wq.V, WeightSize);
+
+      BlockRead(F, Wk.M, WeightSize);
+      BlockRead(F, Wk.V, WeightSize);
+
+      BlockRead(F, Wv.M, WeightSize);
+      BlockRead(F, Wv.V, WeightSize);
+
+      BlockRead(F, W0.M, WeightSize);
+      BlockRead(F, W0.V, WeightSize);
+
+      // MLP weights.
+      BlockRead(F, W1.M, WeightProjectedSize);
+      BlockRead(F, W1.V, WeightProjectedSize);
+
+      BlockRead(F, W2.M, WeightProjectedSize);
+      BlockRead(F, W2.V, WeightProjectedSize);
+
+      // Biases.
+      BlockRead(F, b1.M, ProjectedSize);
+      BlockRead(F, b1.V, ProjectedSize);
+
+      BlockRead(F, b2.M, ModelSize);
+      BlockRead(F, b2.V, ModelSize);
+
+      // LayerNorm 1.
+      BlockRead(F, Gamma1.M, ModelSize);
+      BlockRead(F, Gamma1.V, ModelSize);
+
+      BlockRead(F, Beta1.M, ModelSize);
+      BlockRead(F, Beta1.V, ModelSize);
+
+      // LayerNorm 2.
+      BlockRead(F, Gamma2.M, ModelSize);
+      BlockRead(F, Gamma2.V, ModelSize);
+
+      BlockRead(F, Beta2.M, ModelSize);
+      BlockRead(F, Beta2.V, ModelSize);
+    end;
+end;
 // Load a model.
-function LoadModel(const FileName: string; var Model: TWModelParams): Boolean;
+function LoadModel(const FileName: string; var Model: TWModelParams; var AdamWState: TWAdamState): Boolean;
 var
   F: file;
 var
@@ -345,6 +475,7 @@ var
     IODimVocab, IOModelDimProj, IOProj, IONHead: Integer;
   Checkpoint: TTrainingCheckpoint;
   HasTrainingCheckpoint: Boolean;
+  HasAdamWState: Boolean;
 begin
   Result := False;
 
@@ -354,10 +485,17 @@ begin
 
     BlockRead(F, FileMagic, SizeOf(FileMagic));
     HasTrainingCheckpoint := False;
+    HasAdamWState := False;
 
-    if (FileMagic[0] = 'W') and (FileMagic[1] = 'E') and (FileMagic[2] = 'S') and (FileMagic[3] = '2') then
-      HasTrainingCheckpoint := True
+    if (FileMagic[0] = 'W') and (FileMagic[1] = 'E') and (FileMagic[2] = 'S') and (FileMagic[3] = '2') then begin
+      HasTrainingCheckpoint := True;
+      HasAdamWState := True;
+    end
     else if not ((FileMagic[0] = 'W') and (FileMagic[1] = 'E') and (FileMagic[2] = 'S') and (FileMagic[3] = '1')) then begin
+      HasTrainingCheckpoint := False;
+      HasAdamWState := False;
+    end
+    else begin
       CloseFile(F);
       Writeln('Invalid model file.');
       Exit;
@@ -423,15 +561,21 @@ begin
 
     BlockRead(F, Model, SizeOf(Model));
 
-    if HasTrainingCheckpoint then begin
+    if HasAdamWState then begin
+      // WES3 checkpoint.
       BlockRead(F, Checkpoint, SizeOf(Checkpoint));
-      RestoreTrainingCheckpoint(Checkpoint)
+      LoadAdamWState(F, AdamWState);
+
+      RestoreTrainingCheckpoint(Checkpoint);
+      AdamWStateLoaded := True;
+
     end
     else begin
-      // Old WES1 model: training state was not stored.
+      // WES1.
       GlobalStep := 0;
       CompletedEpochs := 0;
-
+      AdamWStep := 0;
+      AdamWStateLoaded := False;
       Writeln('Old WES1 model loaded.');
       Writeln('Training settings were not stored in this model.');
       Writeln('Current program training settings will be used.');
@@ -451,4 +595,5 @@ begin
     Result := False;
   end;
 end;
+
 end.

@@ -2,14 +2,9 @@ program WesChat;
 
 {$mode ObjFPC}{$H+}{$I proprietary.txt}
 
-{ WesChat, Version 1.2.
-{ Note: Edited 7/26/2026 6 pm -- working from WesChat12 on OneDrive }
-{ Need to recompile CEGradientStrided; Note Tiny Stories change in Symbolize }
-{        Input Train        Input Query        Output
- Raw                        QueryString
- Bytes   Corpus             QueryCorpus
- Token   TokenizedCorpus    QueryTokenized     QueryOutput }
- Folder layout: WorkRoot \corpus \lists \logs \merges \models \scratch \symbols \tokens }
+{ WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wesparsons.com.}
+{ Note: Edited 8/14/2026 4 pm -- working from WesChat12 on OneDrive }
+{ Note Tiny Stories change in Symbolize }
 
 uses
   Classes,
@@ -39,10 +34,10 @@ var
   // Model vars.
   WModelParams: TWModelParams;
   WModelState: TWModelState;
+  WAdamWState: TWAdamWState;
 
   // File names.
-  CorpusFileName, SymbolFileName, TokenFileName,
-    ModelFileName, ListFile: string;
+  CorpusFileName, SymbolFileName, TokenFileName, ModelFileName, ListFile: string;
 
   // Current base name for default output filenames.
   CurrentBaseName: string = 'weschat';
@@ -160,11 +155,6 @@ begin
   Result := LogDir + CleanBaseName(BaseName) + '.sym.tok';
 end;
 
-{function DefaultMetaFile(const BaseName: string): string;
-begin
-  Result := LogDir + ChangeFileExt(CleanBaseName(BaseName), '.meta');
-end;}
-
 function DefaultSymbolFile(const BaseName: string): string;
 begin
   Result := SymbolDir + ChangeFileExt(CleanBaseName(BaseName), '.sym');
@@ -179,7 +169,6 @@ function DefaultTokenFile(const BaseName: string): string;
 begin
   Result := TokenDir + ChangeFileExt(CleanBaseName(BaseName), '.tok');
 end;
-
 
 function DefaultModelFile(const BaseName: string): string;
 begin
@@ -319,8 +308,7 @@ begin
   Result := FileSize(FileName) >= MinSize;
 
   if not Result then
-    Writeln('File too small: ', FileName, '. Size = ', FileSize(FileName),
-      ' minimum = ', MinSize, '.');
+    Writeln('File too small: ', FileName, '. Size = ', FileSize(FileName), ' minimum = ', MinSize, '.');
 end;
 
 function ReadCorpusFilePrompt(var OutCorpusFileName: string; var OutCorpus: TBVector): Boolean;
@@ -330,11 +318,9 @@ begin
   Write('Enter corpus file name: ');
   Readln(OutCorpusFileName);
 
-  if not RequireExistingFile(OutCorpusFileName, CorpusDir) then
-    Exit;
+  if not RequireExistingFile(OutCorpusFileName, CorpusDir) then Exit;
 
-  if not RequireMinFileSize(OutCorpusFileName, MinCorpus) then
-    Exit;
+  if not RequireMinFileSize(OutCorpusFileName, MinCorpus) then Exit;
 
   ReadFileBytes(OutCorpusFileName, OutCorpus);
   nCorpus := Length(OutCorpus);
@@ -343,8 +329,7 @@ begin
 
   SetLength(CorpusFileNames, 1);
   CorpusFileNames[0] :=
-    OutCorpusFileName + '   ' + IntToStr(FileSize(OutCorpusFileName)) +
-    ' bytes   ' + DateTimeToStr(FileDateToDateTime(FileAge(OutCorpusFileName)));
+    OutCorpusFileName + '   ' + IntToStr(FileSize(OutCorpusFileName)) + ' bytes   ' + DateTimeToStr(FileDateToDateTime(FileAge(OutCorpusFileName)));
 
   WriteInfoLog(CurrentBaseName);
 
@@ -376,8 +361,7 @@ begin
   Write('Enter name of file list: ');
   Readln(ListFileName);
 
-  if not RequireExistingFile(ListFileName, ListDir) then
-    Exit;
+  if not RequireExistingFile(ListFileName, ListDir) then Exit;
 
   CurrentBaseName := CleanBaseName(ListFileName);
   ListBaseDir := ExtractFilePath(ListFileName);
@@ -394,8 +378,7 @@ begin
     ReadLn(F, Line);
     Line := Trim(Line);
 
-    if Line = '' then
-      Continue;
+    if Line = '' then Continue;
 
     FullName := Line;
 
@@ -419,14 +402,12 @@ begin
 
     SetLength(CorpusFileNames, Count + 1);
     CorpusFileNames[Count] :=
-      FullName + '   ' + IntToStr(FileSize(FullName)) + ' bytes   ' +
-      DateTimeToStr(FileDateToDateTime(FileAge(FullName)));
+      FullName + '   ' + IntToStr(FileSize(FullName)) + ' bytes   ' + DateTimeToStr(FileDateToDateTime(FileAge(FullName)));
 
     OutCorpus := Concat(OutCorpus, OneCorpus);
     nCorpus := Length(OutCorpus);
 
-    Writeln('  File processed: ', FullName,
-      '; corpus bytes read: ', Length(OneCorpus), '.');
+    Writeln('  File processed: ', FullName, '; corpus bytes read: ', Length(OneCorpus), '.');
     Writeln('  Total bytes read: ', Length(OutCorpus), '.');
 
     Inc(Count);
@@ -504,11 +485,11 @@ begin
   if not RequireExistingFile(ModelFileName, ModelDir) then Exit;
 
   if CudaAllocated or (CuHandle <> nil) then
-    EndCuda(WModelParams, WModelState);
+    EndCuda(WModelParams, WModelState, WAdamWState);
   {if CudaAllocated then
     MDeallocateCublas(WModelParams, WModelState);}
 
-  if LoadModel(ModelFileName, WModelParams) then begin
+  if LoadModel(ModelFileName, WModelParams, WAdamWState) then begin
     Write('Loading model: ', ModelFileName);
     Write('; Model size: ', FileSize(ModelFileName), ' bytes');
     Writeln('; Model date: ', DateTimeToStr(FileDateToDateTime(FileAge(ModelFileName))), '.');
@@ -557,7 +538,7 @@ begin
     ModelFileName := MakeOutputFileName(S, ModelDir,
       CurrentBaseName + '_' + TimeStamp, '.model');
 
-    if SaveModel(ModelFileName, WModelParams) then
+    if SaveModel(ModelFileName, WModelParams, WAdamWState) then
       Writeln('File ', ModelFileName, ' successfully saved.')
     else
       Writeln('File not saved.');
@@ -804,13 +785,13 @@ begin
       ParamsNeedCopyToDevice := True;
       WorkingName := CurrentBaseName;
 
-      RunTrain(WModelParams, WModelState, TokenizedCorpus);
+      RunTrain(WModelParams, WModelState, WAdamWState, TokenizedCorpus);
 
       if TrainSuccess then
         MaybeSaveModel;
 
       if TrainSuccess and AskYesNo('Proceed to inference?', True) then
-        RunInfer(WModelParams, WModelState);
+        RunInfer(WModelParams, WModelState, WAdamWState);
     end;
   end;
 end;
@@ -863,13 +844,13 @@ begin
   end;
 
   WorkingName := CurrentBaseName;
-  RunTrain(WModelParams, WModelState, TokenizedCorpus);
+  RunTrain(WModelParams, WModelState, WAdamWState, TokenizedCorpus);
 
   if TrainSuccess then begin
     MaybeSaveModel;
 
     if AskYesNo('Proceed to inference?', False) then
-      RunInfer(WModelParams, WModelState);
+      RunInfer(WModelParams, WModelState, WAdamWState);
   end;
 end;
 
@@ -898,7 +879,7 @@ begin
   end;
 
   ParamsNeedCopyToDevice := True;
-  RunInfer(WModelParams, WModelState);
+  RunInfer(WModelParams, WModelState, WAdamWState);
 end;
 
 // Main workflow: J = Join symbol tables.
@@ -1147,13 +1128,13 @@ begin
 
   if AskYesNo('Proceed to training?', True) then begin
     WorkingName := CurrentBaseName;
-    RunTrain(WModelParams, WModelState, TokenizedCorpus);
+    RunTrain(WModelParams, WModelState, WAdamWState, TokenizedCorpus);
 
     if TrainSuccess then begin
       MaybeSaveModel;
 
       if AskYesNo('Proceed to inference?', False) then
-        RunInfer(WModelParams, WModelState);
+        RunInfer(WModelParams, WModelState, WAdamWState);
     end;
   end;
 end;
@@ -1204,13 +1185,13 @@ begin
 
   if AskYesNo('Proceed to training?', True) then begin
     WorkingName := CurrentBaseName;
-    RunTrain(WModelParams, WModelState, TokenizedCorpus);
+    RunTrain(WModelParams, WModelState, WAdamWState, TokenizedCorpus);
 
     if TrainSuccess then begin
       MaybeSaveModel;
 
       if AskYesNo('Proceed to inference?', False) then
-        RunInfer(WModelParams, WModelState);
+        RunInfer(WModelParams, WModelState, WAdamWState);
     end;
   end;
 end;
@@ -1275,10 +1256,10 @@ begin
 
   // Discard CUDA storage belonging to the preceding model.
   if CudaAllocated or (CuHandle <> nil) then
-    EndCuda(WModelParams, WModelState);
+    EndCuda(WModelParams, WModelState, WAdamWState);
 
   // Load saved parameters and model information.
-  if not LoadModel(ModelFileName, WModelParams) then begin
+  if not LoadModel(ModelFileName, WModelParams, WAdamWState) then begin
     Writeln('Model not loaded: ', ModelFileName);
     Exit;
   end;
@@ -1306,12 +1287,8 @@ begin
   ModelPresent := True;
 
   Writeln;
-  Write('Loaded Token list = ', TokenFileName);
-  Write('; Symbol table = ', SymbolFileName);
-  Write('; Model = ', ModelFileName);
-  Write('; Tokens = ', nTokenizedCorpus);
-  Write('; Symbols = ', nSymbols);
-  Write('; nVocab = ', nVocab, '.');
+  Write('Loaded token list = ', TokenFileName, '; Symbol table = ', SymbolFileName, '; Model = ', ModelFileName);
+  Writeln('; Tokens = ', nTokenizedCorpus, '; Symbols = ', nSymbols, '; nVocab = ', nVocab, '.');
 
   if not AskYesNo('Proceed to resumed training?', True) then Exit;
 
@@ -1321,14 +1298,14 @@ begin
   Writeln('Loaded checkpoint remains: ', ModelFileName);
   Writeln('New automatic best model: ', ModelDir + WorkingName + '_best.model');
 
-  RunTrain(WModelParams, WModelState, TokenizedCorpus);
+  RunTrain(WModelParams, WModelState, WAdamWState, TokenizedCorpus);
 
   if TrainSuccess then begin
     if AskYesNo('Save an additional model?', False) then
       MaybeSaveModel;
 
     if AskYesNo('Proceed to inference?', False) then
-      RunInfer(WModelParams, WModelState);
+      RunInfer(WModelParams, WModelState, WAdamWState);
   end;
 end;
 
@@ -1630,7 +1607,7 @@ begin
 
   // Stop cuda.
   if CudaAllocated or (CuHandle <> nil) then
-    EndCuda(WModelParams, WModelState);
+    EndCuda(WModelParams, WModelState, WAdamWState);
 
   // Free vocab.
   if Assigned(Vocab) then

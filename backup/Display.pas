@@ -120,16 +120,13 @@ var
   AllBlockParams: Int64;
 begin
   ComputeTrainableParameters;
-
   AllBlockParams := Int64(nBlock) * BlockParams;
 
-  Writeln;
   Writeln('--- Trainable Parameter Calculation ---');
   Writeln('nVocab        = ', nVocab);
   Writeln('ModelDim      = ', ModelDim);
   Writeln('ModelDimProj  = ', ModelDimProj);
   Writeln('nBlock        = ', nBlock);
-  Writeln;
 
   Writeln('Embeddings:');
   Writeln('  nVocab * ModelDim');
@@ -177,7 +174,7 @@ begin
     RolledOffLearning:
       Writeln('Learning rate (rolled off): Floor LR = ', FloorLearningRate: 9: 7, ' Base LR = ', BaseLearningRate: 9: 7, ' LR rolloff = ', RollOff: 9: 7, '.');
   end;
-  Writeln('Weight decay: ', WeightDecay: 9: 7, '; Clip limit: ', ClipLimit: 9: 7, '; Dropouts used: ', Training, '.');
+  Writeln('Clip limit: ', ClipLimit: 9: 7, '; Dropouts used: ', Training, '.');
   Writeln('Number of trainable parameters is ', NumberTrainableParameters);
 end;
 
@@ -225,7 +222,6 @@ begin
   if OverrideLearningRate <> -1.0 then
     Writeln('Override Learning Rate: ', OverrideLearningRate: 9 :7);
   Writeln('Current Learning Rate: ', LearningRate: 9: 7);
-  Writeln('Weight decay: ', WeightDecay: 9: 7);
   Writeln('Clip limit: ', ClipLimit: 9: 7);
   Writeln('Temperature: ', TTemperature: 9: 7);
   Writeln('Global step: ', GlobalStep);

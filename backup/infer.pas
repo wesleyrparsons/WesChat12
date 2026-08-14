@@ -22,7 +22,7 @@ uses
   Arrays are nSymbols x ModelDim of Single.
   nSymbols (nVocab) is vocabulary size. ModelDim is the dimension of the models, the loads.}
 
-procedure RunInfer(var WModelParams: TWModelParams; var WModelState: TWModelState);
+procedure RunInfer(var WModelParams: TWModelParams; var WModelState: TWModelState; var WAdamState: TWAdamWState);
 
 implementation
 
@@ -365,7 +365,7 @@ begin
 
     CopyInvFreqToDevice(WModelState);}
 
-procedure RunInfer(var WModelParams: TWModelParams; var WModelState: TWModelState);
+procedure RunInfer(var WModelParams: TWModelParams; var WModelState: TWModelState; var WAdamState: TWAdamState);
 const
   MaxNewTokens = 500;
 var
@@ -405,7 +405,7 @@ begin
     OwnsCuda := not CudaAllocated;
 
     if OwnsCuda then begin
-      StartCuda(WModelParams, WModelState);
+      StartCuda(WModelParams, WModelState, WAdamState);
       StartedCudaHere := True;
     end;
 
@@ -522,7 +522,6 @@ begin
               Write(Decode(WorkTokens[i]));
             Writeln('>>');}
           Pause;
-        end;
       end;
 
       Write('Query decoded token output: ');
@@ -550,11 +549,11 @@ begin
         Writeln;
       end;
       Writeln;
-  //  end;
+    end;
   finally
     try
       if StartedCudaHere then
-        EndCuda(WModelParams, WModelState);
+        EndCuda(WModelParams, WModelState, WAdamState);
     finally
       Training := OldTraining;
       VerboseTransform := OldVerboseTransform;

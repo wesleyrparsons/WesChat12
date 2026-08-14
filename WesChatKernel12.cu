@@ -1,5 +1,4 @@
 // LayerNorm Forward.
-
 extern "C" __global__
 void LayerNormForwardKernel(
     const float* InX,
@@ -183,8 +182,7 @@ void LaunchLayerNormBackward(
     cudaDeviceSynchronize();
 }
 
-// AutoRegressiveMask.
-
+// AutoRegressive Mask.
 #include <cuda_runtime.h>
 
 extern "C" __global__
@@ -246,7 +244,6 @@ void LaunchAutoRegressiveMaskBackward(
 }
 
 // RoPE Forward.
-
 #include <cuda_runtime.h>
 #include <math.h>
 
@@ -335,7 +332,6 @@ void LaunchRoPEForward(
 }
 
 // RoPE Backward.
-
 extern "C" __global__
 void RoPEBackwardKernel(
     float* dH,
@@ -519,7 +515,6 @@ void LaunchDropoutBackward(
 }
 
 // ReLU Forward.
-
 #include <cuda_runtime.h>
 
 extern "C" __global__
@@ -593,8 +588,7 @@ void LaunchReLUBackward(
     cudaDeviceSynchronize();  // good for debugging
 }
 
-// Softmax Forward Strided, June 13 2026.
-
+// Softmax Forward Strided.
 #include <math.h>
 #include <float.h>
 
@@ -691,8 +685,7 @@ void LaunchSoftmaxForwardStrided(
         Temperature);
 }
 
-// Softmax Backward, strided.
-
+// Softmax Strided Backward.
 #include <cuda_runtime.h>
 
 extern "C" __global__
@@ -753,7 +746,7 @@ void LaunchSoftmaxBackward(
     cudaDeviceSynchronize();
 }
 
-// CE Gradient Strided from Probabilities.
+// Cross Entropy Gradient Strided from Probabilities.
 extern "C" __declspec(dllexport)
 __global__ void CEGradientStridedKernel(
     const float* Probs,
@@ -820,8 +813,7 @@ void LaunchCEGradientStrided(
         GradScale);
 }
 
-// CE Gradient From Probabilities.
-
+// Cross Entropy Gradient From Probabilities.
 #include <cuda_runtime.h>
 
 extern "C" __global__
@@ -951,7 +943,6 @@ void LaunchAddInputEmbeddingGrad(
 }
 
 // Add Bias Rows.
-
 #include <cuda_runtime.h>
 
 extern "C" __global__
@@ -1030,7 +1021,6 @@ void LaunchAddBiasRowsBackward(
 }
 
 // Clip Vector.
-
 extern "C" __declspec(dllexport)
 __global__ void ClipVectorKernel(float* X, int N, float Limit)
 {
@@ -1058,7 +1048,7 @@ void LaunchClipVector(float* X, int N, float Limit)
     ClipVectorKernel<<<blocks, threads>>>(X, N, Limit);
 }
 
-// CELossRows.
+// Cross Entopy Loss using Rows.
 #include <cuda_runtime.h>
 #include <math.h>
 
@@ -1097,4 +1087,89 @@ extern "C" __declspec(dllexport) void LaunchCELossRows(const float* Probs, const
     const int Blocks = (Rows + Threads - 1) / Threads;
 
     CELossRows<<<Blocks, Threads>>>(Probs, Targets, RowLoss, Rows, VocabSize, RowStride);
+}
+
+// AdamW Parameter Update.
+__global__ void AdamWUpdateKernel(
+    float* Param,
+    const float* Grad,
+    float* M,
+    float* V,
+    int Count,
+    float LearningRate,
+    float Beta1,
+    float Beta2,
+    float Beta1Power,
+    float Beta2Power,
+    float AdamEpsilon,
+    float WeightDecay)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (i < Count) {
+        float g;
+        float m;
+        float v;
+        float mHat;
+        float vHat;
+        float p;
+
+        g = Grad[i];
+
+        // Update first moment.
+        m = Beta1 * M[i] + (1.0f - Beta1) * g;
+
+        // Update second moment.
+        v = Beta2 * V[i] + (1.0f - Beta2) * g * g;
+
+        M[i] = m;
+        V[i] = v;
+
+        // Bias correction.
+        mHat = m / (1.0f - Beta1Power);
+        vHat = v / (1.0f - Beta2Power);
+
+        // Adam update plus decoupled weight decay.
+        p = Param[i];
+
+        Param[i] = p -
+            LearningRate *
+            (mHat / (sqrtf(vHat) + AdamEpsilon) +
+             WeightDecay * p);
+    }
+}
+
+extern "C" __declspec(dllexport)
+void LaunchAdamWUpdate(
+    float* Param,
+    const float* Grad,
+    float* M,
+    float* V,
+    int Count,
+    float LearningRate,
+    float Beta1,
+    float Beta2,
+    float Beta1Power,
+    float Beta2Power,
+    float AdamEpsilon,
+    float WeightDecay)
+{
+    const int Threads = 256;
+    int Blocks;
+
+    Blocks = (Count + Threads - 1) / Threads;
+
+    AdamWUpdateKernel<<<Blocks, Threads>>>(
+        Param,
+        Grad,
+        M,
+        V,
+        Count,
+        LearningRate,
+        Beta1,
+        Beta2,
+        Beta1Power,
+        Beta2Power,
+        AdamEpsilon,
+        WeightDecay);
 }

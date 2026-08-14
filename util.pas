@@ -29,9 +29,10 @@ const
 // Cublas and Cuda procedures.
 procedure InitializeCublas;
 procedure CheckCudaError(const Where: string);
-procedure StartCuda(var WModelParams: TWModelParams; var WModelState: TWModelState);
-procedure EndCuda(var WModelParams: TWModelParams; var WModelState: TWModelState);
-// Word procedures and functions.
+procedure StartCuda(var WModelParams: TWModelParams; var WModelState: TWModelState; var WAdamWState: TWAdamWState);
+procedure EndCuda(var WModelParams: TWModelParams; var WModelState: TWModelState; var WAdamWState: TWAdamWState);
+
+// Saving routines.
 function IsAbsolutePath(const FolderName: string): Boolean;
 procedure InitWorkFolders(const Root: string);
 function CleanBaseName(const FileName: string): string;
@@ -40,30 +41,40 @@ function WorkTokenFile(const BaseName: string): string;
 function WorkModelFile(const BaseName: string): string;
 function WorkLogFile(const BaseName: string): string;
 function WorkRunFile(const BaseName: string): string;
+
 // Utility procedures.
 procedure PadToSeqMultiple(var TokenVectorToPad: TIVector; const Seq: Integer);
 procedure TC100(const TC: TIVector);
 procedure TCFull(const TC: TIVector);
 function Decode(const x: Integer): UnicodeString;
-// Transform routines.
+
+// Loss routines.
 function ComputeLoss(const Probs: TSeqVocabMatrix; const TargetTokens: TIDimVector): Double;
-// procedure ScaleAllGradients(var WModelParams: TWModelParams; const S: Single);
+
 // Initialization routines.
 procedure XGUniformW(var W: TWeightMatrix; FanIn, FanOut: Integer);
-//procedure XGUniformWHead(var W: TWeightHeadMatrix; FanIn, FanOut: Integer);
 procedure XGUniformW1(var W: TWeightProjMatrix; FanIn, FanOut: Integer);
 procedure XGUniformW2(var W: TWeightProjMatrixT; FanIn, FanOut: Integer);
 procedure InitializeTransformerState(var WModelState: TWModelState);
 procedure InitializeTransformerParams(var WModelParams: TWModelParams);
 procedure CopyParamsToDevice(var WModelParams: TWModelParams);
 procedure CopyParamsToHost(var WModelParams: TWModelParams);
-procedure MAllocCublas(var WModelParams: TWModelParams; var WModelState: TWModelState);
-procedure MDeallocateCublas(var WModelParams: TWModelParams; var WModelState: TWModelState);
+procedure CopyAdamWStateToHost(var WAdamWState: TWAdamWState);
+procedure CopyAdamWStateToDevice(var WAdamWState: TWAdamWState);
+procedure MAllocCublas(var WModelParams: TWModelParams; var WModelState: TWModelState; var WAdamWState: TWAdamWState);
+procedure MDeallocateCublas(var WModelParams: TWModelParams; var WModelState: TWModelState; var WAdamWState: TWAdamWState);
 procedure CopyInvFreqToDevice(var WModelState: TWModelState);
+procedure InitializeWAdamWState(var WAdamWState: TWAdamWState);
 procedure ZeroGradients(var WModelParams: TWModelParams; var WModelState: TWModelState; const Blk: Integer);
+
 // Optimization routines.
-procedure Optimization(var WModelParams: TWModelParams; const Blk: Integer);
-procedure UpdateEmbeddings(var WModelParams: TWModelParams; var WModelState: TWModelState);
+procedure AdamWOptimizeBlock(var WModelParams: TWModelParams; var WAdamWState: TWAdamWState; const Blk: Integer;
+  const Beta1Power, Beta2Power: Single);
+procedure AdamWOptimizeEmbeddings(var WModelParams: TWModelParams; var WAdamWState: TWAdamWState; const Beta1Power, Beta2Power: Single);
+procedure UpdateEmbeddingGradient(var WModelParams: TWModelParams; var WModelState: TWModelState);
+procedure GetAdamWStatistics(var WModelParams: TWModelParams; var WAdamWState: TWAdamWState;
+  out ParamRMS, UpdateRMS, UpdateRatio, MRMS, SqrtVRMS: Double);
+
 // DLL transform routines.
 procedure LaunchClipVector(X: PSingle; N: Integer; Limit: Single); cdecl;
   external 'WesChatKernel12.dll';
@@ -104,8 +115,12 @@ procedure LaunchAddBiasRowsBackward(dX: PSingle; dBias: PSingle; Rows: Integer; 
   cdecl; external 'WesChatKernel12.dll';
 procedure LaunchCELossRows(Probs: PSingle; Targets: PInteger; RowLoss: PSingle; Rows, VocabSize, RowStride: Integer);
   cdecl; external 'WesChatKernel12.dll';
+procedure LaunchAdamWUpdate(Param, Grad, M, V: PSingle; Count: Integer; LearningRate, Beta1, Beta2, Beta1Power, Beta2Power, AdamEpsilon, WeightDecay: Single);
+  cdecl; external 'WesChatKernel12.dll';
+
 implementation
 
+{ DLL procedures }
 // Check existence of any DLL.
 function CheckDLL(const LibName: string): Boolean;
 var
@@ -131,10 +146,11 @@ begin
   if not CublasPresent or not CudartPresent or not WesChatkernelPresent then begin
       Writeln('One of the following DLLs is required but not present: cublas64_13.dll, cudart64_13.dll, WesChatKernel12.dll.');
       Pause;
-      // Halt;
+      Halt;
   end;
 end;
 
+{ Cublas and cuda procedures }
 // Intialize Cublas.
 procedure InitializeCublas;
 begin
@@ -156,7 +172,7 @@ begin
   Err := cudaGetLastError;
   if Err <> 0 then begin
     Writeln;
-    Writeln('CUDA LAUNCH ERROR. Location: ', Where, 'Error # : ', Err, 'Message : ', StrPas(cudaGetErrorString(Err)), '.');
+    Writeln('CUDA LAUNCH ERROR. Location: ', Where, '; Error # : ', Err, '; Message : ', StrPas(cudaGetErrorString(Err)), '.');
     Pause;
     Exit;
   end;
@@ -164,7 +180,7 @@ begin
   Err := cudaDeviceSynchronize;
   if Err <> 0 then begin
     Writeln;
-    Writeln('CUDA EXECUTION ERROR. Location: ', Where, 'Error # : ', Err, 'Message : ', StrPas(cudaGetErrorString(Err)), '.');
+    Writeln('CUDA EXECUTION ERROR. Location: ', Where, '; Error # : ', Err, '; Message : ', StrPas(cudaGetErrorString(Err)), '.');
     Pause;
   end;
 end;
@@ -180,23 +196,24 @@ begin
 end;
 
 // Intialize Cuda and Cublas.
-procedure StartCuda(var WModelParams: TWModelParams; var WModelState: TWModelState);
+procedure StartCuda(var WModelParams: TWModelParams; var WModelState: TWModelState; var WAdamWState: TWAdamWState);
 begin
   InitializeCublas;
   if not CudaAllocated then
-    MAllocCublas(WModelParams, WModelState);
-  CheckCudaError('Start cuda.');
+    MAllocCublas(WModelParams, WModelState, WAdamWState);
+  CheckCudaError('Cuda started.');
 end;
 
 // End Cuda and Cublas.
-procedure EndCuda(var WModelParams: TWModelParams; var WModelState: TWModelState);
+procedure EndCuda(var WModelParams: TWModelParams; var WModelState: TWModelState; var WAdamWState: TWAdamWState);
 begin
   if CudaAllocated then
-    MDeallocateCublas(WModelParams, WModelState);
+    MDeallocateCublas(WModelParams, WModelState, WAdamWState);
   if CuBLAS_Shutdown then
     Writeln('CuBLAS successfully shut down.')
 end;
 
+{ Reports }
 // Full compute of trainable parameters.
 procedure FullReportTrainableParameters;
 var
@@ -248,13 +265,15 @@ begin
   Result := TotalParams;
 end;
 
-// Saving routines.
+{ Saving routines.}
+// Absolute path.
 function IsAbsolutePath(const FolderName: string): Boolean;
 begin
   Result := (ExtractFileDrive(FolderName) <> '') or
     ((Length(FolderName) >= 2) and (FolderName[1] = DirectorySeparator) and (FolderName[2] = DirectorySeparator));
 end;
 
+// Initialize work folders.
 procedure InitWorkFolders(const Root: string);
 begin
   WorkRoot := IncludeTrailingPathDelimiter(ExpandFileName(Root));
@@ -277,36 +296,43 @@ begin
   ForceDirectories(ScratchDir);
 end;
 
+// Clean base name.
 function CleanBaseName(const FileName: string): string;
 begin
   Result := ChangeFileExt(ExtractFileName(FileName), '');
 end;
 
+// Create work symbol file name.
 function WorkSymbolFile(const BaseName: string): string;
 begin
   Result := SymbolDir + ChangeFileExt(ExtractFileName(BaseName), '.sym.tok');
 end;
 
+// Create work token file name.
 function WorkTokenFile(const BaseName: string): string;
 begin
   Result := TokenDir + ChangeFileExt(ExtractFileName(BaseName), '.tok');
 end;
 
+// Create work model file name.
 function WorkModelFile(const BaseName: string): string;
 begin
   Result := ModelDir + ChangeFileExt(ExtractFileName(BaseName), '.model');
 end;
 
+// Create work log file name.
 function WorkLogFile(const BaseName: string): string;
 begin
   Result := LogDir + ChangeFileExt(ExtractFileName(BaseName), '.log');
 end;
 
+// Create work run file name.
 function WorkRunFile(const BaseName: string): string;
 begin
   Result := RunDir + BaseName + '_' + FormatDateTime('yyyy-mm-dd_hhnnss', Now) + '.run';
 end;
 
+{ Utility procedures }
 // Pad token vector to multiple of SeqLen.
 procedure PadToSeqMultiple(var TokenVectorToPad: TIVector; const Seq: Integer);
 var
@@ -352,21 +378,6 @@ begin
   Writeln;
   Pause;
 end;
-{procedure TCFull(const TC: TIVector);
-var
-  i: Integer;
-begin
-  Write('Tokenized Corpus (in full length of ', Length(TC), '): ');
-  for i := 0 to High(TC) do
-    Write(TC[i], ' ');
-  Writeln;
-
-  Write('Detokenized Corpus (in full length of ', Length(TC) - 1, '): ');
-  for i := 0 to High(TC) do
-    Write(SymbolTable[TC[i]]);
-  Writeln;
-  Pause;
-end;}
 
 // Decode for WesTokenize and GPT2Tokenize, using symbol table, for one token.
 function Decode(const x: Integer): UnicodeString;
@@ -410,33 +421,6 @@ begin
   Result := Result / SeqLen;
 end;
 
-// Scale all the gradients.
-{procedure ScaleAllGradients(var WModelParams: TWModelParams; const S: Single);
-var
-  k: Integer;
-begin
-  for k := 0 to nBlock - 1 do
-    with WModelParams.ParamBlock[k] do begin
-      CuScale(CuHandle, ModelDim * ModelDim, S, Wq.dGrad);
-      CuScale(CuHandle, ModelDim * ModelDim, S, Wk.dGrad);
-      CuScale(CuHandle, ModelDim * ModelDim, S, Wv.dGrad);
-      CuScale(CuHandle, ModelDim * ModelDim, S, W0.dGrad);
-
-      CuScale(CuHandle, ModelDim * ModelDimProj, S, W1.dGrad);
-      CuScale(CuHandle, ModelDimProj * ModelDim, S, W2.dGrad);
-
-      CuScale(CuHandle, ModelDimProj, S, b1.dGrad);
-      CuScale(CuHandle, ModelDim,     S, b2.dGrad);
-
-      CuScale(CuHandle, ModelDim, S, Gamma1.dGrad);
-      CuScale(CuHandle, ModelDim, S, Beta1.dGrad);
-      CuScale(CuHandle, ModelDim, S, Gamma2.dGrad);
-      CuScale(CuHandle, ModelDim, S, Beta2.dGrad);
-    end;
-
-  CuScale(CuHandle, DimVocab * ModelDim, S, WModelParams.Embeddings.dGrad);
-end;}
-
 // Xavier-Glorot initialization on W0 matrix.
 procedure XGUniformW(var W: TWeightMatrix; FanIn, FanOut: Integer);
 var
@@ -452,21 +436,7 @@ begin
     end;
 end;
 
-// Xavier-Glorot initialization on WHead matrix.
-{procedure XGUniformWHead(var W: TWeightHeadMatrix; FanIn, FanOut: Integer);
-var
-  Limit, r: Single;
-  i, j: Integer;
-begin
-  Limit := Sqrt(6.0 / (FanIn + FanOut));
-
-  for i := 0 to HeadDim - 1 do
-    for j := 0 to HeadDim - 1 do begin
-      r := Random;              // 0..1.
-      W[i, j] := (2 * r - 1) * Limit;
-    end;
-end;}
-
+{ Initialization routines }
 // Xavier-Glorot initialization on W1 matrix.
 procedure XGUniformW1(var W: TWeightProjMatrix; FanIn, FanOut: Integer);
 var
@@ -497,114 +467,203 @@ begin
     end;
 end;
 
-// Allocate cublas memory.
-// Separate for State and Params? Not necessary.
-procedure MAllocCublas(var WModelParams: TWModelParams; var WModelState: TWModelState);
+// Allocate CUDA memory for model parameters, model state, and AdamW state.
+procedure MAllocCublas(var WModelParams: TWModelParams; var WModelState: TWModelState; var WAdamWState: TWAdamWState);
 var
   h, k: Integer;
+
+  procedure AllocSingle(var P: PSingle; const Bytes: Integer; const Name: string);
+  begin
+    CheckCudaStatus(cudaMalloc(@P, Bytes), Name);
+  end;
+
+  procedure AllocInteger(var P: PInteger; const Bytes: Integer; const Name: string);
+  begin
+    CheckCudaStatus(cudaMalloc(@P, Bytes), Name);
+  end;
+
 begin
   CudaAllocated := False;
 
   // Input and target tokens.
-  cudaMalloc(@dInputTokens, SeqLen * SizeOf(Integer));
-  cudaMalloc(@dTargetTokens, SeqLen * SizeOf(Integer));
+  AllocInteger(dInputTokens, SeqLen * SizeOf(Integer), 'dInputTokens');
+  AllocInteger(dTargetTokens, SeqLen * SizeOf(Integer), 'dTargetTokens');
 
-  // Global/shared parameters.
+  // Global/shared model parameters.
   with WModelParams do begin
-    cudaMalloc(@Embeddings.dValue, EmbeddingsSize);
-    cudaMalloc(@Embeddings.dGrad, EmbeddingsSize);
-  end;
-  with WModelState do begin
-    cudaMalloc(@dInvFreq, InvFreqSize);
-    cudaMalloc(@dProbs, ProbsSize);
-    dRowLoss := nil;
-    cudaMalloc(@dRowLoss, SeqSize);
-    cudaMalloc(@dTopGradient, ProbsSize);
+    AllocSingle(Embeddings.dValue, EmbeddingsSize, 'Embeddings.dValue');
+    AllocSingle(Embeddings.dGrad, EmbeddingsSize, 'Embeddings.dGrad');
   end;
 
-  // Per block parameters.
+  // Global/shared AdamW state.
+  with WAdamWState.Embeddings do begin
+    AllocSingle(dM, EmbeddingsSize, 'Adam Embeddings.dM');
+    AllocSingle(dV, EmbeddingsSize, 'Adam Embeddings.dV');
+  end;
+
+  // Global/shared model state.
+  with WModelState do begin
+    AllocSingle(dInvFreq, InvFreqSize, 'dInvFreq');
+    AllocSingle(dProbs, ProbsSize, 'dProbs');
+    AllocSingle(dRowLoss, SeqSize, 'dRowLoss');
+    AllocSingle(dTopGradient, ProbsSize, 'dTopGradient');
+  end;
+
+  // Per-block parameters, AdamW state, and transformer state.
   for k := 0 to nBlock - 1 do begin
+
+    // Trainable model parameters.
     with WModelParams.ParamBlock[k] do begin
-      cudaMalloc(@Wq.dValue, WeightSize);
-      cudaMalloc(@Wq.dGrad, WeightSize);
-      cudaMalloc(@Wk.dValue, WeightSize);
-      cudaMalloc(@Wk.dGrad, WeightSize);
-      cudaMalloc(@Wv.dValue, WeightSize);
-      cudaMalloc(@Wv.dGrad, WeightSize);
-      cudaMalloc(@W0.dValue, WeightSize);
-      cudaMalloc(@W0.dGrad, WeightSize);
-      cudaMalloc(@W1.dValue, WeightProjectedSize);
-      cudaMalloc(@W1.dGrad, WeightProjectedSize);
-      cudaMalloc(@W2.dValue, WeightProjectedSize);
-      cudaMalloc(@W2.dGrad, WeightProjectedSize);
-      cudaMalloc(@b1.dValue, ProjectedSize);
-      cudaMalloc(@b1.dGrad, ProjectedSize);
-      cudaMalloc(@b2.dValue, ModelSize);
-      cudaMalloc(@b2.dGrad, ModelSize);
-      cudaMalloc(@Gamma1.dValue, ModelSize);
-      cudaMalloc(@Gamma1.dGrad, ModelSize);
-      cudaMalloc(@Beta1.dValue, ModelSize);
-      cudaMalloc(@Beta1.dGrad, ModelSize);
-      cudaMalloc(@Gamma2.dValue, ModelSize);
-      cudaMalloc(@Gamma2.dGrad, ModelSize);
-      cudaMalloc(@Beta2.dValue, ModelSize);
-      cudaMalloc(@Beta2.dGrad, ModelSize);
+      AllocSingle(Wq.dValue, WeightSize, 'Wq.dValue');
+      AllocSingle(Wq.dGrad, WeightSize, 'Wq.dGrad');
+
+      AllocSingle(Wk.dValue, WeightSize, 'Wk.dValue');
+      AllocSingle(Wk.dGrad, WeightSize, 'Wk.dGrad');
+
+      AllocSingle(Wv.dValue, WeightSize, 'Wv.dValue');
+      AllocSingle(Wv.dGrad, WeightSize, 'Wv.dGrad');
+
+      AllocSingle(W0.dValue, WeightSize, 'W0.dValue');
+      AllocSingle(W0.dGrad, WeightSize, 'W0.dGrad');
+
+      AllocSingle(W1.dValue, WeightProjectedSize, 'W1.dValue');
+      AllocSingle(W1.dGrad, WeightProjectedSize, 'W1.dGrad');
+
+      AllocSingle(W2.dValue, WeightProjectedSize, 'W2.dValue');
+      AllocSingle(W2.dGrad, WeightProjectedSize, 'W2.dGrad');
+
+      AllocSingle(b1.dValue, ProjectedSize, 'b1.dValue');
+      AllocSingle(b1.dGrad, ProjectedSize, 'b1.dGrad');
+
+      AllocSingle(b2.dValue, ModelSize, 'b2.dValue');
+      AllocSingle(b2.dGrad, ModelSize, 'b2.dGrad');
+
+      AllocSingle(Gamma1.dValue, ModelSize, 'Gamma1.dValue');
+      AllocSingle(Gamma1.dGrad, ModelSize, 'Gamma1.dGrad');
+
+      AllocSingle(Beta1.dValue, ModelSize, 'Beta1.dValue');
+      AllocSingle(Beta1.dGrad, ModelSize, 'Beta1.dGrad');
+
+      AllocSingle(Gamma2.dValue, ModelSize, 'Gamma2.dValue');
+      AllocSingle(Gamma2.dGrad, ModelSize, 'Gamma2.dGrad');
+
+      AllocSingle(Beta2.dValue, ModelSize, 'Beta2.dValue');
+      AllocSingle(Beta2.dGrad, ModelSize, 'Beta2.dGrad');
     end;
+
+    // Persistent AdamW first and second moments.
+    with WAdamWState.ParamBlock[k] do begin
+      AllocSingle(Wq.dM, WeightSize, 'Adam Wq.dM');
+      AllocSingle(Wq.dV, WeightSize, 'Adam Wq.dV');
+
+      AllocSingle(Wk.dM, WeightSize, 'Adam Wk.dM');
+      AllocSingle(Wk.dV, WeightSize, 'Adam Wk.dV');
+
+      AllocSingle(Wv.dM, WeightSize, 'Adam Wv.dM');
+      AllocSingle(Wv.dV, WeightSize, 'Adam Wv.dV');
+
+      AllocSingle(W0.dM, WeightSize, 'Adam W0.dM');
+      AllocSingle(W0.dV, WeightSize, 'Adam W0.dV');
+
+      AllocSingle(W1.dM, WeightProjectedSize, 'Adam W1.dM');
+      AllocSingle(W1.dV, WeightProjectedSize, 'Adam W1.dV');
+
+      AllocSingle(W2.dM, WeightProjectedSize, 'Adam W2.dM');
+      AllocSingle(W2.dV, WeightProjectedSize, 'Adam W2.dV');
+
+      AllocSingle(b1.dM, ProjectedSize, 'Adam b1.dM');
+      AllocSingle(b1.dV, ProjectedSize, 'Adam b1.dV');
+
+      AllocSingle(b2.dM, ModelSize, 'Adam b2.dM');
+      AllocSingle(b2.dV, ModelSize, 'Adam b2.dV');
+
+      AllocSingle(Gamma1.dM, ModelSize, 'Adam Gamma1.dM');
+      AllocSingle(Gamma1.dV, ModelSize, 'Adam Gamma1.dV');
+
+      AllocSingle(Beta1.dM, ModelSize, 'Adam Beta1.dM');
+      AllocSingle(Beta1.dV, ModelSize, 'Adam Beta1.dV');
+
+      AllocSingle(Gamma2.dM, ModelSize, 'Adam Gamma2.dM');
+      AllocSingle(Gamma2.dV, ModelSize, 'Adam Gamma2.dV');
+
+      AllocSingle(Beta2.dM, ModelSize, 'Adam Beta2.dM');
+      AllocSingle(Beta2.dV, ModelSize, 'Adam Beta2.dV');
+    end;
+
+    // Non-trainable transformer state.
     with WModelState.StateBlock[k] do begin
-      cudaMalloc(@X.dValue, XSize);
-      cudaMalloc(@X.dGrad, XSize);
-      cudaMalloc(@X1.dValue, XSize);
-      cudaMalloc(@X1.dGrad, XSize);
-      cudaMalloc(@X2.dValue, XSize);
-      cudaMalloc(@X2.dGrad, XSize);
-      cudaMalloc(@X3.dValue, XSize);
-      cudaMalloc(@X3.dGrad, XSize);
-      cudaMalloc(@X4.dValue, XSize);
-      cudaMalloc(@X4.dGrad, XSize);
-      cudaMalloc(@X5.dValue, XSize);
-      cudaMalloc(@X5.dGrad, XSize);
-      cudaMalloc(@X6.dValue, XSize);
-      cudaMalloc(@X6.dGrad, XSize);
-      cudaMalloc(@X7.dValue, XSize);
-      cudaMalloc(@X7.dGrad, XSize);
-      cudaMalloc(@X1q.dValue, XSize);
-      cudaMalloc(@X1q.dGrad, XSize);
-      cudaMalloc(@X1k.dValue, XSize);
-      cudaMalloc(@X1k.dGrad, XSize);
-      cudaMalloc(@X1v.dValue, XSize);
-      cudaMalloc(@X1v.dGrad, XSize);
-      cudaMalloc(@Q.dValue, XSize);
-      cudaMalloc(@Q.dGrad, XSize);
-      cudaMalloc(@K.dValue, XSize);
-      cudaMalloc(@K.dGrad, XSize);
-      cudaMalloc(@V.dValue, XSize);
-      cudaMalloc(@V.dGrad, XSize);
+      AllocSingle(X.dValue, XSize, 'X.dValue');
+      AllocSingle(X.dGrad, XSize, 'X.dGrad');
+
+      AllocSingle(X1.dValue, XSize, 'X1.dValue');
+      AllocSingle(X1.dGrad, XSize, 'X1.dGrad');
+
+      AllocSingle(X2.dValue, XSize, 'X2.dValue');
+      AllocSingle(X2.dGrad, XSize, 'X2.dGrad');
+
+      AllocSingle(X3.dValue, XSize, 'X3.dValue');
+      AllocSingle(X3.dGrad, XSize, 'X3.dGrad');
+
+      AllocSingle(X4.dValue, XSize, 'X4.dValue');
+      AllocSingle(X4.dGrad, XSize, 'X4.dGrad');
+
+      AllocSingle(X5.dValue, XSize, 'X5.dValue');
+      AllocSingle(X5.dGrad, XSize, 'X5.dGrad');
+
+      AllocSingle(X6.dValue, XSize, 'X6.dValue');
+      AllocSingle(X6.dGrad, XSize, 'X6.dGrad');
+
+      AllocSingle(X7.dValue, XSize, 'X7.dValue');
+      AllocSingle(X7.dGrad, XSize, 'X7.dGrad');
+
+      AllocSingle(X1q.dValue, XSize, 'X1q.dValue');
+      AllocSingle(X1q.dGrad, XSize, 'X1q.dGrad');
+
+      AllocSingle(X1k.dValue, XSize, 'X1k.dValue');
+      AllocSingle(X1k.dGrad, XSize, 'X1k.dGrad');
+
+      AllocSingle(X1v.dValue, XSize, 'X1v.dValue');
+      AllocSingle(X1v.dGrad, XSize, 'X1v.dGrad');
+
+      AllocSingle(Q.dValue, XSize, 'Q.dValue');
+      AllocSingle(Q.dGrad, XSize, 'Q.dGrad');
+
+      AllocSingle(K.dValue, XSize, 'K.dValue');
+      AllocSingle(K.dGrad, XSize, 'K.dGrad');
+
+      AllocSingle(V.dValue, XSize, 'V.dValue');
+      AllocSingle(V.dGrad, XSize, 'V.dGrad');
+
       for h := 0 to nHead - 1 do begin
-        cudaMalloc(@ScoresHead1[h].dValue, ScoresSize);
-        cudaMalloc(@ScoresHead1[h].dGrad, ScoresSize);
-        cudaMalloc(@ScoresHead2[h].dValue, ScoresSize);
-        cudaMalloc(@ScoresHead2[h].dGrad, ScoresSize);
+        AllocSingle(ScoresHead1[h].dValue, ScoresSize, 'ScoresHead1.dValue');
+        AllocSingle(ScoresHead1[h].dGrad, ScoresSize, 'ScoresHead1.dGrad');
+        AllocSingle(ScoresHead2[h].dValue, ScoresSize, 'ScoresHead2.dValue');
+        AllocSingle(ScoresHead2[h].dGrad, ScoresSize, 'ScoresHead2.dGrad');
       end;
-      cudaMalloc(@Hidden1.dValue, HiddenSize);
-      cudaMalloc(@Hidden1.dGrad, HiddenSize);
-      cudaMalloc(@Hidden2.dValue, HiddenSize);
-      cudaMalloc(@Hidden2.dGrad, HiddenSize);
-      cudaMalloc(@dLNInvStd1, SeqSize);
-      cudaMalloc(@dLNXHat1, XSize);
-      cudaMalloc(@dLNInvStd2, SeqSize);
-      cudaMalloc(@dLNXHat2, XSize);
-      cudaMalloc(@dX4FromLN2, XSize);
-      cudaMalloc(@dXFromLN1, XSize);
+
+      AllocSingle(Hidden1.dValue, HiddenSize, 'Hidden1.dValue');
+      AllocSingle(Hidden1.dGrad, HiddenSize, 'Hidden1.dGrad');
+
+      AllocSingle(Hidden2.dValue, HiddenSize, 'Hidden2.dValue');
+      AllocSingle(Hidden2.dGrad, HiddenSize, 'Hidden2.dGrad');
+
+      AllocSingle(dLNInvStd1, SeqSize, 'dLNInvStd1');
+      AllocSingle(dLNXHat1, XSize, 'dLNXHat1');
+
+      AllocSingle(dLNInvStd2, SeqSize, 'dLNInvStd2');
+      AllocSingle(dLNXHat2, XSize, 'dLNXHat2');
+
+      AllocSingle(dX4FromLN2, XSize, 'dX4FromLN2');
+      AllocSingle(dXFromLN1, XSize, 'dXFromLN1');
     end;
   end;
-  CheckCudaStatus(cudaMalloc(@dInputTokens, SeqLen * SizeOf(Integer)), 'dInputTokens');
-  CheckCudaStatus(cudaMalloc(@dTargetTokens, SeqLen * SizeOf(Integer)), 'dTargetTokens');
+
   CheckCudaError('Allocate CUDA memory.');
   CudaAllocated := True;
 end;
 
 // De-allocate cublas memory.
-procedure MDeallocateCublas(var WModelParams: TWModelParams; var WModelState: TWModelState);
+procedure MDeallocateCublas(var WModelParams: TWModelParams; var WModelState: TWModelState; var WAdamWState: TWAdamWState);
 var
   h, k: Integer;
 begin
@@ -744,10 +803,70 @@ begin
       cudaMemcpy(Beta1.dValue,  @Beta1.Value[0],  ModelSize, cudaMemcpyHostToDevice);
       cudaMemcpy(Gamma2.dValue, @Gamma2.Value[0], ModelSize, cudaMemcpyHostToDevice);
       cudaMemcpy(Beta2.dValue,  @Beta2.Value[0],  ModelSize, cudaMemcpyHostToDevice);
-  end;
+    end;
   ParamsNeedCopyToDevice := False;
   if DebugCudaChecks then
     CheckCudaError('Copy model parameters to device.');
+end;
+
+// Copy AdamW first and second moments from host to CUDA device.
+procedure CopyAdamWStateToDevice(var WAdamWState: TWAdamWState);
+var
+  k: Integer;
+begin
+  // Tied embeddings.
+  with WAdamWState.Embeddings do begin
+    cudaMemcpy(dM, @M[0, 0], EmbeddingsSize, cudaMemcpyHostToDevice);
+    cudaMemcpy(dV, @V[0, 0], EmbeddingsSize, cudaMemcpyHostToDevice);
+  end;
+
+  // Per-block AdamW state.
+  for k := 0 to nBlock - 1 do
+    with WAdamWState.ParamBlock[k] do begin
+
+      // Attention weights.
+      cudaMemcpy(Wq.dM, @Wq.M[0, 0], WeightSize, cudaMemcpyHostToDevice);
+      cudaMemcpy(Wq.dV, @Wq.V[0, 0], WeightSize, cudaMemcpyHostToDevice);
+
+      cudaMemcpy(Wk.dM, @Wk.M[0, 0], WeightSize, cudaMemcpyHostToDevice);
+      cudaMemcpy(Wk.dV, @Wk.V[0, 0], WeightSize, cudaMemcpyHostToDevice);
+
+      cudaMemcpy(Wv.dM, @Wv.M[0, 0], WeightSize, cudaMemcpyHostToDevice);
+      cudaMemcpy(Wv.dV, @Wv.V[0, 0], WeightSize, cudaMemcpyHostToDevice);
+
+      cudaMemcpy(W0.dM, @W0.M[0, 0], WeightSize, cudaMemcpyHostToDevice);
+      cudaMemcpy(W0.dV, @W0.V[0, 0], WeightSize, cudaMemcpyHostToDevice);
+
+      // MLP weights.
+      cudaMemcpy(W1.dM, @W1.M[0, 0], WeightProjectedSize, cudaMemcpyHostToDevice);
+      cudaMemcpy(W1.dV, @W1.V[0, 0], WeightProjectedSize, cudaMemcpyHostToDevice);
+
+      cudaMemcpy(W2.dM, @W2.M[0, 0], WeightProjectedSize, cudaMemcpyHostToDevice);
+      cudaMemcpy(W2.dV, @W2.V[0, 0], WeightProjectedSize, cudaMemcpyHostToDevice);
+
+      // Biases.
+      cudaMemcpy(b1.dM, @b1.M[0], ProjectedSize, cudaMemcpyHostToDevice);
+      cudaMemcpy(b1.dV, @b1.V[0], ProjectedSize, cudaMemcpyHostToDevice);
+
+      cudaMemcpy(b2.dM, @b2.M[0], ModelSize, cudaMemcpyHostToDevice);
+      cudaMemcpy(b2.dV, @b2.V[0], ModelSize, cudaMemcpyHostToDevice);
+
+      // LayerNorm parameters.
+      cudaMemcpy(Gamma1.dM, @Gamma1.M[0], ModelSize, cudaMemcpyHostToDevice);
+      cudaMemcpy(Gamma1.dV, @Gamma1.V[0], ModelSize, cudaMemcpyHostToDevice);
+
+      cudaMemcpy(Beta1.dM, @Beta1.M[0], ModelSize, cudaMemcpyHostToDevice);
+      cudaMemcpy(Beta1.dV, @Beta1.V[0], ModelSize, cudaMemcpyHostToDevice);
+
+      cudaMemcpy(Gamma2.dM, @Gamma2.M[0], ModelSize, cudaMemcpyHostToDevice);
+      cudaMemcpy(Gamma2.dV, @Gamma2.V[0], ModelSize, cudaMemcpyHostToDevice);
+
+      cudaMemcpy(Beta2.dM, @Beta2.M[0], ModelSize, cudaMemcpyHostToDevice);
+      cudaMemcpy(Beta2.dV, @Beta2.V[0], ModelSize, cudaMemcpyHostToDevice);
+    end;
+
+  if DebugCudaChecks then
+    CheckCudaError('Copy AdamW state to device.');
 end;
 
 // Copy parameters from device to host (for saving model).
@@ -780,9 +899,69 @@ begin
       cudaMemcpy(@Beta1.Value[0],  Beta1.dValue,  ModelSize, cudaMemcpyDeviceToHost);
       cudaMemcpy(@Gamma2.Value[0], Gamma2.dValue, ModelSize, cudaMemcpyDeviceToHost);
       cudaMemcpy(@Beta2.Value[0],  Beta2.dValue,  ModelSize, cudaMemcpyDeviceToHost);
-  end;
+    end;
   if DebugCudaChecks then
     CheckCudaError('Copy model parameters to host.');
+end;
+
+// Copy AdamW first and second moments from CUDA device to host.
+procedure CopyAdamWStateToHost(var WAdamWState: TWAdamWState);
+var
+  k: Integer;
+begin
+  // Tied embeddings.
+  with WAdamWState.Embeddings do begin
+    cudaMemcpy(@M[0, 0], dM, EmbeddingsSize, cudaMemcpyDeviceToHost);
+    cudaMemcpy(@V[0, 0], dV, EmbeddingsSize, cudaMemcpyDeviceToHost);
+  end;
+
+  // Per-block AdamW state.
+  for k := 0 to nBlock - 1 do
+    with WAdamWState.ParamBlock[k] do begin
+
+      // Attention weights.
+      cudaMemcpy(@Wq.M[0, 0], Wq.dM, WeightSize, cudaMemcpyDeviceToHost);
+      cudaMemcpy(@Wq.V[0, 0], Wq.dV, WeightSize, cudaMemcpyDeviceToHost);
+
+      cudaMemcpy(@Wk.M[0, 0], Wk.dM, WeightSize, cudaMemcpyDeviceToHost);
+      cudaMemcpy(@Wk.V[0, 0], Wk.dV, WeightSize, cudaMemcpyDeviceToHost);
+
+      cudaMemcpy(@Wv.M[0, 0], Wv.dM, WeightSize, cudaMemcpyDeviceToHost);
+      cudaMemcpy(@Wv.V[0, 0], Wv.dV, WeightSize, cudaMemcpyDeviceToHost);
+
+      cudaMemcpy(@W0.M[0, 0], W0.dM, WeightSize, cudaMemcpyDeviceToHost);
+      cudaMemcpy(@W0.V[0, 0], W0.dV, WeightSize, cudaMemcpyDeviceToHost);
+
+      // MLP weights.
+      cudaMemcpy(@W1.M[0, 0], W1.dM, WeightProjectedSize, cudaMemcpyDeviceToHost);
+      cudaMemcpy(@W1.V[0, 0], W1.dV, WeightProjectedSize, cudaMemcpyDeviceToHost);
+
+      cudaMemcpy(@W2.M[0, 0], W2.dM, WeightProjectedSize, cudaMemcpyDeviceToHost);
+      cudaMemcpy(@W2.V[0, 0], W2.dV, WeightProjectedSize, cudaMemcpyDeviceToHost);
+
+      // Biases.
+      cudaMemcpy(@b1.M[0], b1.dM, ProjectedSize, cudaMemcpyDeviceToHost);
+      cudaMemcpy(@b1.V[0], b1.dV, ProjectedSize, cudaMemcpyDeviceToHost);
+
+      cudaMemcpy(@b2.M[0], b2.dM, ModelSize, cudaMemcpyDeviceToHost);
+      cudaMemcpy(@b2.V[0], b2.dV, ModelSize, cudaMemcpyDeviceToHost);
+
+      // LayerNorm parameters.
+      cudaMemcpy(@Gamma1.M[0], Gamma1.dM, ModelSize, cudaMemcpyDeviceToHost);
+      cudaMemcpy(@Gamma1.V[0], Gamma1.dV, ModelSize, cudaMemcpyDeviceToHost);
+
+      cudaMemcpy(@Beta1.M[0], Beta1.dM, ModelSize, cudaMemcpyDeviceToHost);
+      cudaMemcpy(@Beta1.V[0], Beta1.dV, ModelSize, cudaMemcpyDeviceToHost);
+
+      cudaMemcpy(@Gamma2.M[0], Gamma2.dM, ModelSize, cudaMemcpyDeviceToHost);
+      cudaMemcpy(@Gamma2.V[0], Gamma2.dV, ModelSize, cudaMemcpyDeviceToHost);
+
+      cudaMemcpy(@Beta2.M[0], Beta2.dM, ModelSize, cudaMemcpyDeviceToHost);
+      cudaMemcpy(@Beta2.V[0], Beta2.dV, ModelSize, cudaMemcpyDeviceToHost);
+    end;
+
+  if DebugCudaChecks then
+    CheckCudaError('Copy AdamW state to host.');
 end;
 
 // Copy InvFreq from host to device.
@@ -851,6 +1030,67 @@ begin
     end;
 end;
 
+// Initialize AdamW first and second moments to zero.
+// Call only when starting a new AdamW optimizer.
+procedure InitializeWAdamWState(var WAdamWState: TWAdamWState);
+var
+  k: Integer;
+begin
+  // Tied embeddings.
+  with WAdamWState.Embeddings do begin
+    cudaMemset(dM, 0, EmbeddingsSize);
+    cudaMemset(dV, 0, EmbeddingsSize);
+  end;
+
+  // Per-block AdamW moments.
+  for k := 0 to nBlock - 1 do
+    with WAdamWState.ParamBlock[k] do begin
+
+      // Attention weights.
+      cudaMemset(Wq.dM, 0, WeightSize);
+      cudaMemset(Wq.dV, 0, WeightSize);
+
+      cudaMemset(Wk.dM, 0, WeightSize);
+      cudaMemset(Wk.dV, 0, WeightSize);
+
+      cudaMemset(Wv.dM, 0, WeightSize);
+      cudaMemset(Wv.dV, 0, WeightSize);
+
+      cudaMemset(W0.dM, 0, WeightSize);
+      cudaMemset(W0.dV, 0, WeightSize);
+
+      // MLP weights.
+      cudaMemset(W1.dM, 0, WeightProjectedSize);
+      cudaMemset(W1.dV, 0, WeightProjectedSize);
+
+      cudaMemset(W2.dM, 0, WeightProjectedSize);
+      cudaMemset(W2.dV, 0, WeightProjectedSize);
+
+      // Biases.
+      cudaMemset(b1.dM, 0, ProjectedSize);
+      cudaMemset(b1.dV, 0, ProjectedSize);
+
+      cudaMemset(b2.dM, 0, ModelSize);
+      cudaMemset(b2.dV, 0, ModelSize);
+
+      // LayerNorm parameters.
+      cudaMemset(Gamma1.dM, 0, ModelSize);
+      cudaMemset(Gamma1.dV, 0, ModelSize);
+
+      cudaMemset(Beta1.dM, 0, ModelSize);
+      cudaMemset(Beta1.dV, 0, ModelSize);
+
+      cudaMemset(Gamma2.dM, 0, ModelSize);
+      cudaMemset(Gamma2.dV, 0, ModelSize);
+
+      cudaMemset(Beta2.dM, 0, ModelSize);
+      cudaMemset(Beta2.dV, 0, ModelSize);
+    end;
+
+  if DebugCudaChecks then
+    CheckCudaError('Initialize AdamW state.');
+end;
+
 // Zero out all gradients.
 procedure ZeroGradients(var WModelParams: TWModelParams; var WModelState: TWModelState; const Blk: Integer);
 var
@@ -915,91 +1155,221 @@ begin
   end;
 end;
 
-// Procedures for updating the parameters. Here, with decay.
-procedure CuUpdateParamDecay(Handle: TcublasHandle; const N: Integer; const LearningRate: Single; const Grad: PSingle; Param: PSingle);
+{ Optimization routines }
+// Update one transformer block using AdamW.
+procedure AdamWOptimizeBlock(var WModelParams: TWModelParams; var WAdamWState: TWAdamWState; const Blk: Integer;
+  const Beta1Power, Beta2Power: Single);
 begin
-  CuScale(Handle, N, DecayScale, Param);
-  CuAddScaled(Handle, N, -LearningRate, Grad, Param);
-end;
-
-{procedure CuUpdateParamDecay(Handle: TcublasHandle; const N: Integer; const LearningRate: Single; const Grad: PSingle; Param: PSingle);
-var
-  Alpha: Single;
-begin
-  CuScale(Handle, N, DecayScale, Param);
-  Alpha := -LearningRate;
-  cublasSaxpy_v2(Handle, N, @Alpha, Grad, 1, Param, 1);
-end;}
-
-// Procedures for updating the parameters. Here, without decay.
-procedure CuUpdateParamNoDecay(Handle: TcublasHandle; const N: Integer; const LearningRate: Single; const Grad: PSingle; Param: PSingle);
-begin
-  CuAddScaled(Handle, N, -LearningRate, Grad, Param);
-end;
-{procedure CuUpdateParamNoDecay(Handle: TcublasHandle; const N: Integer; const LearningRate: Single; const Grad: PSingle; Param: PSingle);
-var
-  Alpha: Single;
-begin
-  Alpha := -LearningRate;
-  cublasSaxpy_v2(Handle, N, @Alpha, Grad, 1, Param, 1);
-end;}
-
-// Update the weights and biases. .
-procedure Optimization(var WModelParams: TWModelParams; const Blk: Integer);
-begin
+  with WAdamWState.ParamBlock[Blk] do
   with WModelParams.ParamBlock[Blk] do begin
-    // W weights: main attention output. Decay.
-    CuUpdateParamDecay(CuHandle, ModelDim * ModelDim, LearningRate, W0.dGrad, W0.dValue);
 
-    // Wq, Wk, Wv weights: Q, K, V. Decay.
-    CuUpdateParamDecay(CuHandle, ModelDim * ModelDim, LearningRate, Wq.dGrad, Wq.dValue);
-    CuUpdateParamDecay(CuHandle, ModelDim * ModelDim, LearningRate, Wk.dGrad, Wk.dValue);
-    CuUpdateParamDecay(CuHandle, ModelDim * ModelDim, LearningRate, Wv.dGrad, Wv.dValue);
+    // Attention weights. Apply weight decay.
+    LaunchAdamWUpdate(Wq.dValue, Wq.dGrad, WAdamWState.ParamBlock[Blk].Wq.dM, WAdamWState.ParamBlock[Blk].Wq.dV,
+      ModelDim * ModelDim, LearningRate, AdamBeta1, AdamBeta2, Beta1Power, Beta2Power, AdamEpsilon, WeightDecay);
 
-    CuUpdateParamDecay(CuHandle, ModelDim * ModelDimProj, LearningRate, W1.dGrad, W1.dValue);
-    CuUpdateParamDecay(CuHandle, ModelDimProj * ModelDim, LearningRate, W2.dGrad, W2.dValue);
+    LaunchAdamWUpdate(Wk.dValue, Wk.dGrad, WAdamWState.ParamBlock[Blk].Wk.dM, WAdamWState.ParamBlock[Blk].Wk.dV,
+      ModelDim * ModelDim, LearningRate, AdamBeta1, AdamBeta2, Beta1Power, Beta2Power, AdamEpsilon, WeightDecay);
 
-    // b1, b2: biases. No decay.
-    CuUpdateParamNoDecay(CuHandle, ModelDimProj, LearningRate, b1.dGrad, b1.dValue);
-    CuUpdateParamNoDecay(CuHandle, ModelDim,     LearningRate, b2.dGrad, b2.dValue);
+    LaunchAdamWUpdate(Wv.dValue, Wv.dGrad, WAdamWState.ParamBlock[Blk].Wv.dM, WAdamWState.ParamBlock[Blk].Wv.dV,
+      ModelDim * ModelDim, LearningRate, AdamBeta1, AdamBeta2, Beta1Power, Beta2Power, AdamEpsilon, WeightDecay);
 
-    // Gamma1, Gamm2, Beta1, Beta2: Layer-Norm parameters. No decay.
-    CuUpdateParamNoDecay(CuHandle, ModelDim, LearningRate, Gamma1.dGrad, Gamma1.dValue);
-    CuUpdateParamNoDecay(CuHandle, ModelDim, LearningRate, Gamma2.dGrad, Gamma2.dValue);
-    CuUpdateParamNoDecay(CuHandle, ModelDim, LearningRate, Beta1.dGrad, Beta1.dValue);
-    CuUpdateParamNoDecay(CuHandle, ModelDim, LearningRate, Beta2.dGrad, Beta2.dValue);
+    LaunchAdamWUpdate(W0.dValue, W0.dGrad, WAdamWState.ParamBlock[Blk].W0.dM, WAdamWState.ParamBlock[Blk].W0.dV,
+      ModelDim * ModelDim, LearningRate, AdamBeta1, AdamBeta2, Beta1Power, Beta2Power, AdamEpsilon, WeightDecay);
 
+    // MLP weights. Apply weight decay.
+    LaunchAdamWUpdate(W1.dValue, W1.dGrad, WAdamWState.ParamBlock[Blk].W1.dM, WAdamWState.ParamBlock[Blk].W1.dV,
+      ModelDim * ModelDimProj, LearningRate, AdamBeta1, AdamBeta2, Beta1Power, Beta2Power, AdamEpsilon, WeightDecay);
+
+    LaunchAdamWUpdate(W2.dValue, W2.dGrad, WAdamWState.ParamBlock[Blk].W2.dM, WAdamWState.ParamBlock[Blk].W2.dV,
+      ModelDimProj * ModelDim, LearningRate, AdamBeta1, AdamBeta2, Beta1Power, Beta2Power, AdamEpsilon, WeightDecay);
+
+    // Biases. No weight decay.
+    LaunchAdamWUpdate(b1.dValue, b1.dGrad, WAdamWState.ParamBlock[Blk].b1.dM, WAdamWState.ParamBlock[Blk].b1.dV,
+      ModelDimProj, LearningRate, AdamBeta1, AdamBeta2, Beta1Power, Beta2Power, AdamEpsilon, 0.0);
+
+    LaunchAdamWUpdate(b2.dValue, b2.dGrad, WAdamWState.ParamBlock[Blk].b2.dM, WAdamWState.ParamBlock[Blk].b2.dV,
+      ModelDim, LearningRate, AdamBeta1, AdamBeta2, Beta1Power, Beta2Power, AdamEpsilon, 0.0);
+
+    // LayerNorm 1. No weight decay.
+    LaunchAdamWUpdate(Gamma1.dValue, Gamma1.dGrad, WAdamWState.ParamBlock[Blk].Gamma1.dM, WAdamWState.ParamBlock[Blk].Gamma1.dV,
+      ModelDim, LearningRate, AdamBeta1, AdamBeta2, Beta1Power, Beta2Power, AdamEpsilon, 0.0);
+
+    LaunchAdamWUpdate(Beta1.dValue, Beta1.dGrad, WAdamWState.ParamBlock[Blk].Beta1.dM, WAdamWState.ParamBlock[Blk].Beta1.dV,
+      ModelDim, LearningRate, AdamBeta1, AdamBeta2, Beta1Power, Beta2Power, AdamEpsilon, 0.0);
+
+    // LayerNorm 2. No weight decay.
+    LaunchAdamWUpdate(Gamma2.dValue, Gamma2.dGrad, WAdamWState.ParamBlock[Blk].Gamma2.dM, WAdamWState.ParamBlock[Blk].Gamma2.dV,
+      ModelDim, LearningRate, AdamBeta1, AdamBeta2, Beta1Power, Beta2Power, AdamEpsilon, 0.0);
+
+    LaunchAdamWUpdate(Beta2.dValue, Beta2.dGrad, WAdamWState.ParamBlock[Blk].Beta2.dM, WAdamWState.ParamBlock[Blk].Beta2.dV,
+      ModelDim, LearningRate, AdamBeta1, AdamBeta2, Beta1Power, Beta2Power, AdamEpsilon, 0.0);
+  end;
+
+  if DebugCudaChecks then
+    CheckCudaError('AdamW optimizer block ' + IntToStr(Blk));
+end;
+
+// AdamW optimize embeddings.
+procedure AdamWOptimizeEmbeddings(var WModelParams: TWModelParams; var WAdamWState: TWAdamWState; const Beta1Power, Beta2Power: Single);
+begin
+  with WModelParams.Embeddings do
+    LaunchAdamWUpdate(dValue, dGrad, WAdamWState.Embeddings.dM, WAdamWState.Embeddings.dV,
+      nVocab * ModelDim, LearningRate, AdamBeta1, AdamBeta2, Beta1Power, Beta2Power, AdamEpsilon, WeightDecay);
+
+  if DebugCudaChecks then
+    CheckCudaError('AdamW optimizer embeddings.');
+end;
+
+// Accumulate AdamW statistics for one parameter tensor. Param, M, and V are HOST pointers.
+procedure AccumulateAdamWStatistics(Param, M, V: PSingle; const Count: Integer; const Decay: Single;
+  const Beta1Power, Beta2Power: Double; var SumParam2, SumUpdate2, SumM2, SumV: Double; var TotalCount: Int64);
+var
+  i: Integer;
+  PNew, POld, MV, VV, MHat, VHat, AdamTerm, Update, Denom: Double;
+begin
+  Denom := 1.0 - LearningRate * Decay;
+
+  for i := 0 to Count - 1 do begin
+    PNew := Param^;
+    MV := M^;
+    VV := V^;
+
+    // Bias-corrected AdamW moments for the most recent update.
+    MHat := MV / (1.0 - Beta1Power);
+    VHat := VV / (1.0 - Beta2Power);
+
+    if VHat < 0.0 then
+      VHat := 0.0;
+
+    AdamTerm := MHat / (Sqrt(VHat) + AdamEpsilon);
+
+    // AdamW kernel did: PNew = POld - LR * (AdamTerm + Decay * POld). Therefore reconstruct POld.
+    POld := (PNew + LearningRate * AdamTerm) / Denom;
+
+    Update := PNew - POld;
+
+    SumParam2 := SumParam2 + POld * POld;
+    SumUpdate2 := SumUpdate2 + Update * Update;
+    SumM2 := SumM2 + MV * MV;
+    SumV := SumV + VV;
+
+    Inc(Param);
+    Inc(M);
+    Inc(V);
+  end;
+
+  Inc(TotalCount, Count);
+end;
+
+// Compute whole-model AdamW statistics for the most recently completed update.
+procedure GetAdamWStatistics(var WModelParams: TWModelParams; var WAdamWState: TWAdamWState;
+  out ParamRMS, UpdateRMS, UpdateRatio, MRMS, SqrtVRMS: Double);
+var
+  k: Integer;
+  TotalCount: Int64;
+  SumParam2, SumUpdate2, SumM2, SumV: Double;
+  Beta1Power, Beta2Power: Double;
+begin
+  ParamRMS := 0.0;
+  UpdateRMS := 0.0;
+  UpdateRatio := 0.0;
+  MRMS := 0.0;
+  SqrtVRMS := 0.0;
+
+  if AdamWStep <= 0 then Exit;
+
+  // Copy current parameters and AdamW moments to host.
+  CopyParamsToHost(WModelParams);
+  CopyAdamWStateToHost(WAdamWState);
+
+  // AdamWStep is the number of updates already completed.
+  Beta1Power := Power(AdamBeta1, AdamWStep);
+  Beta2Power := Power(AdamBeta2, AdamWStep);
+
+  SumParam2 := 0.0;
+  SumUpdate2 := 0.0;
+  SumM2 := 0.0;
+  SumV := 0.0;
+  TotalCount := 0;
+
+  // Tied embeddings. Weight decay applies.
+  AccumulateAdamWStatistics(@WModelParams.Embeddings.Value[0, 0], @WAdamWState.Embeddings.M[0, 0], @WAdamWState.Embeddings.V[0, 0],
+    nVocab * ModelDim, WeightDecay, Beta1Power, Beta2Power, SumParam2, SumUpdate2, SumM2, SumV, TotalCount);
+
+  // Transformer blocks.
+  for k := 0 to nBlock - 1 do begin
+
+    // Attention weights. Weight decay applies.
+    AccumulateAdamWStatistics(@WModelParams.ParamBlock[k].Wq.Value[0, 0], @WAdamWState.ParamBlock[k].Wq.M[0, 0], @WAdamWState.ParamBlock[k].Wq.V[0, 0],
+      ModelDim * ModelDim, WeightDecay, Beta1Power, Beta2Power, SumParam2, SumUpdate2, SumM2, SumV, TotalCount);
+
+    AccumulateAdamWStatistics(@WModelParams.ParamBlock[k].Wk.Value[0, 0], @WAdamWState.ParamBlock[k].Wk.M[0, 0], @WAdamWState.ParamBlock[k].Wk.V[0, 0],
+      ModelDim * ModelDim, WeightDecay, Beta1Power, Beta2Power, SumParam2, SumUpdate2, SumM2, SumV, TotalCount);
+
+    AccumulateAdamWStatistics(@WModelParams.ParamBlock[k].Wv.Value[0, 0], @WAdamWState.ParamBlock[k].Wv.M[0, 0], @WAdamWState.ParamBlock[k].Wv.V[0, 0],
+      ModelDim * ModelDim, WeightDecay, Beta1Power, Beta2Power, SumParam2, SumUpdate2, SumM2, SumV, TotalCount);
+
+    AccumulateAdamWStatistics(@WModelParams.ParamBlock[k].W0.Value[0, 0], @WAdamWState.ParamBlock[k].W0.M[0, 0], @WAdamWState.ParamBlock[k].W0.V[0, 0],
+      ModelDim * ModelDim, WeightDecay, Beta1Power, Beta2Power, SumParam2, SumUpdate2, SumM2, SumV, TotalCount);
+
+    // MLP weights. Weight decay applies.
+    AccumulateAdamWStatistics(@WModelParams.ParamBlock[k].W1.Value[0, 0], @WAdamWState.ParamBlock[k].W1.M[0, 0], @WAdamWState.ParamBlock[k].W1.V[0, 0],
+      ModelDim * ModelDimProj, WeightDecay, Beta1Power, Beta2Power, SumParam2, SumUpdate2, SumM2, SumV, TotalCount);
+
+    AccumulateAdamWStatistics(@WModelParams.ParamBlock[k].W2.Value[0, 0], @WAdamWState.ParamBlock[k].W2.M[0, 0], @WAdamWState.ParamBlock[k].W2.V[0, 0],
+      ModelDimProj * ModelDim, WeightDecay, Beta1Power, Beta2Power, SumParam2, SumUpdate2, SumM2, SumV, TotalCount);
+
+    // Biases. No weight decay.
+    AccumulateAdamWStatistics(@WModelParams.ParamBlock[k].b1.Value[0], @WAdamWState.ParamBlock[k].b1.M[0], @WAdamWState.ParamBlock[k].b1.V[0],
+      ModelDimProj, 0.0, Beta1Power, Beta2Power, SumParam2, SumUpdate2, SumM2, SumV, TotalCount);
+
+    AccumulateAdamWStatistics(@WModelParams.ParamBlock[k].b2.Value[0], @WAdamWState.ParamBlock[k].b2.M[0], @WAdamWState.ParamBlock[k].b2.V[0],
+      ModelDim, 0.0, Beta1Power, Beta2Power, SumParam2, SumUpdate2, SumM2, SumV, TotalCount);
+
+    // LayerNorm 1. No weight decay.
+    AccumulateAdamWStatistics(@WModelParams.ParamBlock[k].Gamma1.Value[0], @WAdamWState.ParamBlock[k].Gamma1.M[0], @WAdamWState.ParamBlock[k].Gamma1.V[0],
+      ModelDim, 0.0, Beta1Power, Beta2Power, SumParam2, SumUpdate2, SumM2, SumV, TotalCount);
+
+    AccumulateAdamWStatistics(@WModelParams.ParamBlock[k].Beta1.Value[0], @WAdamWState.ParamBlock[k].Beta1.M[0], @WAdamWState.ParamBlock[k].Beta1.V[0],
+      ModelDim, 0.0, Beta1Power, Beta2Power, SumParam2, SumUpdate2, SumM2, SumV, TotalCount);
+
+    // LayerNorm 2. No weight decay.
+    AccumulateAdamWStatistics(@WModelParams.ParamBlock[k].Gamma2.Value[0], @WAdamWState.ParamBlock[k].Gamma2.M[0], @WAdamWState.ParamBlock[k].Gamma2.V[0],
+      ModelDim, 0.0, Beta1Power, Beta2Power, SumParam2, SumUpdate2, SumM2, SumV, TotalCount);
+
+    AccumulateAdamWStatistics(@WModelParams.ParamBlock[k].Beta2.Value[0], @WAdamWState.ParamBlock[k].Beta2.M[0], @WAdamWState.ParamBlock[k].Beta2.V[0],
+      ModelDim, 0.0, Beta1Power, Beta2Power,
+      SumParam2, SumUpdate2, SumM2, SumV, TotalCount);
+  end;
+
+  if TotalCount > 0 then begin
+    ParamRMS := Sqrt(SumParam2 / TotalCount);
+    UpdateRMS := Sqrt(SumUpdate2 / TotalCount);
+    MRMS := Sqrt(SumM2 / TotalCount);
+
+    // RMS(sqrt(V)) = sqrt(mean(V)).
+    SqrtVRMS := Sqrt(SumV / TotalCount);
+
+    if ParamRMS <> 0.0 then
+      UpdateRatio := UpdateRMS / ParamRMS;
   end;
 end;
 
-procedure UpdateEmbeddings(var WModelParams: TWModelParams; var WModelState: TWModelState);
-var
-  EmbeddingScale: Single;
+procedure UpdateEmbeddingGradient(var WModelParams: TWModelParams; var WModelState: TWModelState);
 begin
-  EmbeddingScale := Sqrt(ModelDim);
+  with WModelParams do with WModelState do begin
 
-  // Backpropagate through X = Embedding * sqrt(ModelDim).
-  CuScale(CuHandle, SeqLen * ModelDim, EmbeddingScale, WModelState.StateBlock[0].X.dGrad);
+    // Backpropagate through X = Embedding * Scale.
+    CuScale(CuHandle, SeqLen * ModelDim, Scale, StateBlock[0].X.dGrad);
 
-  // Add input-side gradient to existing output-side tied gradient.
-  LaunchAddInputEmbeddingGrad(WModelState.StateBlock[0].X.dGrad, WModelParams.Embeddings.dGrad, dInputTokens, SeqLen, ModelDim, nVocab);
+    // Add input-side embedding gradient to the existing output-side
+    // tied-embedding gradient.
+    LaunchAddInputEmbeddingGrad(StateBlock[0].X.dGrad, Embeddings.dGrad, dInputTokens, SeqLen, ModelDim, nVocab);
 
-  // Clip the complete tied-embedding gradient.
-  LaunchClipVector(WModelParams.Embeddings.dGrad, nVocab * ModelDim, ClipLimit);
-
-  // Apply total embedding gradient.
-  CuUpdateParamNoDecay(CuHandle, nVocab * ModelDim, LearningRate, WModelParams.Embeddings.dGrad, WModelParams.Embeddings.dValue);
+    // Clip the complete tied-embedding gradient.
+    LaunchClipVector(Embeddings.dGrad, nVocab * ModelDim, ClipLimit);
+  end;
 end;
-
-{procedure UpdateEmbeddings(var WModelParams: TWModelParams; var WModelState: TWModelState);
-begin
-  // Add input-side embedding grads into Embeddings.dGrad.
-  // Output-side tied gradient is already in Embeddings.dGrad.
-  LaunchAddInputEmbeddingGrad(WModelState.StateBlock[0].X.dGrad, WModelParams.Embeddings.dGrad, dInputTokens, SeqLen, ModelDim, nVocab);
-
-  // Apply total embedding gradient.
-  CuUpdateParamNoDecay(CuHandle, nVocab * ModelDim, LearningRate, WModelParams.Embeddings.dGrad, WModelParams.Embeddings.dValue);
-end;}
 
 // Rotary positional encoding. No longer used.
 // Apply RoPE to both Q and K, [0..SeqLen - 1, 0..ModelDim - 1]

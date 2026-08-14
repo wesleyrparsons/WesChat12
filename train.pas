@@ -22,12 +22,11 @@ uses
   Arrays are nSymbols x ModelDim of Single.
   nSymbols (nVocab) is vocabulary size. ModelDim is the dimension of the models, the loads.}
 
-procedure RunTrain(var WModelParams: TWModelParams; var WModelState: TWModelState; const TokenizedCorpus: TIVector);
+procedure RunTrain(var WModelParams: TWModelParams; var WModelState: TWModelState; var WAdamWState: TWAdamWState; const TokenizedCorpus: TIVector);
 
 implementation
 
 const
-  Scale = Sqrt(ModelDim);         // Transformer-style embedding scaling by sqrt(d_model).
   MinWindowsPerEpoch = 100;       // Need for stride, especially changing.
 type
   TRowLossVector = array[0..SeqLen - 1] of Single;    // For computing CELoss on cuda.
@@ -38,33 +37,34 @@ var
   MinSaveGap: Integer;
   MinSaveDelta: Double;
   RowLoss: TRowLossVector;
+  Beta1Power, Beta2Power: Single;
 
-  // Compute the CELoss with kernel routine.
+// Compute the CELoss with kernel routine.
 function ComputeCELossGPU(dProbs: PSingle; dTargetTokens: PInteger; dRowLoss: PSingle; var RowLoss: TRowLossVector): Double;
-  var
-    i: Integer;
-  begin
-    LaunchCELossRows(dProbs, dTargetTokens, dRowLoss, SeqLen, nVocab, DimVocab);
+var
+  i: Integer;
+begin
+  LaunchCELossRows(dProbs, dTargetTokens, dRowLoss, SeqLen, nVocab, DimVocab);
 
-    if DebugCudaChecks then
-      CheckCudaError('Launch CELossRows.');
+  if DebugCudaChecks then
+    CheckCudaError('Launch CELossRows.');
 
-    cudaMemcpy(@RowLoss[0], dRowLoss, SeqLen * SizeOf(Single), cudaMemcpyDeviceToHost);
+  cudaMemcpy(@RowLoss[0], dRowLoss, SeqLen * SizeOf(Single), cudaMemcpyDeviceToHost);
 
-    if DebugCudaChecks then
-      CheckCudaError('Copy CE row losses.');
+  if DebugCudaChecks then
+    CheckCudaError('Copy CE row losses.');
 
-    Result := 0.0;
+  Result := 0.0;
 
-    for i := 0 to SeqLen - 1 do begin
-      if IsNan(RowLoss[i]) or IsInfinite(RowLoss[i]) then
-        raise Exception.CreateFmt('ComputeCELossGPU: invalid row loss at position %d.', [i]);
+  for i := 0 to SeqLen - 1 do begin
+    if IsNan(RowLoss[i]) or IsInfinite(RowLoss[i]) then
+      raise Exception.CreateFmt('ComputeCELossGPU: invalid row loss at position %d.', [i]);
 
-      Result := Result + RowLoss[i];
-    end;
-
-    Result := Result / SeqLen;
+    Result := Result + RowLoss[i];
   end;
+
+  Result := Result / SeqLen;
+end;
 
 // Compute the CE loss only.
 function ComputeLossOnly(var WModelParams: TWModelParams; var WModelState: TWModelState; const InputTokens, TargetTokens: TIDimVector): Double;
@@ -97,13 +97,6 @@ begin
     RunOutputForward(WModelParams, WModelState);
 
     Result := ComputeCELossGPU(dProbs, dTargetTokens, dRowLoss, RowLoss);
-
-    {RunOutputForward(WModelParams, WModelState);
-    cudaMemcpy(@Probs[0, 0], dProbs, ProbsSize, cudaMemcpyDeviceToHost);
-    if DebugCudaChecks then
-      CheckCudaError('Copy probabilities for diagnostic loss.');
-
-    Result := ComputeCELoss(Probs, TargetTokens);}
   end;
 end;
 
@@ -111,23 +104,18 @@ end;
 procedure CheckFirstValuesFinite(const Name: string; Ptr: PSingle; Count: Integer);
 var
   Temp: array[0..31] of Single;
-  i, N: Integer;
+  i, n: Integer;
 begin
-  N := Count;
-  if N > 32 then N := 32;
+  n := Count;
+  if n > 32 then n := 32;
 
-  cudaMemcpy(@Temp[0], Ptr, N * SizeOf(Single), cudaMemcpyDeviceToHost);
+  cudaMemcpy(@Temp[0], Ptr, n * SizeOf(Single), cudaMemcpyDeviceToHost);
   if DebugCudaChecks then
     CheckCudaError('copy ' + Name);
 
-  for i := 0 to N - 1 do begin
-    if (Temp[i] <> Temp[i]) or
-       (Temp[i] > 1.0e20) or
-       (Temp[i] < -1.0e20) then begin
-      Writeln('BAD VALUE in ', Name, '[', i, '] = ', Temp[i]:12:6);
-      Pause;
-      Halt;
-    end;
+  for i := 0 to n - 1 do begin
+    if (Temp[i] <> Temp[i]) or (Temp[i] > 1.0e20) or (Temp[i] < -1.0e20) then
+      raise Exception.CreateFmt('BAD VALUE in %s[%d] = %g', [Name, i, Temp[i]]);
   end;
 end;
 
@@ -190,17 +178,17 @@ begin
 end;
 
 // Run the training.
-procedure RunTrain(var WModelParams: TWModelParams; var WModelState: TWModelState; const TokenizedCorpus: TIVector);
+procedure RunTrain(var WModelParams: TWModelParams; var WModelState: TWModelState; var WAdamWState: TWAdamWState; const TokenizedCorpus: TIVector);
 var
   i, j, k: Integer;
-  Blk, Epoch, FirstEpoch, Start, WindowCount, MinLossEpoch: Integer;
-  MaxStride: Integer;
+  Blk, Epoch, FirstEpoch, Start, WindowCount, MinLossEpoch, MaxStride: Integer;
   Loss, MinLoss, DiffLoss, LastLoss, EpochLoss, MEL, StartLoss: Double;
   RecentImprovementIndex, RecentImprovementCount: Integer;
   RecentImprovementSum, MeanRunningImprovement: Double;
   RecentImprovements: array[0..RecentCount - 1] of Double;
   Starts: TIVector;
   NeedParamCopy, WasNewModel: Boolean;
+  AdamParamRMS, AdamUpdateRMS, AdamUpdateRatio, AdamMRMS, AdamSqrtVRMS: Double;
 
   function TrainReadIfKeyPressed: Boolean;
   var
@@ -265,7 +253,7 @@ var
             ModelFileName := ExpandFileName(ModelFileName);
         end;
 
-        if SaveModel(ModelFileName, WModelParams) then begin
+        if SaveModel(ModelFileName, WModelParams, WAdamWState) then begin
           ModelPresent := True;
           Write('Saving model File = ', ModelFileName);
           Write('; Epoch = ', Epoch);
@@ -338,6 +326,7 @@ begin
 
   if WasNewModel then begin
     GlobalStep := 0;
+    AdamWStep := 0;
     CompletedEpochs := 0;
     GlobalSeed := 123456789;
   end;
@@ -363,12 +352,15 @@ begin
 
   // Initialize params if new model.
   NeedParamCopy := (not CudaAllocated) or ParamsNeedCopyToDevice or WasNewModel;
+
   if WasNewModel then
     InitializeTransformerParams(WModelParams);
+
   NewModel := False;
 
-  // Initiate Cuda.
-  StartCuda(WModelParams, WModelState);
+  // Initiate CUDA and allocate all CUDA buffers,
+  // including AdamW dM and dV.
+  StartCuda(WModelParams, WModelState, WAdamWState);
 
   try
     if NeedParamCopy then begin
@@ -379,14 +371,30 @@ begin
     // Send InvFreq to device.
     CopyInvFreqToDevice(WModelState);
 
+    // Now dM and dV exist, so initialize or restore AdamW.
+    if WasNewModel then begin
+      InitializeWAdamWState(WAdamWState);
+      AdamWStep := 0;
+      AdamWStateLoaded := True;
+    end
+    else if AdamWStateLoaded then begin
+      // WES2 model containing saved AdamW state.
+      CopyAdamWStateToDevice(WAdamWState);
+    end
+    else begin
+      // WES1 model: loaded weights, but no AdamW history.
+      InitializeWAdamWState(WAdamWState);
+      AdamWStep := 0;
+      AdamWStateLoaded := True;
+    end;
+
     // Initialize epoch/sequence loop.
     Start := 0;
     FirstEpoch := CompletedEpochs;
-
     Writeln('Training started.');
     Writeln;
     Write(DateTimeToStr(Now), '  I = get program Information. L = set Learning rate. N = go to iNference. P = Pause. ');
-    Writeln('S = Save. T = set sTride. V = toggle Verbose mode. X = eXit training. Training...');
+    Writeln('S = Save. T = set sTride. V = toggle Verbose mode. W = set Weight decay. X = eXit training. Training...');
 
     // Display embeddings.
     if VerboseTransform then begin
@@ -409,7 +417,6 @@ begin
         ShuffleStarts(Starts);
 
       // Stride loop thru Sequence.
-      // while ((Start + SeqLen + 1) <= Length(TokenizedCorpus)) do begin
       for i := 0 to High(Starts) do begin
         Start := Starts[i];
 
@@ -524,46 +531,50 @@ begin
 
         // Use schedule to calculate learning rate. Remember Training may be False (affects dropouts).
         Case LearningStyle of
-          // Flat schedule of 0.01;.
-          FlatLearning: LearningRate := 0.01;
-          // Slow schedule.
+          // Flat AdamW schedule.
+          FlatLearning: LearningRate := 0.0003;
+          // Slow AdamW schedule.
           SlowLearning:
             case Epoch of
-              0..10:      LearningRate := 0.01;
-              11..20:     LearningRate := 0.005;
-              21..100:    LearningRate := 0.0005;
-              101..1000:  LearningRate := 0.0001;
-              else        LearningRate := 0.00005;
+              0..2:       LearningRate := 0.00010;
+              3..10:      LearningRate := 0.000075;
+              11..30:     LearningRate := 0.000050;
+              31..100:    LearningRate := 0.000025;
+              101..1000:  LearningRate := 0.000010;
+              else        LearningRate := 0.000005;
             end;
-          // Fast schedule.
+          // Fast AdamW schedule.
           FastLearning:
             case Epoch of
-              0..30:      LearningRate := 0.01;
-              31..100:    LearningRate := 0.005;
-              101..400:   LearningRate := 0.001;
-              401..800:   LearningRate := 0.0005;
-              else        LearningRate := 0.0001;
+              0..2:       LearningRate := 0.00030;
+              3..10:      LearningRate := 0.00020;
+              11..30:     LearningRate := 0.00010;
+              31..100:    LearningRate := 0.000050;
+              101..400:   LearningRate := 0.000025;
+              401..800:   LearningRate := 0.000010;
+              else        LearningRate := 0.000005;
             end;
-          // Rolled off schedule.
-          RolledOffLearning: begin
-            // LearningRate := Max(FloorLearningRate, BaseLearningRate * Power(Rolloff, GlobalStep));
-            LearningRate := FloorLearningRate + (BaseLearningRate - FloorLearningRate) * Power(Rolloff, GlobalStep);
-          end;
         end;
 
         // User can set override learning rate.
         if OverrideLearningRate <> -1.0 then
           LearningRate := OverrideLearningRate;
 
-        // Decay tied to learning rate, AdamW-style.
-        DecayScale:= 1.0 - LearningRate * WeightDecay;
+        // Do AdamW optimization.
+        Beta1Power := Single(Power(AdamBeta1, AdamWStep + 1));
+        Beta2Power := Single(Power(AdamBeta2, AdamWStep + 1));
 
-        // Modify weights and biases.
+        UpdateEmbeddingGradient(WModelParams, WModelState);
+
+        // Build the complete embedding gradient.
+        // This will replace the updating portion of your present UpdateEmbeddings.         STOP.
+        // UpdateEmbeddingGradient(WModelParams, WModelState);
+
         for k := 0 to nBlock - 1 do
-          Optimization(WModelParams, k);
+          AdamWOptimizeBlock(WModelParams, WAdamWState, k, Beta1Power, Beta2Power);
 
-        // Apply the total embedding gradient (output-side + input-side).
-        UpdateEmbeddings(wModelParams, WModelState);
+        AdamWOptimizeEmbeddings(WModelParams, WAdamWState, Beta1Power, Beta2Power);
+        Inc(AdamWStep);
 
         // Diagnostic check for excessive embeddings values.
         if DebugCudaChecks then begin
@@ -639,7 +650,7 @@ begin
             else                            // Subsequent times.
               Write('Saving new best model. Previous saved best = ', BestSavedLoss: 9: 7, ' in epoch ', LastBestSaveEpoch, '; new best = ', MEL: 9: 7, ' in epoch ', Epoch);
             // For saving all best models.
-            if SaveModel(ModelDir + WorkingName + '_best.model', WModelParams) then begin
+            if SaveModel(ModelDir + WorkingName + '_best.model', WModelParams, WAdamWState) then begin
               LastBestSaveEpoch := Epoch;
               BestSavedLoss := MEL;
               Writeln('. Best model saved.');
@@ -655,15 +666,16 @@ begin
         Write('--');
       Write('Epoch ', Epoch, ' ended. Steps = ', GlobalStep - WindowCount + 1, '..', GlobalStep, '.');
       Write(' LR = ', LearningRate:7 : 5, '. Mean loss: Start = ', StartLoss: 8: 6, '; Min = ',
-        MinLoss: 8: 6, ' in epoch ', MinLossEpoch, '; Current = ', MEL: 8: 6, '; Perplexity = ', exp(MEL): 8: 6,
-        '; Rolling improvement', RecentImprovementCount, ' = ', MeanRunningImprovement: 9: 7);
+        MinLoss: 8: 6, ' in epoch ', MinLossEpoch, '; Current = ', MEL: 8: 6, '; Perplexity = ', exp(MEL): 8: 6);,
       if Epoch > 0 then begin
+        write('; Rolling improvement', RecentImprovementCount, ' = ', MeanRunningImprovement: 9: 7);
         if DiffLoss > 0 then
-          Write('; Better by ', DiffLoss: 8: 6)
+          Write('; Better by ', DiffLoss: 8: 6, '.')
         else
-          Write('; Worse by ', -DiffLoss: 8: 6);
-      end;
-      Writeln('.');
+          Write('; Worse by ', -DiffLoss: 8: 6, '.');
+      end
+      else
+        Writeln('.');
 
       // Display loss progress every 10 epochs.
       if (Epoch > 0) and ((Epoch mod 10) = 0) then begin
@@ -677,36 +689,46 @@ begin
         else
           Writeln('.');
 
-        if OverrideLearningRate = -1.0 then begin
-          // Not override learning rate.
-          Case LearningStyle of
-            FlatLearning:
-              // Display flat learning rate.
-              Write('>> Learning rate (flat) = ', LearningRate: 9: 7, '.');
-            SlowLearning:
-              // Display slow learning rate schedule.
-              Write('>> Learning rate (slow) = ', LearningRate: 9: 7, ' with 0..10: 0.01; 11..20: 0.005; 21..100: 0.0005; 101..1000: 0.0001; else 0.00005.');
-            FastLearning:
-              // Display fast learning rate schedule.
-              Write('>> Learning rate (fast) = ', LearningRate: 9: 7, ' with 0..30: 0.01; 31..100: 0.005; 101..400: 0.001; 401..800: 0.0005; else 0.0001.');
-            RolledOffLearning:
-              // Learning Rolled off learning rate.
-              Write('>> Learning rate (rolled of) = ', LearningRate: 9: 7, ' Floor LR = ', FloorLearningRate: 9: 7, ' Base LR = ', BaseLearningRate: 9: 7, ' LR rolloff = ', RollOff: 9: 7, '.');
-          end;
-        end
-        else
-        // Display override learning rate.
-        Write('>> Learning rate (override) = ', LearningRate: 9: 7, '.');
+        if {(Epoch > 0) and} ((Epoch mod 10) = 0) then begin
 
-        // Display training information.
-        Writeln(' Window # = ', WindowCount, ' Weight decay = ', WeightDecay: 8: 6, '; Decay per epoch = ', 100.0 * (1.0 - Power(DecayScale, WindowCount)): 0: 6,
-          '%; Temperature = ', TTemperature: 8: 6, '; Clip limit = ', ClipLimit: 8: 6, '.');
-      end;
-    end;      // End epoch loop.
+          GetAdamWStatistics(WModelParams, WAdamWState, AdamParamRMS, AdamUpdateRMS, AdamUpdateRatio, AdamMRMS, AdamSqrtVRMS);
+
+          Writeln('>> AdamW step = ', AdamWStep, '; Param RMS = ', AdamParamRMS: 0: 8, '; Update RMS = ', AdamUpdateRMS: 0: 10,
+            '; Update ratio = ', AdamUpdateRatio: 0: 8, ' (', 100.0 * AdamUpdateRatio: 0: 5, '%)', '; M RMS = ', AdamMRMS: 0: 8, '; sqrt(V) RMS = ', AdamSqrtVRMS: 0: 8, '.');
+
+          if OverrideLearningRate = -1.0 then begin
+            // Display no override learning rate.
+            Case LearningStyle of
+              FlatLearning:
+                // Display flat learning rate.
+                Write('>> Learning rate (flat) = ', LearningRate: 9: 7, '.');
+              SlowLearning:
+                // Display slow AdamW learning rate schedule.
+                Write('>> Learning rate (slow) = ', LearningRate: 9: 7,
+                  ' with 0..2: 0.00010; 3..10: 0.000075; 11..30: 0.000050; 31..100: 0.000025; 101..1000: 0.000010; else 0.000005');
+              FastLearning:
+                // Display fast AdamW learning rate schedule.
+                Write('>> Learning rate (fast) = ', LearningRate: 9: 7,
+                  ' with 0..2: 0.00030; 3..10: 0.00020; 11..30: 0.00010; 31..100: 0.000050; 101..400: 0.000025; 401..800: 0.000010; else 0.000005');
+              RolledOffLearning:
+                // Learning Rolled off learning rate.
+                Write('>> Learning rate (rolled of) = ', LearningRate: 9: 7,
+                  ' Floor LR = ', FloorLearningRate: 9: 7, ' Base LR = ', BaseLearningRate: 9: 7, ' LR rolloff = ', RollOff: 9: 7);
+            end;
+          end
+          else
+            // Display override learning rate.
+            Write('>> Learning rate (override) = ', LearningRate: 9: 7);
+
+          // Display training information.
+          Writeln('; Window # = ', WindowCount, '; Temperature = ', TTemperature: 8: 6, '; Weight decay = ', WeightDecay: 8: 6, '; Clip limit = ', ClipLimit: 8: 6, '.');
+        end;    // End epoch display loop.
+      end;      // End epoch loss loop.
+    end         // End epoch loop.
   except
     on E: Exception do begin
       TrainSuccess := False;
-      Writeln('Error in training: ', E.ClassName, ': ', E.Message);
+      Writeln('TRAINING ERROR: ', E.ClassName, '; ', E.Message, '.');
       Pause;
       Exit;
     end;

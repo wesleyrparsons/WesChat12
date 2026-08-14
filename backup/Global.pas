@@ -39,6 +39,7 @@ const
   // Model constants.
   MaxEpochs = 1000000;            // Number of epochs, loops over tokenized corpus.
   ModelDim = 192;                 // Number of loadings for a symbol.
+  Scale = Sqrt(ModelDim);         // Transformer-style embedding scaling by sqrt(d_model).
   Proj = 4;                       // Projection to Hidden arrays.
   ModelDimProj = ModelDim * Proj; // Dimension of model of projected X matrix.
   SeqLen = 256;                   // Sequence length for X.
@@ -60,7 +61,6 @@ const
   InvSqrtHeadDim: Single = 1 / Sqrt(HeadDim);         // Used in softmax.
   FirstMergedToken = 260;         // First token after all extended ASCII and 4 specials.
   DisplayLength = 100;            // Length of diaplying corpus or tokens.
-  MinWindowsPerEpoch = 100;       // Need for stride, especially changing.
 
 type                              // SeqLen = L, ModelDim = D, ModelDim/nHead = H, DB is Proj*D, DV is DimVocab.
   // cublas type.
@@ -83,7 +83,7 @@ type                              // SeqLen = L, ModelDim = D, ModelDim/nHead = 
   TSeqVocabMatrix = array [0..SeqLen - 1] of TVocabVector;                     // L x MaxVocab
   TFSVector = array[0..SeqLen - 1] of Single;                                  // L
   TEmbeddingsMatrix = array[0..DimVocab - 1] of TSeqVector;                    // DV x D. Array for embeddings matrix, at DimVocab, a maximum.
-  // Tensor types.
+  // State tensor types.
   TSeqTensor = record
     Value, Grad:  TSeqMatrix;
     dValue, dGrad:  PSingle;
@@ -119,6 +119,31 @@ type                              // SeqLen = L, ModelDim = D, ModelDim/nHead = 
   TEmbeddingsTensor = record
     Value, Grad:  TEmbeddingsMatrix;
     dValue, dGrad:  PSingle;
+  end;
+  TAdamWeightTensor = record
+    M, V: TWeightMatrix;
+    dM, dV: PSingle;
+  end;
+  // Adam state tensor types.
+  TAdamWeightProjTensor = record
+    M, V: TWeightProjMatrix;
+    dM, dV: PSingle;
+  end;
+  TAdamWeightProjTensorT = record
+    M, V: TWeightProjMatrixT;
+    dM, dV: PSingle;
+  end;
+  TAdamSeqVectorTensor = record
+    M, V: TSeqVector;
+    dM, dV: PSingle;
+  end;
+  TAdamSeqVectorProjTensor = record
+    M, V: TSeqVectorProj;
+    dM, dV: PSingle;
+  end;
+  TAdamEmbeddingsTensor = record
+    M, V: TEmbeddingsMatrix;
+    dM, dV: PSingle;
   end;
   // Corpus and IO types.
   TBooleanVector = array of Boolean;   // Array of boolean.
@@ -164,8 +189,13 @@ type                              // SeqLen = L, ModelDim = D, ModelDim/nHead = 
     Stride: Integer;
     StartStride: Integer;
     GlobalSeed: UInt64;
+    // AdamW.
+    AdamWStep: Int64;
+    AdamBeta1: Single;
+    AdamBeta2: Single;
+    AdamEpsilon: Single;
   end;
-  // Block types.
+  // Param block types.
   TParamBlock = array[0..nBlock - 1] of record
     Wq, Wk, Wv, W0:                 TWeightTensor;         // Weights.
     W1:                             TWeightProjTensor;     // Weights.
@@ -178,6 +208,7 @@ type                              // SeqLen = L, ModelDim = D, ModelDim/nHead = 
     Embeddings:                     TEmbeddingsTensor;     // Embeddings cannot be dynamic, CBLAS will not work.
     ParamBlock:                     TParamBlock;
   end;
+  // State block types.
   TStateBlock = array[0..nBlock - 1] of record             // Model of non-trainable parameters.
     // Matrices for neural net.
     X, X1, X2, X3, X4, X5, X6, X7:  TSeqTensor;            // X's at all stages.
@@ -210,7 +241,19 @@ type                              // SeqLen = L, ModelDim = D, ModelDim/nHead = 
     dProbs, dTopGradient:           PSingle;               // Logit and Gradient.
     dRowLoss:                       PSingle;               // For cross-entropy loss.
   end;
-
+  // Adam param abd state block types.
+  TAdamParamBlock = array[0..nBlock - 1] of record
+    Wq, Wk, Wv, W0: TAdamWeightTensor;
+    W1: TAdamWeightProjTensor;
+    W2: TAdamWeightProjTensorT;
+    b1: TAdamSeqVectorProjTensor;
+    b2: TAdamSeqVectorTensor;
+    Gamma1, Beta1, Gamma2, Beta2: TAdamSeqVectorTensor;
+  end;
+  TWAdamWState = record
+    Embeddings: TAdamEmbeddingsTensor;
+    ParamBlock: TAdamParamBlock;
+  end;
 var
   // cublas vars.
   CuHandle: TcublasHandle;                       // Create a cuda handle.
@@ -254,11 +297,11 @@ var
   Training:             Boolean = False;         // True = training mode: training temperature and dropout enabled.
   LearningStyle:        TLearning = FlatLearning;// Style of learning.
   ShuffleWindows:       Boolean = True;          // Shuffle the windows each epoch.
-  BaseLearningRate:     Double = 0.01000;        // Base learning rate for Gradient.
-  FloorLearningRate:    Double = 0.00010;        // Floor learning rate for Gradient.
-  OverrideLearningRate: Double = 0.0005;         // Override learning rate for Gradient.
-  RollOff:              Double = 0.99990;        // Reduction in learning rate.
-  WeightDecay:          Double = 0.00010;        // Decay (multiplicative) for learning rate.
+  BaseLearningRate:     Double = 0.000100;        // Base learning rate for Gradient.
+  FloorLearningRate:    Double = 0.000005;       // Floor learning rate for Gradient.
+  OverrideLearningRate: Double = -1.00000;        // Override learning rate for Gradient.
+  RollOff:              Double = 0.999900;        // Reduction in learning rate.
+  WeightDecay:          Double = 0.000100;        // Decay (multiplicative) for learning rate.
   DecayScale:           Double;                  // 1.0 - LearningRate * WeightDecay.
   LearningRate:         Double;                  // Derived learningRate for Gradient.
   GlobalStep:           Int64;                   // Increments once per window.
@@ -267,10 +310,10 @@ var
   ClipLimit:            Single = 0.40000;        // Clips gradients.
   CompletedEpochs:      Integer;                 // Number of epochs completed, for saving model.
   // Dropout probabilities and seed.
-  ADropOut: Single = 0.05;                       // Probability of attention dropout. Set to 0.0 for no dropout.
-  MLPDropOut: Single = 0.05;                     // Probability of MLP dropout.       Even if Training is True.
-  RDropout: Single = 0.05;                       // Probability of residual dropout.
-  GlobalSeed: UInt64 = 123456789;                // Global seed.
+  ADropOut:             Single = 0.05;           // Probability of attention dropout. Set to 0.0 for no dropout.
+  MLPDropOut:           Single = 0.05;           // Probability of MLP dropout.       Even if Training is True.
+  RDropout:             Single = 0.05;           // Probability of residual dropout.
+  GlobalSeed:           UInt64 = 123456789;      // Global seed.
   Stride:               Integer = 128;           // Stride across sequence lengths.
   StartStride:          Integer = 17;            // Coprime with Stride. Also use 43. Ty, Leonhard.
   // Staging and epoch vars.
@@ -279,17 +322,23 @@ var
   DisplayEpoch:         Boolean = True;          // Display progress by epoch in train and transform.
   Stage:                Byte;                    // Indentation for stage;
   // Saving vars.
-  WorkRoot:   string = '';                       // Work folder name set by user or default.
-  CorpusDir:  string = '';                       // Folder for corpus files.
-  SymbolDir:  string = '';                       // Folder for symbol files.
-  MergeDir:   string = '';                       // Folder for merge files.
-  TokenDir:   string = '';                       // Folder for token files.
-  ModelDir:   string = '';                       // Folder for model files.
-  LogDir:     string = '';                       // Folder for log files.
-  RunDir:     string = '';                       // Folder for run files (not used).
-  ListDir:    string = '';                       // Folder for list files (not used).
-  ScratchDir: string = '';                       // Folder for scratch files (not used).
-  SymbolMagic: array[0..3] of Char = ('S', 'Y', 'M', 'T'); // Global magic, for saving symbol table.
+  WorkRoot:             string = '';             // Work folder name set by user or default.
+  CorpusDir:            string = '';             // Folder for corpus files.
+  SymbolDir:            string = '';             // Folder for symbol files.
+  MergeDir:             string = '';             // Folder for merge files.
+  TokenDir:             string = '';             // Folder for token files.
+  ModelDir:             string = '';             // Folder for model files.
+  LogDir:               string = '';             // Folder for log files.
+  RunDir:               string = '';             // Folder for run files (not used).
+  ListDir:              string = '';             // Folder for list files (not used).
+  ScratchDir:           string = '';             // Folder for scratch files (not used).
+  SymbolMagic:          array[0..3] of Char = ('S', 'Y', 'M', 'T');  // Global magic, for saving symbol table.
+  // Adam Hyperparameters.
+  AdamBeta1:            Single = 0.90000;
+  AdamBeta2:            Single = 0.99900;
+  AdamEpsilon:          Single = 1.0e-8;
+  AdamWStep:            Int64 = 0;
+  AdamWStateLoaded:     Boolean = False;
   // Utility vars.
   Mt0, Mt1, t0, t1, StopTime: TDateTime;         // For timing.
   FromSymbolTable: Boolean = False;              // Operating from input Symbol Table rather than from tokenization.

@@ -94,7 +94,7 @@ begin
   if KeyPressed then
     Result := ReadKey
   else
-    Result := #0;   { means: no key }
+    Result := #0;  // No key.
 end;
 
 // Compute trainable parameters.
@@ -122,16 +122,16 @@ begin
   ComputeTrainableParameters;
   AllBlockParams := Int64(nBlock) * BlockParams;
 
-  Writeln('--- Trainable Parameter Calculation ---');
-  Writeln('nVocab        = ', nVocab);
+  Writeln('--- Summary Trainable Parameter Calculation ---');
+  Writeln('nVocab        = ', Global.nVocab);
   Writeln('ModelDim      = ', ModelDim);
   Writeln('ModelDimProj  = ', ModelDimProj);
   Writeln('nBlock        = ', nBlock);
 
+  Writeln('--- Detailed Trainable Parameter Calculation ---');
   Writeln('Embeddings:');
   Writeln('  nVocab * ModelDim');
-  Writeln('  ', nVocab, ' * ', ModelDim, ' = ', EmbeddingParams);
-  Writeln;
+  Writeln('  ', Global.nVocab, ' * ', ModelDim, ' = ', EmbeddingParams);
 
   Writeln('Attention parameters per block:');
   Writeln('  4 * ModelDim * ModelDim');
@@ -182,9 +182,9 @@ end;
 procedure ReportPath(const PathLabel, PathValue: string);
 begin
   if Trim(PathValue) = '' then
-    Writeln('  ', PathLabel, ': (none)')
+    Writeln(PathLabel, ': (none)')
   else
-    Writeln('  ', PathLabel, ': ', PathValue);
+    Writeln(PathLabel, ': ', PathValue);
 end;
 
 // Write information on state of program.
@@ -206,7 +206,7 @@ begin
   Writeln('Blocks (nBlock): ', nBlock);
   Writeln('Epochs (MaxEpochs): ', MaxEpochs);
   Writeln('Maximum Vocabulary (MaxVocab): ', DimVocab);
-  Writeln('Number of Vocabulary (nVocab): ', nVocab);
+  Writeln('Number of Vocabulary (nVocab): ', Global.nVocab);
   Writeln('--- Model Specs ---');
   Case LearningStyle of
     SlowLearning:

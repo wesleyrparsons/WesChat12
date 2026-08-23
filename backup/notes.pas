@@ -3,30 +3,30 @@ unit Notes;
 {$mode ObjFPC}{$H+}{$I proprietary.txt}
 
 { WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wesparsons.com.}
+{        Input Train        Input Query        Output
+ Raw                        QueryString
+ Bytes   Corpus             QueryCorpus
+ Token   TokenizedCorpus    QueryTokenized     QueryOutput
+ Folder layout: WorkRoot \corpus \lists \logs \merges \models \scratch \symbols \tokens }
 
-1.  Systematize nTC.
+Good models.
+Model gibbon816, at about 10mb. Goog as of 818.
+Model ts20mb818, down to 2.316 at LR= .000005 on 8-19-26. Using slow AdamW LR schedule. Almost all betters. Stopped, then restarted at 7 pm on 8/19.
+On restart, LR started much higher (0.0001) than where it ended (0.0000015). Fixed, so now override continues, but adaptivenest dopes not continue into
+next start. Ended with Loss = 1.876 om 8/21. Eventually save adaptive LR value to checkpoint. This is WesTokenize.
+Model ts20mb822g. Stared with Loss=2.98. Adaptive LR at 0.0001. Loss going down fast over first 4 epochs to 2.037. This is a ChatGPT2 tokenization.
+Would the LR start so low with WesTokenize and 50K symbols?
+
+1. For training, add Extrafield1 and ExtraField2, etc. in CheckPoint. Also add saved AdaptiveLR.
+
+2.  Systematize nTC.
 nRawTokenizedCorpus := Length(TokenizedCorpus);
 PadToSeqMultiple(TokenizedCorpus, SeqLen);
 nTokenizedCorpus := Length(TokenizedCorpus);
 
-2.  Flags for params on device.
-Good flag names:
-ParamsOnDevice: Boolean = False;
-HostParamsChanged: Boolean = False;
-Simpler for now:
-if not ParamsOnDevice then begin
-  CopyParamsToDevice(WModelParams);
-  ParamsOnDevice := True;
-end;
-After training updates GPU params, keep:
-ParamsOnDevice := True;
-After loading model:
-ParamsOnDevice := False;
 
 3. Replace nSymbols with nVocab.
-   UsenTokenizedCorpus instead of Length(TC)
-
-4. Fix GPT2 in infer unit.
+   Use nTokenizedCorpus instead of Length(TC)
 
 5. Notes on file naming.
   Proc          Input                      Output
@@ -42,8 +42,6 @@ ParamsOnDevice := False;
   RunForward    UserInput                  Output
 
 Tokenize
-
-1. Where does nCorpus live?
 
 2. Do not use Float instead of Single. Need to use compiler directive.
 
@@ -81,8 +79,6 @@ SetLength(FinalBeta.Grad, ModelDim);
 Transform/Matrix/Utils.
 
 0. Use CPU/GPU or host/device or cblas/cublas nomenclature?
-
-1. ApplyRope inside each rather than across all model.
 
 2. Many models reuse the embedding matrix for output projection.
 This is called weight tying. WVocab not needed. I am doing it.

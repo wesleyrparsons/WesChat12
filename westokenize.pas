@@ -206,7 +206,7 @@ begin
     Result := False;
 end;
 
-// Tokenize Corpus from SymbolTable loaded by program. ``
+// Tokenize Corpus from SymbolTable loaded by program.
 procedure TokenizeFromSymbolTable(var TokenizedCorpus: TIVector; const Corpus: TBVector);
 var
   i, BestSym, BestLen: Integer;
@@ -218,11 +218,13 @@ begin
   EnsureWesTrie;
 
   while i < Length(Corpus) do begin
-    // Tiny Stories separator byte becomes EOS.
-    if Corpus[i] = 254 then begin
+
+    // Tiny Stories UTF-8 separator "■" becomes EOS.
+    if (i + 2 < Length(Corpus)) and (Corpus[i] = $E2) and
+       (Corpus[i + 1] = $96) and (Corpus[i + 2] = $A0) then begin
       SetLength(TokenizedCorpus, Length(TokenizedCorpus) + 1);
       TokenizedCorpus[High(TokenizedCorpus)] := EOS;
-      Inc(i);
+      Inc(i, 3);
       Continue;
     end;
 
@@ -238,19 +240,15 @@ begin
     end;
   end;
 
-  // Add an EOS to the end of TC.
-  SetLength(TokenizedCorpus, Length(TokenizedCorpus) + 1);
-  TokenizedCorpus[High(TokenizedCorpus)] := EOS;
-
-  if TokenizedCorpus[High(TokenizedCorpus)] <> EOS then begin
+  // Ensure corpus ends with EOS.
+  if (Length(TokenizedCorpus) = 0) or
+     (TokenizedCorpus[High(TokenizedCorpus)] <> EOS) then begin
     SetLength(TokenizedCorpus, Length(TokenizedCorpus) + 1);
     TokenizedCorpus[High(TokenizedCorpus)] := EOS;
   end;
 
-  // Set nTC.
   nTokenizedCorpus := Length(TokenizedCorpus);
 
-  // Free the trie memory.
   FreeTrie(TrieHead);
 
   if VerboseTokenize then begin
@@ -597,14 +595,21 @@ begin
 end;
 
 // Detokenize tokenized corpus to text.
+// Detokenize tokenized corpus to text.
 procedure DetokenizeToDisplay(const TokenizedCorpus: TIVector; const Part: TPart = B);
 var
   i, iB, iE, Cutoff: Integer;
 begin
-  if Length(TokenizedCorpus) < 499 then
+  if Length(TokenizedCorpus) = 0 then begin
+    Writeln('Detokenized Corpus is empty.');
+    Exit;
+  end;
+
+  if Length(TokenizedCorpus) < 500 then
     Cutoff := Length(TokenizedCorpus) - 1
   else
     Cutoff := 499;
+
   Case Part of
     B: begin
       iB := 0;
@@ -622,13 +627,15 @@ begin
 
   Write('Detokenized Corpus, ');
   Case Part of
-    B: Write('First 500 bytes: ');
-    E: Write('Last 500 bytes: ');
-    F: Write('All bytes: ');
+    B: Write('First 500 tokens: ');
+    E: Write('Last 500 tokens: ');
+    F: Write('All tokens: ');
   end;
   Writeln;
+
   for i := iB to iE do
     Write(SymbolTable[TokenizedCorpus[i]]);
+
   Writeln;
 end;
 
@@ -709,13 +716,20 @@ begin
 
   i := 0;
   while i < Length(Corpus) do begin
-    // Tiny Stories separator byte becomes EOS.
+    // Legacy single-byte Tiny Stories separator becomes EOS.
     if Corpus[i] = 254 then begin
       SetLength(Tokens, Length(Tokens) + 1);
       Tokens[High(Tokens)] := EOS;
       Inc(i);
       Continue;
     end;
+    // Tiny Stories UTF-8 separator "■" becomes EOS.
+    if (i + 2 < Length(Corpus)) and (Corpus[i] = $E2) and (Corpus[i + 1] = $96) and (Corpus[i + 2] = $A0) then begin
+      SetLength(Tokens, Length(Tokens) + 1);
+      Tokens[High(Tokens)] := EOS;
+      Inc(i, 3);
+      Continue;
+   end;
 
     if MatchLongest(TrieHead, Corpus, i, BestSym, BestLen) then begin
       SetLength(Tokens, Length(Tokens) + 1);

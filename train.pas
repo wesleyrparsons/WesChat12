@@ -31,13 +31,22 @@ const
 type
   TRowLossVector = array[0..SeqLen - 1] of Single;    // For computing CELoss on cuda.
 var
+  // Best model to save.
   LastBestSaveEpoch: Integer;     // Saving models.
   AutoSaveEpoch: Integer;         // At this epoch, start saving new minimum loss models.
   BestSavedLoss: Double;
   MinSaveGap: Integer;
   MinSaveDelta: Double;
+  // CE Loss.
   RowLoss: TRowLossVector;
   Beta1Power, Beta2Power: Single;
+  // Adaptive LR vars.
+  // AdaptiveLRState: TAdaptiveLRState;
+  // RecommendedLR: Double;
+  // AdaptiveLRReason: string;
+  // Timing of epoch.
+  EpochTime: TDateTime = 0;
+  MeanElapsedEpochTime: Single;
 
 // Compute the CELoss with kernel routine.
 function ComputeCELossGPU(dProbs: PSingle; dTargetTokens: PInteger; dRowLoss: PSingle; var RowLoss: TRowLossVector): Double;
@@ -156,6 +165,7 @@ begin
   end;
 end;
 
+// Helper routine for shuffle.
 procedure Swap(var A, B: Integer);
 var
   C: Integer;
@@ -165,6 +175,7 @@ begin
   B := C;
 end;
 
+// Shuffle staing points in TC.
 procedure ShuffleStarts(var Starts: TIVector);
 var
   i, j: Integer;
@@ -175,6 +186,19 @@ begin
     j := Random(i + 1);   // 0..i
     Swap(Starts[i], Starts[j]);
   end;
+end;
+
+// Initialize training settings for a new model.
+procedure InitializeNewTrainingSettings;
+begin
+  GlobalStep := 0;
+  AdamWStep := 0;
+  CompletedEpochs := 0;
+  GlobalSeed := 123456789;
+
+  LearningStyle := SlowLearning;
+  LearningRate := 0.000100;
+  OverrideLearningRate := -1.0;
 end;
 
 // Run the training.
@@ -189,6 +213,9 @@ var
   Starts: TIVector;
   NeedParamCopy, WasNewModel: Boolean;
   AdamParamRMS, AdamUpdateRMS, AdamUpdateRatio, AdamMRMS, AdamSqrtVRMS: Double;
+  CompactStats: TCompactTensorStats;
+  AdaptiveLRState: TAdaptiveLRState;
+  AdaptiveLRReason: string = '';
 
   function TrainReadIfKeyPressed: Boolean;
   var
@@ -255,13 +282,9 @@ var
 
         if SaveModel(ModelFileName, WModelParams, WAdamWState) then begin
           ModelPresent := True;
-          Write('Saving model File = ', ModelFileName);
-          Write('; Epoch = ', Epoch);
-          Write('; GlobalStep = ', GlobalStep);
-          Write('; LearningRate = ', LearningRate: 0: 7);
-          Write('; WeightDecay = ', WeightDecay: 0: 7);
-          Write('; Current loss = ', MEL: 0: 7);
-          Writeln('; Perplexity = ', Exp(MEL): 0: 7, '.');
+          Writeln('Saving model. File = ', ModelFileName);
+          Write('--Epoch = ', Epoch, '; GlobalStep = ', GlobalStep, '; LearningRate = ', LearningRate: 0: 7, '; WeightDecay = ', WeightDecay: 0: 7);
+          Writeln('; Current loss = ', MEL: 0: 7, '; Perplexity = ', Exp(MEL): 0: 7, '.');
         end
         else
           Writeln('File not saved. Training...');
@@ -301,18 +324,18 @@ var
 
 begin
   // For saving models.
-  LastBestSaveEpoch := -1000000000;
-  AutoSaveEpoch := 50;
-  BestSavedLoss := MaxDouble;
-  MinSaveGap := 10;
-  MinSaveDelta := 0.01;      // Adjust for saving best model.
+  LastBestSaveEpoch := -1000000000;    // Sentinel for no best model saved.
+  AutoSaveEpoch := 25;                 // Start auto save of bext model at epoch 25.
+  BestSavedLoss := MaxDouble;          // The prior best saved loss.
+  MinSaveGap := 5;                     // Wait this many epochs to save a best model again.
+  MinSaveDelta := 0.00025;             // Adjust for saving best model.
 
   // Getting working name right.
   if Trim(WorkingName) = '' then begin
     Writeln('WorkingName is blank. Using "weschat".');
     WorkingName := 'weschat';
   end;
-  Writeln('Automatic best model file: ', ModelDir + WorkingName + '_best.model');
+  Writeln('Automatic best model file: ', BestModelFileName);
 
   // For each epoch's loss.
   MEL := 0;
@@ -323,13 +346,10 @@ begin
   StopTraining := False;
   Training := True;
   WasNewModel := NewModel;
+  InitializeAdaptiveLRState(AdaptiveLRState);
 
-  if WasNewModel then begin
-    GlobalStep := 0;
-    AdamWStep := 0;
-    CompletedEpochs := 0;
-    GlobalSeed := 123456789;
-  end;
+  if WasNewModel then
+    InitializeNewTrainingSettings;
 
   // Initialize rolling improvement variables.
   RecentImprovementIndex := 0;
@@ -391,6 +411,7 @@ begin
     // Initialize epoch/sequence loop.
     Start := 0;
     FirstEpoch := CompletedEpochs;
+    // EpochTime := Now;
     Writeln('Training started.');
     Writeln;
     Write(DateTimeToStr(Now), '  I = get program Information. L = set Learning rate. N = go to iNference. P = Pause. ');
@@ -529,36 +550,45 @@ begin
           VTPDisplayX('Display Probs after softmax.', Probs, B);
         end;
 
-        // Use schedule to calculate learning rate. Remember Training may be False (affects dropouts).
-        Case LearningStyle of
-          // Flat AdamW schedule.
-          FlatLearning: LearningRate := 0.0003;
-          // Slow AdamW schedule.
-          SlowLearning:
-            case Epoch of
-              0..2:       LearningRate := 0.00010;
-              3..10:      LearningRate := 0.000075;
-              11..30:     LearningRate := 0.000050;
-              31..100:    LearningRate := 0.000025;
-              101..1000:  LearningRate := 0.000010;
-              else        LearningRate := 0.000005;
-            end;
-          // Fast AdamW schedule.
-          FastLearning:
-            case Epoch of
-              0..2:       LearningRate := 0.00030;
-              3..10:      LearningRate := 0.00020;
-              11..30:     LearningRate := 0.00010;
-              31..100:    LearningRate := 0.000050;
-              101..400:   LearningRate := 0.000025;
-              401..800:   LearningRate := 0.000010;
-              else        LearningRate := 0.000005;
-            end;
-        end;
-
-        // User can set override learning rate.
+        // Set learning rate.
+        // Manual override has highest priority.
         if OverrideLearningRate <> -1.0 then
-          LearningRate := OverrideLearningRate;
+          LearningRate := OverrideLearningRate
+
+        // Adaptive learning owns LearningRate once enabled.
+        else if not AdaptiveLearning then begin
+          // Use schedule to calculate learning rate.
+          Case LearningStyle of
+
+            // Flat AdamW schedule.
+            FlatLearning:
+              LearningRate := 0.0003;
+
+            // Slow AdamW schedule.
+            SlowLearning:
+              case Epoch of
+                0..2:       LearningRate := 0.000100;
+                3..7:       LearningRate := 0.000075;
+                8..15:      LearningRate := 0.000050;
+                16..30:     LearningRate := 0.000025;
+                31..60:     LearningRate := 0.000015;
+                61..100:    LearningRate := 0.000010;
+                else        LearningRate := 0.000005;
+              end;
+
+            // Fast AdamW schedule.
+            FastLearning:
+              case Epoch of
+                0..2:       LearningRate := 0.00030;
+                3..10:      LearningRate := 0.00020;
+                11..30:     LearningRate := 0.00010;
+                31..100:    LearningRate := 0.000050;
+                101..400:   LearningRate := 0.000025;
+                401..800:   LearningRate := 0.000010;
+                else        LearningRate := 0.000005;
+              end;
+          end;
+        end;
 
         // Do AdamW optimization.
         Beta1Power := Single(Power(AdamBeta1, AdamWStep + 1));
@@ -566,13 +596,11 @@ begin
 
         UpdateEmbeddingGradient(WModelParams, WModelState);
 
-        // Build the complete embedding gradient.
-        // This will replace the updating portion of your present UpdateEmbeddings.         STOP.
-        // UpdateEmbeddingGradient(WModelParams, WModelState);
-
+        // Update transformer block parameters with AdamW.
         for k := 0 to nBlock - 1 do
           AdamWOptimizeBlock(WModelParams, WAdamWState, k, Beta1Power, Beta2Power);
 
+        // Update tied embeddings.
         AdamWOptimizeEmbeddings(WModelParams, WAdamWState, Beta1Power, Beta2Power);
         Inc(AdamWStep);
 
@@ -602,7 +630,6 @@ begin
         Writeln('Epoch ', Epoch, ' contained no training windows.');
         Continue;
       end;
-
       MEL := EpochLoss / WindowCount;
 
       // Difference from previous epoch. Positive DiffLoss means improvement.
@@ -646,11 +673,11 @@ begin
 
             // Display saving of first and subsequent best models.
             if LastBestSaveEpoch < 0 then   // First time.
-              Write('Saving first best model in epoch ', Epoch)
+              Write('--Saving first best model in epoch ', Epoch)
             else                            // Subsequent times.
-              Write('Saving new best model. Previous saved best = ', BestSavedLoss: 9: 7, ' in epoch ', LastBestSaveEpoch, '; new best = ', MEL: 9: 7, ' in epoch ', Epoch);
+              Write('--Saving new best model. Previous saved best = ', BestSavedLoss: 9: 7, ' in epoch ', LastBestSaveEpoch, '; new best = ', MEL: 9: 7, ' in epoch ', Epoch);
             // For saving all best models.
-            if SaveModel(ModelDir + WorkingName + '_best.model', WModelParams, WAdamWState) then begin
+            if SaveModel(BestModelFileName, WModelParams, WAdamWState) then begin
               LastBestSaveEpoch := Epoch;
               BestSavedLoss := MEL;
               Writeln('. Best model saved.');
@@ -660,70 +687,94 @@ begin
         end;
       end;
 
-      if MinLossEpoch = Epoch then
+      // Display rolling improvement.
+      if DiffLoss > 0 then        // Loss gets better.
         Write('^^')
+      else if DiffLoss < 0 then
+        Write('vv')               // Loss gets worse.
       else
-        Write('--');
-      Write('Epoch ', Epoch, ' ended. Steps = ', GlobalStep - WindowCount + 1, '..', GlobalStep, '.');
-      Write(' LR = ', LearningRate:7 : 5, '. Mean loss: Start = ', StartLoss: 8: 6, '; Min = ',
-        MinLoss: 8: 6, ' in epoch ', MinLossEpoch, '; Current = ', MEL: 8: 6, '; Perplexity = ', exp(MEL): 8: 6);,
+        Write('--');              // Loss does not change.
+
+      Write('Epoch ', Epoch, ' ended. Steps = ', GlobalStep - WindowCount + 1, '..', GlobalStep,
+        '. LR = ', LearningRate: 9: 7, '. Mean loss: Start = ', StartLoss: 8: 6, '; Min = ',
+        MinLoss: 8: 6, ' in epoch ', MinLossEpoch, '; Current = ', MEL: 8: 6, '; Perplexity = ', exp(MEL): 8: 6);
       if Epoch > 0 then begin
-        write('; Rolling improvement', RecentImprovementCount, ' = ', MeanRunningImprovement: 9: 7);
+        Write('; Rolling improvement', RecentImprovementCount, ' = ', MeanRunningImprovement: 9: 7);
         if DiffLoss > 0 then
-          Write('; Better by ', DiffLoss: 8: 6, '.')
+          Writeln('; Better by ', DiffLoss: 8: 6, '.')
         else
-          Write('; Worse by ', -DiffLoss: 8: 6, '.');
+          Writeln('; Worse by ', -DiffLoss: 8: 6, '.');
       end
       else
         Writeln('.');
 
       // Display loss progress every 10 epochs.
-      if (Epoch > 0) and ((Epoch mod 10) = 0) then begin
+      if (Epoch mod 10) = 0 then begin
+
+        // Timing epochs.
+        if (Epoch = 0) then
+          MeanElapsedEpochTime := 0.0
+        else
+          MeanElapsedEpochTime := (Now - EpochTime) * 86400.0 / 10;
+        EpochTime := Now;
 
         // Parameters.
-        Write('>> Work = ', ExtractFileName(ExcludeTrailingPathDelimiter(WorkingDir)), '; nTC = ', Length(TokenizedCorpus), '; nVocab = ', nVocab, '; DimVocab = ', DimVocab,
-          '; Seqlen = ', SeqLen, '; Stride = ', Stride, '; ModelDim = ', ModelDim, '; nHead = ', nHead, '; nBlock = ', nBlock, '; Proj = ', Proj, '; Shuffling = ', ShuffleWindows,
-          '; DropOut = ', Training);
+        Write('>>Work = ', ExtractFileName(ExcludeTrailingPathDelimiter(WorkingDir)), '; nTC = ', Length(TokenizedCorpus), '; nVocab = ', nVocab,
+          '; DimVocab = ', DimVocab, '; Seqlen = ', SeqLen, '; Stride = ', Stride, '; ModelDim = ', ModelDim, '; nHead = ', nHead, '; nBlock =  ', nBlock,
+          '; Proj = ', Proj, '; Shuffling = ', ShuffleWindows, '; DropOut = ', Training);
         if Training then
           Writeln(' (', ADropOut: 4: 3, ' ', MLPDropOut: 4: 3, ' ', RDropOut: 4: 3, ').')
         else
           Writeln('.');
 
-        if {(Epoch > 0) and} ((Epoch mod 10) = 0) then begin
+        GetAdamWStatistics(WModelParams, WAdamWState, AdamParamRMS, AdamUpdateRMS, AdamUpdateRatio, AdamMRMS, AdamSqrtVRMS);
 
-          GetAdamWStatistics(WModelParams, WAdamWState, AdamParamRMS, AdamUpdateRMS, AdamUpdateRatio, AdamMRMS, AdamSqrtVRMS);
+        Writeln('>>AdamW step = ', AdamWStep, '; Param RMS = ', AdamParamRMS: 0: 8, '; Update RMS = ', AdamUpdateRMS: 0: 10,
+          '; Update ratio = ', AdamUpdateRatio: 0: 8, ' (', 100.0 * AdamUpdateRatio: 0: 5, '%)', '; M RMS = ', AdamMRMS: 0: 8, '; sqrt(V) RMS = ', AdamSqrtVRMS: 0: 8, '.');
 
-          Writeln('>> AdamW step = ', AdamWStep, '; Param RMS = ', AdamParamRMS: 0: 8, '; Update RMS = ', AdamUpdateRMS: 0: 10,
-            '; Update ratio = ', AdamUpdateRatio: 0: 8, ' (', 100.0 * AdamUpdateRatio: 0: 5, '%)', '; M RMS = ', AdamMRMS: 0: 8, '; sqrt(V) RMS = ', AdamSqrtVRMS: 0: 8, '.');
+        // Display learning-rate mode.
+        if OverrideLearningRate <> -1.0 then begin
+          Write('>>Learning rate (override) = ', LearningRate:8:6);
+        end
+        else if AdaptiveLearning then begin
+          Write('>>Learning rate (adaptive) = ', LearningRate:9:7);
+        end
+        else begin
+          Case LearningStyle of
+            FlatLearning:
+              Write('>>Learning rate (flat) = ', LearningRate:9:7, '.');
 
-          if OverrideLearningRate = -1.0 then begin
-            // Display no override learning rate.
-            Case LearningStyle of
-              FlatLearning:
-                // Display flat learning rate.
-                Write('>> Learning rate (flat) = ', LearningRate: 9: 7, '.');
-              SlowLearning:
-                // Display slow AdamW learning rate schedule.
-                Write('>> Learning rate (slow) = ', LearningRate: 9: 7,
-                  ' with 0..2: 0.00010; 3..10: 0.000075; 11..30: 0.000050; 31..100: 0.000025; 101..1000: 0.000010; else 0.000005');
-              FastLearning:
-                // Display fast AdamW learning rate schedule.
-                Write('>> Learning rate (fast) = ', LearningRate: 9: 7,
-                  ' with 0..2: 0.00030; 3..10: 0.00020; 11..30: 0.00010; 31..100: 0.000050; 101..400: 0.000025; 401..800: 0.000010; else 0.000005');
-              RolledOffLearning:
-                // Learning Rolled off learning rate.
-                Write('>> Learning rate (rolled of) = ', LearningRate: 9: 7,
-                  ' Floor LR = ', FloorLearningRate: 9: 7, ' Base LR = ', BaseLearningRate: 9: 7, ' LR rolloff = ', RollOff: 9: 7);
-            end;
-          end
-          else
-            // Display override learning rate.
-            Write('>> Learning rate (override) = ', LearningRate: 9: 7);
+            SlowLearning:
+              Write('>>Learning rate (slow) = ', LearningRate:9:7, ' with 0..2: 0.000100; 3..7: 0.000075; 8..15: 0.000050; ',
+                '16..30: 0.000025; 31..60: 0.000015; 61..100: 0.000010; else 0.000005');
 
-          // Display training information.
-          Writeln('; Window # = ', WindowCount, '; Temperature = ', TTemperature: 8: 6, '; Weight decay = ', WeightDecay: 8: 6, '; Clip limit = ', ClipLimit: 8: 6, '.');
-        end;    // End epoch display loop.
-      end;      // End epoch loss loop.
+            FastLearning:
+              Write('>>Learning rate (fast) = ', LearningRate:9:7, ' with 0..2: 0.00030; 3..10: 0.00020; 11..30: 0.00010; ',
+                '31..100: 0.000050; 101..400: 0.000025; 401..800: 0.000010; else 0.000005');
+
+            RolledOffLearning:
+              Write('>>Learning rate (rolloff) = ', LearningRate:9:7,
+                ' Floor LR = ', FloorLearningRate:9:7, ' Base LR = ', BaseLearningRate:9:7, ' LR rolloff = ', RollOff: 9: 7);
+          end;
+        end;
+
+        // Display training and LR information.
+        Writeln('; Window # = ', WindowCount, '; Mean epoch time = ', MeanElapsedEpochTime: 0: 2, ' seconds; Loss per hour = ', MeanRunningImprovement / MeanElapsedEpochTime * 3600.0: 8: 6,
+          '; Weight decay = ', WeightDecay: 8: 6, '; Clip limit = ', ClipLimit: 8: 6, '.');
+        Writeln('>>Adaptive LR = ', LearningRate: 9: 7, '. ', AdaptiveLRReason);
+
+        // Report full tensor stats.
+        if VerboseTransform then
+          ReportAdamWTensorStatistics(WModelParams, WAdamWState);
+        // Report compact tensor stats.
+        ReportCompactTensorStatistics(WModelParams, Epoch, CompactStats);
+
+        // Compute and display new adaptive LR.
+        with CompactStats do
+          if AdaptiveLearning and (OverrideLearningRate = -1.0) then
+            ApplyAdaptiveLR(AdaptiveLRState, LearningRate, FloorLearningRate, MEL, MinLoss, MeanRunningImprovement,
+            AdamParamRMS, AdamUpdateRatio, AdamMRMS, AdamSqrtVRMS, MaxGammaRMS, Epoch, AdaptiveLRReason);
+      end;      // End epoch loss display.
     end         // End epoch loop.
   except
     on E: Exception do begin

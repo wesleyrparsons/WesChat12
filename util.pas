@@ -26,6 +26,32 @@ const
   InvFreqSize: Integer = (HeadDim div 2) * SizeOf(Single);
   ProbsSize: Integer = SeqLen * DimVocab * SizeOf(Single);
 
+type
+// Adaptive LR.
+TAdaptiveLRState = record
+  Initialized: Boolean;
+  PrevLoss: Double;
+  PrevParamRMS: Double;
+  PrevUpdateRatio: Double;
+  PrevMRMS: Double;
+  PrevSqrtVRMS: Double;
+  PrevMaxGammaRMS: Double;
+  ConsecutiveWorse: Integer;
+  ConsecutiveFlat: Integer;
+  LastLRChangeEpoch: Integer;
+end;
+// Compact tensor report.
+TCompactTensorStats = record
+  EmbParamRMS: Double;
+  EmbGradRMS: Double;
+  EmbMaxParam: Double;
+  EmbMaxGrad: Double;
+  EmbClippedPercent: Double;
+  EmbClippedCount: Integer;
+  MaxWeightGradRMS: Double;
+  MaxGammaRMS: Double;
+end;
+
 // Cublas and Cuda procedures.
 procedure InitializeCublas;
 procedure CheckCudaError(const Where: string);
@@ -74,6 +100,15 @@ procedure AdamWOptimizeEmbeddings(var WModelParams: TWModelParams; var WAdamWSta
 procedure UpdateEmbeddingGradient(var WModelParams: TWModelParams; var WModelState: TWModelState);
 procedure GetAdamWStatistics(var WModelParams: TWModelParams; var WAdamWState: TWAdamWState;
   out ParamRMS, UpdateRMS, UpdateRatio, MRMS, SqrtVRMS: Double);
+procedure ReportCompactTensorStatistics(var WModelParams: TWModelParams; const Epoch: Integer; out Stats: TCompactTensorStats);
+procedure ReportAdamWTensorStatistics(var WModelParams: TWModelParams; var WAdamWState: TWAdamWState);
+procedure GetClippedGradientPercent(dGrad: PSingle; const Count: Integer;
+  const ClipLimit: Single; out ClippedCount: Integer; out ClippedPercent: Double);
+
+// Adaptive LR procedures.
+procedure InitializeAdaptiveLRState(var LRState: TAdaptiveLRState);
+procedure ApplyAdaptiveLR(var LRState: TAdaptiveLRState; var LearningRate: Double;  const FloorLR, CurrentLoss, BestLoss, RollingImprovement,
+  ParamRMS, UpdateRatio, MRMS, SqrtVRMS, MaxGammaRMS: Double; const Epoch: Integer; out Reason: string);
 
 // DLL transform routines.
 procedure LaunchClipVector(X: PSingle; N: Integer; Limit: Single); cdecl;
@@ -119,6 +154,9 @@ procedure LaunchAdamWUpdate(Param, Grad, M, V: PSingle; Count: Integer; Learning
   cdecl; external 'WesChatKernel12.dll';
 
 implementation
+
+type
+  TStatBuffer = array of Single;
 
 { DLL procedures }
 // Check existence of any DLL.
@@ -662,114 +700,192 @@ begin
   CudaAllocated := True;
 end;
 
-// De-allocate cublas memory.
+// De-allocate CUDA memory.
 procedure MDeallocateCublas(var WModelParams: TWModelParams; var WModelState: TWModelState; var WAdamWState: TWAdamWState);
 var
   h, k: Integer;
 begin
   CudaAllocated := False;
 
+  // Input and target tokens.
   cudaFree(dInputTokens);  dInputTokens  := nil;
   cudaFree(dTargetTokens); dTargetTokens := nil;
 
+  // Global/shared model parameters.
   with WModelParams do begin
     cudaFree(Embeddings.dValue); Embeddings.dValue := nil;
     cudaFree(Embeddings.dGrad);  Embeddings.dGrad  := nil;
   end;
 
+  // Global/shared AdamW state.
+  with WAdamWState.Embeddings do begin
+    cudaFree(dM); dM := nil;
+    cudaFree(dV); dV := nil;
+  end;
+
+  // Global/shared model state.
   with WModelState do begin
     cudaFree(dInvFreq);     dInvFreq     := nil;
     cudaFree(dProbs);       dProbs       := nil;
+
     if dRowLoss <> nil then begin
       cudaFree(dRowLoss);
       dRowLoss := nil;
     end;
+
     cudaFree(dTopGradient); dTopGradient := nil;
   end;
 
+  // Per-block parameters, AdamW state, and transformer state.
   for k := 0 to nBlock - 1 do begin
+
+    // Trainable model parameters.
     with WModelParams.ParamBlock[k] do begin
       cudaFree(Wq.dValue);     Wq.dValue     := nil;
       cudaFree(Wq.dGrad);      Wq.dGrad      := nil;
+
       cudaFree(Wk.dValue);     Wk.dValue     := nil;
       cudaFree(Wk.dGrad);      Wk.dGrad      := nil;
+
       cudaFree(Wv.dValue);     Wv.dValue     := nil;
       cudaFree(Wv.dGrad);      Wv.dGrad      := nil;
+
       cudaFree(W0.dValue);     W0.dValue     := nil;
       cudaFree(W0.dGrad);      W0.dGrad      := nil;
+
       cudaFree(W1.dValue);     W1.dValue     := nil;
       cudaFree(W1.dGrad);      W1.dGrad      := nil;
+
       cudaFree(W2.dValue);     W2.dValue     := nil;
       cudaFree(W2.dGrad);      W2.dGrad      := nil;
+
       cudaFree(b1.dValue);     b1.dValue     := nil;
       cudaFree(b1.dGrad);      b1.dGrad      := nil;
+
       cudaFree(b2.dValue);     b2.dValue     := nil;
       cudaFree(b2.dGrad);      b2.dGrad      := nil;
+
       cudaFree(Gamma1.dValue); Gamma1.dValue := nil;
       cudaFree(Gamma1.dGrad);  Gamma1.dGrad  := nil;
+
       cudaFree(Beta1.dValue);  Beta1.dValue  := nil;
       cudaFree(Beta1.dGrad);   Beta1.dGrad   := nil;
+
       cudaFree(Gamma2.dValue); Gamma2.dValue := nil;
       cudaFree(Gamma2.dGrad);  Gamma2.dGrad  := nil;
+
       cudaFree(Beta2.dValue);  Beta2.dValue  := nil;
       cudaFree(Beta2.dGrad);   Beta2.dGrad   := nil;
     end;
 
+    // Persistent AdamW first and second moments.
+    with WAdamWState.ParamBlock[k] do begin
+      cudaFree(Wq.dM);     Wq.dM     := nil;
+      cudaFree(Wq.dV);     Wq.dV     := nil;
+
+      cudaFree(Wk.dM);     Wk.dM     := nil;
+      cudaFree(Wk.dV);     Wk.dV     := nil;
+
+      cudaFree(Wv.dM);     Wv.dM     := nil;
+      cudaFree(Wv.dV);     Wv.dV     := nil;
+
+      cudaFree(W0.dM);     W0.dM     := nil;
+      cudaFree(W0.dV);     W0.dV     := nil;
+
+      cudaFree(W1.dM);     W1.dM     := nil;
+      cudaFree(W1.dV);     W1.dV     := nil;
+
+      cudaFree(W2.dM);     W2.dM     := nil;
+      cudaFree(W2.dV);     W2.dV     := nil;
+
+      cudaFree(b1.dM);     b1.dM     := nil;
+      cudaFree(b1.dV);     b1.dV     := nil;
+
+      cudaFree(b2.dM);     b2.dM     := nil;
+      cudaFree(b2.dV);     b2.dV     := nil;
+
+      cudaFree(Gamma1.dM); Gamma1.dM := nil;
+      cudaFree(Gamma1.dV); Gamma1.dV := nil;
+
+      cudaFree(Beta1.dM);  Beta1.dM  := nil;
+      cudaFree(Beta1.dV);  Beta1.dV  := nil;
+
+      cudaFree(Gamma2.dM); Gamma2.dM := nil;
+      cudaFree(Gamma2.dV); Gamma2.dV := nil;
+
+      cudaFree(Beta2.dM);  Beta2.dM  := nil;
+      cudaFree(Beta2.dV);  Beta2.dV  := nil;
+    end;
+
+    // Non-trainable transformer state.
     with WModelState.StateBlock[k] do begin
       cudaFree(X.dValue);   X.dValue   := nil;
       cudaFree(X.dGrad);    X.dGrad    := nil;
+
       cudaFree(X1.dValue);  X1.dValue  := nil;
       cudaFree(X1.dGrad);   X1.dGrad   := nil;
+
       cudaFree(X2.dValue);  X2.dValue  := nil;
       cudaFree(X2.dGrad);   X2.dGrad   := nil;
+
       cudaFree(X3.dValue);  X3.dValue  := nil;
       cudaFree(X3.dGrad);   X3.dGrad   := nil;
+
       cudaFree(X4.dValue);  X4.dValue  := nil;
       cudaFree(X4.dGrad);   X4.dGrad   := nil;
+
       cudaFree(X5.dValue);  X5.dValue  := nil;
       cudaFree(X5.dGrad);   X5.dGrad   := nil;
+
       cudaFree(X6.dValue);  X6.dValue  := nil;
       cudaFree(X6.dGrad);   X6.dGrad   := nil;
+
       cudaFree(X7.dValue);  X7.dValue  := nil;
       cudaFree(X7.dGrad);   X7.dGrad   := nil;
 
       cudaFree(X1q.dValue); X1q.dValue := nil;
       cudaFree(X1q.dGrad);  X1q.dGrad  := nil;
+
       cudaFree(X1k.dValue); X1k.dValue := nil;
       cudaFree(X1k.dGrad);  X1k.dGrad  := nil;
+
       cudaFree(X1v.dValue); X1v.dValue := nil;
       cudaFree(X1v.dGrad);  X1v.dGrad  := nil;
 
       cudaFree(Q.dValue);   Q.dValue   := nil;
       cudaFree(Q.dGrad);    Q.dGrad    := nil;
+
       cudaFree(K.dValue);   K.dValue   := nil;
       cudaFree(K.dGrad);    K.dGrad    := nil;
+
       cudaFree(V.dValue);   V.dValue   := nil;
       cudaFree(V.dGrad);    V.dGrad    := nil;
 
       for h := 0 to nHead - 1 do begin
         cudaFree(ScoresHead1[h].dValue); ScoresHead1[h].dValue := nil;
         cudaFree(ScoresHead1[h].dGrad);  ScoresHead1[h].dGrad  := nil;
+
         cudaFree(ScoresHead2[h].dValue); ScoresHead2[h].dValue := nil;
         cudaFree(ScoresHead2[h].dGrad);  ScoresHead2[h].dGrad  := nil;
       end;
 
       cudaFree(Hidden1.dValue); Hidden1.dValue := nil;
       cudaFree(Hidden1.dGrad);  Hidden1.dGrad  := nil;
+
       cudaFree(Hidden2.dValue); Hidden2.dValue := nil;
       cudaFree(Hidden2.dGrad);  Hidden2.dGrad  := nil;
 
       cudaFree(dLNInvStd1); dLNInvStd1 := nil;
       cudaFree(dLNXHat1);   dLNXHat1   := nil;
+
       cudaFree(dLNInvStd2); dLNInvStd2 := nil;
       cudaFree(dLNXHat2);   dLNXHat2   := nil;
 
-      cudaFree(dX4FromLN2);
-      cudaFree(dXFromLN1);
-      dX4FromLN2 := nil;
-      dXFromLN1  := nil;
+      cudaFree(dX4FromLN2); dX4FromLN2 := nil;
+      cudaFree(dXFromLN1);  dXFromLN1  := nil;
     end;
   end;
+
   ParamsNeedCopyToDevice := True;
 end;
 
@@ -996,7 +1112,7 @@ begin
   // As to the param values -- they are zeroed below.
 
   // Initialize embeddings.
-  for i := 0 to nSymbols - 1 do             // Random normal distribution.
+  for i := 0 to nVocab - 1 do               // Random normal distribution.
     for j := 0 to ModelDim - 1 do           // Mean = 0, SD = 0.02.
       WModelParams.Embeddings.Value[i, j] := RandG(0.0, 0.02); // Only time I use this randomizer.
 
@@ -1128,6 +1244,9 @@ begin
       cudaMemset(ScoresHead1[h].dGrad, 0, ScoresSize);
       cudaMemset(ScoresHead2[h].dGrad, 0, ScoresSize);
     end;
+    // Temporary parameters.
+    cudaMemset(dX4FromLN2, 0, XSize);
+    cudaMemset(dXFromLN1, 0, XSize);
   end;
 
   // Embeddings are shared by all blocks, so clear them once.
@@ -1369,6 +1488,419 @@ begin
     // Clip the complete tied-embedding gradient.
     LaunchClipVector(Embeddings.dGrad, nVocab * ModelDim, ClipLimit);
   end;
+end;
+
+// Report AdamW statistics for one CUDA parameter tensor.
+procedure ReportOneAdamWTensor(const Name: string; dParam, dGrad, dM, dV: PSingle; const Count: Integer);
+var
+  ParamBuf, GradBuf, MBuf, VBuf: TStatBuffer;
+  i: Integer;
+  P, G, MVal, VVal: Double;
+  SumP2, SumG2, SumM2, SumV: Double;
+  ParamRMS, GradRMS, MRMS, SqrtVRMS: Double;
+  MaxParam, MaxGrad: Double;
+begin
+  if Count <= 0 then Exit;
+
+  SetLength(ParamBuf, Count);
+  SetLength(GradBuf, Count);
+  SetLength(MBuf, Count);
+  SetLength(VBuf, Count);
+
+  cudaMemcpy(@ParamBuf[0], dParam, Count * SizeOf(Single), cudaMemcpyDeviceToHost);
+  cudaMemcpy(@GradBuf[0], dGrad, Count * SizeOf(Single), cudaMemcpyDeviceToHost);
+  cudaMemcpy(@MBuf[0], dM, Count * SizeOf(Single), cudaMemcpyDeviceToHost);
+  cudaMemcpy(@VBuf[0], dV, Count * SizeOf(Single), cudaMemcpyDeviceToHost);
+
+  if DebugCudaChecks then
+    CheckCudaError('Report statistics for ' + Name);
+
+  SumP2 := 0.0;
+  SumG2 := 0.0;
+  SumM2 := 0.0;
+  SumV := 0.0;
+  MaxParam := 0.0;
+  MaxGrad := 0.0;
+
+  for i := 0 to Count - 1 do begin
+    P := ParamBuf[i];
+    G := GradBuf[i];
+    MVal := MBuf[i];
+    VVal := VBuf[i];
+
+    SumP2 := SumP2 + P * P;
+    SumG2 := SumG2 + G * G;
+    SumM2 := SumM2 + MVal * MVal;
+
+    if VVal > 0.0 then
+      SumV := SumV + VVal;
+
+    if Abs(P) > MaxParam then MaxParam := Abs(P);
+    if Abs(G) > MaxGrad then MaxGrad := Abs(G);
+  end;
+
+  ParamRMS := Sqrt(SumP2 / Count);
+  GradRMS := Sqrt(SumG2 / Count);
+  MRMS := Sqrt(SumM2 / Count);
+  SqrtVRMS := Sqrt(SumV / Count);
+
+  Writeln(Name:18, '  Param RMS=', ParamRMS:11:7, '  Grad RMS=', GradRMS:11:7, '  M RMS=', MRMS:11:7,
+    '  sqrt(V) RMS=', SqrtVRMS:11:7, '  Max|P|=', MaxParam:11:7, '  Max|G|=', MaxGrad:11:7);
+end;
+
+// Return RMS and maximum absolute value for a CUDA tensor.
+procedure GetTensorStats(dPtr: PSingle; const Count: Integer; out RMS, MaxAbs: Double);
+var
+  Buf: TStatBuffer;
+  i: Integer;
+  V, Sum2: Double;
+begin
+  RMS := 0.0;
+  MaxAbs := 0.0;
+
+  if Count <= 0 then Exit;
+
+  SetLength(Buf, Count);
+  cudaMemcpy(@Buf[0], dPtr, Count * SizeOf(Single), cudaMemcpyDeviceToHost);
+
+  Sum2 := 0.0;
+
+  for i := 0 to Count - 1 do begin
+    V := Buf[i];
+    Sum2 := Sum2 + V * V;
+
+    if Abs(V) > MaxAbs then
+      MaxAbs := Abs(V);
+  end;
+
+  RMS := Sqrt(Sum2 / Count);
+end;
+
+// Compact per-tensor diagnostic report.
+procedure ReportCompactTensorStatistics(var WModelParams: TWModelParams; const Epoch: Integer; out Stats: TCompactTensorStats);
+var
+  k: Integer;
+  EmbPRMS, EmbGRMS, EmbMaxP, EmbMaxG: Double;
+  EmbClippedPercent: Double;
+  EmbClippedCount: Integer;
+  WqG, WqMax: Double;
+  W1G, W1Max: Double;
+  W2G, W2Max: Double;
+  G1P, G1Max: Double;
+  G2P, G2Max: Double;
+begin
+  FillChar(Stats, SizeOf(Stats), 0);
+
+  Writeln;
+  Writeln('Epoch ', Epoch, ' compact tensor statistics.');
+
+  // Embeddings.
+  GetTensorStats(WModelParams.Embeddings.dValue, nVocab * ModelDim, EmbPRMS, EmbMaxP);
+  GetTensorStats(WModelParams.Embeddings.dGrad, nVocab * ModelDim, EmbGRMS, EmbMaxG);
+
+  GetClippedGradientPercent(WModelParams.Embeddings.dGrad, nVocab * ModelDim,
+    ClipLimit, EmbClippedCount, EmbClippedPercent);
+
+  Stats.EmbParamRMS := EmbPRMS;
+  Stats.EmbGradRMS := EmbGRMS;
+  Stats.EmbMaxParam := EmbMaxP;
+  Stats.EmbMaxGrad := EmbMaxG;
+  Stats.EmbClippedCount := EmbClippedCount;
+  Stats.EmbClippedPercent := EmbClippedPercent;
+
+  Writeln('Embeddings: ParamRMS=', EmbPRMS:9:7, ' GradRMS=', EmbGRMS:9:7,
+    ' MaxP=', EmbMaxP:9:7, ' MaxG=', EmbMaxG:9:7,
+    ' Clipped=', EmbClippedCount, ' (', EmbClippedPercent:0:4, '%)');
+
+  // Transformer blocks.
+  for k := 0 to nBlock - 1 do begin
+    with WModelParams.ParamBlock[k] do begin
+      GetTensorStats(Wq.dGrad, ModelDim * ModelDim, WqG, WqMax);
+      GetTensorStats(W1.dGrad, ModelDim * ModelDimProj, W1G, W1Max);
+      GetTensorStats(W2.dGrad, ModelDimProj * ModelDim, W2G, W2Max);
+
+      GetTensorStats(Gamma1.dValue, ModelDim, G1P, G1Max);
+      GetTensorStats(Gamma2.dValue, ModelDim, G2P, G2Max);
+
+      // Largest weight-gradient RMS in the entire transformer.
+      if WqG > Stats.MaxWeightGradRMS then Stats.MaxWeightGradRMS := WqG;
+      if W1G > Stats.MaxWeightGradRMS then Stats.MaxWeightGradRMS := W1G;
+      if W2G > Stats.MaxWeightGradRMS then Stats.MaxWeightGradRMS := W2G;
+
+      // Largest Gamma RMS in the entire transformer.
+      if G1P > Stats.MaxGammaRMS then Stats.MaxGammaRMS := G1P;
+      if G2P > Stats.MaxGammaRMS then Stats.MaxGammaRMS := G2P;
+
+      Writeln('Block ', k, ': WqG=', WqG:9:7, ' W1G=', W1G:9:7,
+        ' W2G=', W2G:9:7, ' G1P=', G1P:9:7, ' G2P=', G2P:9:7);
+    end;
+  end;
+
+  Writeln('Max weight GradRMS=', Stats.MaxWeightGradRMS:9:7,
+    '; Max Gamma RMS=', Stats.MaxGammaRMS:9:7);
+  Writeln;
+end;
+
+// Return percentage of gradient elements at the clipping limit.
+procedure GetClippedGradientPercent(dGrad: PSingle; const Count: Integer;
+  const ClipLimit: Single; out ClippedCount: Integer; out ClippedPercent: Double);
+const
+  Tolerance = 0.000001;
+var
+  Buf: TStatBuffer;
+  i: Integer;
+begin
+  ClippedCount := 0;
+  ClippedPercent := 0.0;
+
+  if Count <= 0 then Exit;
+
+  SetLength(Buf, Count);
+  cudaMemcpy(@Buf[0], dGrad, Count * SizeOf(Single), cudaMemcpyDeviceToHost);
+
+  for i := 0 to Count - 1 do
+    if Abs(Abs(Buf[i]) - ClipLimit) <= Tolerance then
+      Inc(ClippedCount);
+
+  ClippedPercent := 100.0 * ClippedCount / Count;
+end;
+
+// Report AdamW statistics tensor by tensor.
+procedure ReportAdamWTensorStatistics(var WModelParams: TWModelParams; var WAdamWState: TWAdamWState);
+var
+  k: Integer;
+begin
+  Writeln;
+  Writeln('--- AdamW per-tensor statistics ---');
+  Writeln('AdamW step = ', AdamWStep, '; Learning rate = ', LearningRate:0:7);
+
+  // Tied embeddings.
+  ReportOneAdamWTensor('Embeddings', WModelParams.Embeddings.dValue,
+    WModelParams.Embeddings.dGrad, WAdamWState.Embeddings.dM,
+    WAdamWState.Embeddings.dV, nVocab * ModelDim);
+
+  for k := 0 to nBlock - 1 do begin
+    Writeln;
+    Writeln('Block ', k, ':');
+
+    with WModelParams.ParamBlock[k] do begin
+
+      // Attention weights.
+      ReportOneAdamWTensor('Wq', Wq.dValue, Wq.dGrad,
+        WAdamWState.ParamBlock[k].Wq.dM, WAdamWState.ParamBlock[k].Wq.dV,
+        ModelDim * ModelDim);
+
+      ReportOneAdamWTensor('Wk', Wk.dValue, Wk.dGrad,
+        WAdamWState.ParamBlock[k].Wk.dM, WAdamWState.ParamBlock[k].Wk.dV,
+        ModelDim * ModelDim);
+
+      ReportOneAdamWTensor('Wv', Wv.dValue, Wv.dGrad,
+        WAdamWState.ParamBlock[k].Wv.dM, WAdamWState.ParamBlock[k].Wv.dV,
+        ModelDim * ModelDim);
+
+      ReportOneAdamWTensor('W0', W0.dValue, W0.dGrad,
+        WAdamWState.ParamBlock[k].W0.dM, WAdamWState.ParamBlock[k].W0.dV,
+        ModelDim * ModelDim);
+
+      // MLP weights.
+      ReportOneAdamWTensor('W1', W1.dValue, W1.dGrad,
+        WAdamWState.ParamBlock[k].W1.dM, WAdamWState.ParamBlock[k].W1.dV,
+        ModelDim * ModelDimProj);
+
+      ReportOneAdamWTensor('W2', W2.dValue, W2.dGrad,
+        WAdamWState.ParamBlock[k].W2.dM, WAdamWState.ParamBlock[k].W2.dV,
+        ModelDimProj * ModelDim);
+
+      // Biases.
+      ReportOneAdamWTensor('b1', b1.dValue, b1.dGrad,
+        WAdamWState.ParamBlock[k].b1.dM, WAdamWState.ParamBlock[k].b1.dV,
+        ModelDimProj);
+
+      ReportOneAdamWTensor('b2', b2.dValue, b2.dGrad,
+        WAdamWState.ParamBlock[k].b2.dM, WAdamWState.ParamBlock[k].b2.dV,
+        ModelDim);
+
+      // LayerNorm 1.
+      ReportOneAdamWTensor('Gamma1', Gamma1.dValue, Gamma1.dGrad,
+        WAdamWState.ParamBlock[k].Gamma1.dM,
+        WAdamWState.ParamBlock[k].Gamma1.dV, ModelDim);
+
+      ReportOneAdamWTensor('Beta1', Beta1.dValue, Beta1.dGrad,
+        WAdamWState.ParamBlock[k].Beta1.dM,
+        WAdamWState.ParamBlock[k].Beta1.dV, ModelDim);
+
+      // LayerNorm 2.
+      ReportOneAdamWTensor('Gamma2', Gamma2.dValue, Gamma2.dGrad,
+        WAdamWState.ParamBlock[k].Gamma2.dM,
+        WAdamWState.ParamBlock[k].Gamma2.dV, ModelDim);
+
+      ReportOneAdamWTensor('Beta2', Beta2.dValue, Beta2.dGrad,
+        WAdamWState.ParamBlock[k].Beta2.dM,
+        WAdamWState.ParamBlock[k].Beta2.dV, ModelDim);
+    end;
+  end;
+
+  Writeln;
+  Writeln('--- End AdamW per-tensor statistics ---');
+  Writeln;
+end;
+
+procedure InitializeAdaptiveLRState(var LRState: TAdaptiveLRState);
+begin
+  FillChar(LRState, SizeOf(LRState), 0);
+  LRState.Initialized := False;
+  LRState.LastLRChangeEpoch := -1000;
+end;
+
+// Apply adaptive LearningRate.
+procedure ApplyAdaptiveLR(var LRState: TAdaptiveLRState; var LearningRate: Double;  const FloorLR, CurrentLoss, BestLoss, RollingImprovement,
+  ParamRMS, UpdateRatio, MRMS, SqrtVRMS, MaxGammaRMS: Double; const Epoch: Integer; out Reason: string);
+const
+  FlatImprovement = 0.00025;
+  ClearWorsening = -0.00100;
+  SharpWorseningFraction = 0.02;
+
+  UpdateRatioWarning = 1.75;
+  MomentWarning = 1.75;
+  ParamGrowthWarning = 1.10;
+  GammaGrowthWarning = 1.10;
+
+  CooldownEpochs = 5;
+var
+  NewLR: Double;
+  LossChange, LossWorseFraction: Double;
+  UpdateRatioChange, MRMSChange, VRMSChange: Double;
+  ParamChange, GammaChange: Double;
+  SafetyWarnings: Integer;
+  CanChangeLR: Boolean;
+begin
+  Reason := 'Learning rate unchanged.';
+
+  if not LRState.Initialized then begin
+    LRState.PrevLoss := CurrentLoss;
+    LRState.PrevParamRMS := ParamRMS;
+    LRState.PrevUpdateRatio := UpdateRatio;
+    LRState.PrevMRMS := MRMS;
+    LRState.PrevSqrtVRMS := SqrtVRMS;
+    LRState.PrevMaxGammaRMS := MaxGammaRMS;
+    LRState.ConsecutiveWorse := 0;
+    LRState.ConsecutiveFlat := 0;
+    LRState.Initialized := True;
+
+    Reason := 'Initial adaptive-LR observation; learning rate unchanged.';
+    Exit;
+  end;
+
+  LossChange := CurrentLoss - LRState.PrevLoss;
+
+  if BestLoss > 0.0 then
+    LossWorseFraction := (CurrentLoss - BestLoss) / BestLoss
+  else
+    LossWorseFraction := 0.0;
+
+  if LRState.PrevUpdateRatio > 0.0 then
+    UpdateRatioChange := UpdateRatio / LRState.PrevUpdateRatio
+  else
+    UpdateRatioChange := 1.0;
+
+  if LRState.PrevMRMS > 0.0 then
+    MRMSChange := MRMS / LRState.PrevMRMS
+  else
+    MRMSChange := 1.0;
+
+  if LRState.PrevSqrtVRMS > 0.0 then
+    VRMSChange := SqrtVRMS / LRState.PrevSqrtVRMS
+  else
+    VRMSChange := 1.0;
+
+  if LRState.PrevParamRMS > 0.0 then
+    ParamChange := ParamRMS / LRState.PrevParamRMS
+  else
+    ParamChange := 1.0;
+
+  if LRState.PrevMaxGammaRMS > 0.0 then
+    GammaChange := MaxGammaRMS / LRState.PrevMaxGammaRMS
+  else
+    GammaChange := 1.0;
+
+  if LossChange > 0.0 then
+    Inc(LRState.ConsecutiveWorse)
+  else
+    LRState.ConsecutiveWorse := 0;
+
+  if Abs(RollingImprovement) < FlatImprovement then
+    Inc(LRState.ConsecutiveFlat)
+  else
+    LRState.ConsecutiveFlat := 0;
+
+  SafetyWarnings := 0;
+
+  if UpdateRatioChange > UpdateRatioWarning then Inc(SafetyWarnings);
+  if MRMSChange > MomentWarning then Inc(SafetyWarnings);
+  if VRMSChange > MomentWarning then Inc(SafetyWarnings);
+  if ParamChange > ParamGrowthWarning then Inc(SafetyWarnings);
+  if GammaChange > GammaGrowthWarning then Inc(SafetyWarnings);
+
+  CanChangeLR := (Epoch - LRState.LastLRChangeEpoch) >= CooldownEpochs;
+  NewLR := LearningRate;
+
+  if CanChangeLR then begin
+
+    if (LossWorseFraction > SharpWorseningFraction) and
+       (SafetyWarnings >= 2) then begin
+      NewLR := LearningRate * 0.25;
+      Reason := 'LR reduced 75%: loss is above best and model statistics are unstable.';
+    end
+
+    else if (LRState.ConsecutiveWorse >= 3) and
+            (SafetyWarnings >= 1) then begin
+      NewLR := LearningRate * 0.50;
+      Reason := 'LR reduced 50%: loss worsened for 3 epochs with statistical warning.';
+    end
+
+    else if (LRState.ConsecutiveWorse >= 5) or
+            (RollingImprovement < ClearWorsening) then begin
+      NewLR := LearningRate * 0.50;
+      Reason := 'LR reduced 50%: persistent loss deterioration.';
+    end
+
+    else if LRState.ConsecutiveFlat >= 5 then begin
+      NewLR := LearningRate * 0.75;
+      Reason := 'LR reduced 25%: training has plateaued.';
+    end
+
+    else if SafetyWarnings >= 3 then begin
+      NewLR := LearningRate * 0.75;
+      Reason := 'LR reduced 25%: several model statistics are rising.';
+    end
+
+    else if RollingImprovement > 0.0 then
+      Reason := 'Loss is improving; learning rate unchanged.'
+
+    else
+      Reason := 'No sustained reason to reduce learning rate.';
+  end
+  else
+    Reason := 'Adaptive-LR cooldown active; learning rate unchanged.';
+
+  if NewLR < FloorLR then
+    NewLR := FloorLR;
+
+  if NewLR < LearningRate then begin
+    LearningRate := Single(NewLR);
+    LRState.LastLRChangeEpoch := Epoch;
+
+    // Start fresh after an actual LR change.
+    LRState.ConsecutiveWorse := 0;
+    LRState.ConsecutiveFlat := 0;
+  end;
+
+  LRState.PrevLoss := CurrentLoss;
+  LRState.PrevParamRMS := ParamRMS;
+  LRState.PrevUpdateRatio := UpdateRatio;
+  LRState.PrevMRMS := MRMS;
+  LRState.PrevSqrtVRMS := SqrtVRMS;
+  LRState.PrevMaxGammaRMS := MaxGammaRMS;
 end;
 
 // Rotary positional encoding. No longer used.

@@ -8,18 +8,18 @@ interface
 
 uses
   Classes,
-  Display,
   Fpjson,
   Global,
-  IOHandler,
   Jsonparser,
-  Math,
   SysUtils,
   WesTokenize;
 
-procedure RunGPT2Tokenize(const FileName: string; var TokenizedCorpus: TIVector);
 procedure EnsureGPT2VocabLoaded;
+procedure EnsureGPT2MergesLoaded;
+procedure RunGPT2TokenizeFile(const FileName: string; var OutTokens: TIVector);
+procedure RunGPT2TokenizeString(const InputString: string; var TokenizedCorpus: TIVector);
 procedure LoadVocab(const FileName: string; Vocab: TStringList);
+procedure LoadMerges(const FileName: string; Merges: TStringList);
 function DisplayToken(const S: UnicodeString): AnsiString;
 function DecodeGPT2Token(const TokenID: Integer): UnicodeString;
 function DecodeGPT2Tokens(const Tokens: TIVector): UnicodeString;
@@ -33,6 +33,7 @@ type
 var
   InputBytes: RawByteString;
   EncodedText: UnicodeString;
+  GPT2Merges: TStringList = nil;
 
 // Ensure that vocab1.json is loaded.
 procedure EnsureGPT2VocabLoaded;
@@ -41,7 +42,17 @@ begin
     Vocab := TStringList.Create;
 
   if Vocab.Count = 0 then
-    LoadVocab('vocab1.json', Vocab);
+    LoadVocab(VocabFileName, Vocab);
+end;
+
+// Ensure the merges file is loaded.
+procedure EnsureGPT2MergesLoaded;
+begin
+  if GPT2Merges = nil then
+    GPT2Merges := TStringList.Create;
+
+  if GPT2Merges.Count = 0 then
+    LoadMerges(MergeFileName, GPT2Merges);
 end;
 
 // Load a file of bytes.
@@ -66,6 +77,28 @@ begin
       Writeln(i: 5, ord(Result[i]): 5, '   *', Result[i], '* ');
     Readln;
   end;
+end;
+
+// Encode bytes to ChatGPT2 unicode.
+function GPT2ByteToUnicode(B: Byte): WideChar;
+var
+  i, n: Integer;
+begin
+  if ((B >= 33) and (B <= 126)) or
+     ((B >= 161) and (B <= 172)) or
+      (B >= 174) then begin
+    Result := WideChar(B);
+    Exit;
+  end;
+
+  n := 0;
+  for i := 0 to B - 1 do
+    if not (((i >= 33) and (i <= 126)) or
+            ((i >= 161) and (i <= 172)) or
+            ((i >= 174) and (i <= 255))) then
+      Inc(n);
+
+  Result := WideChar(256 + n);
 end;
 
 // Decode GPT2 tokens.
@@ -129,28 +162,6 @@ begin
   OneToken[0] := TokenID;
 
   Result := DecodeGPT2Tokens(OneToken);
-end;
-
-// Encode bytes to ChatGPT2 unicode.
-function GPT2ByteToUnicode(B: Byte): WideChar;
-var
-  i, n: Integer;
-begin
-  if ((B >= 33) and (B <= 126)) or
-     ((B >= 161) and (B <= 172)) or
-      (B >= 174) then begin
-    Result := WideChar(B);
-    Exit;
-  end;
-
-  n := 0;
-  for i := 0 to B - 1 do
-    if not (((i >= 33) and (i <= 126)) or
-            ((i >= 161) and (i <= 172)) or
-            ((i >= 174) and (i <= 255))) then
-      Inc(n);
-
-  Result := WideChar(256 + n);
 end;
 
 function EncodeBytesToUnicode(const x: RawByteString): UnicodeString;
@@ -253,118 +264,6 @@ begin
   Inc(idx);
 end;
 
-{Old version of NextToken.
-function IsLetterOrDigit(c: Widechar): Boolean;
-begin
-  Result :=
-    ((c >= 'a') and (c <= 'z')) or
-    ((c >= 'A') and (c <= 'Z')) or
-    ((c >= '0') and (c <= '9')) or
-    (c > #255);  // remapped
-end;
-
-function IsWhitespace(c: Widechar): Boolean;
-begin
-  Result :=
-    (c = ' ') or   // space
-    (c = #9)  or   // tab
-    (c = #10) or   // LF
-    (c = #13);     // CR
-end;
-
-function NextToken(const S: UnicodeString; var idx: Integer): UnicodeString;
-var
-  Start: Integer;
-  ch: WideChar;
-begin
-  Result := '';
-
-  while idx <= Length(S) do begin
-    ch := S[idx];
-
-    // 1. GPT‑2 byte‑fallback marker (U+0100..U+01FF) → start of a word token.
-    if (Ord(ch) >= $0100) and (Ord(ch) <= $01FF) then begin
-      start := idx;
-      Inc(idx);
-
-      // Consume ASCII letters/digits.
-      while (idx <= Length(S)) and (S[idx] in ['A'..'Z','a'..'z','0'..'9','''', '"']) do
-        Inc(idx);
-
-      Result := Copy(S, Start, idx - Start);
-      Exit;
-    end;
-
-    // 2. Punctuation → its own token.
-    if ch in ['.', ',', ';', ':', '!', '?', '(', ')', '[', ']', '{', '}', '"', ''''] then begin
-      Result := ch;
-      Inc(idx);
-      Exit;
-    end;
-
-    // 3. Otherwise skip (spaces, other unicode, etc.).
-    Inc(idx);
-  end;
-end;}
-
-{ No longer used.
-procedure GPTChunk(const Text: UnicodeString; var Chunks: TUStringArray);
-var
-  i, Start, Count: Integer;
-  Mode: (mNone, mWord, mSpace, mPunct);
-  c: Widechar;
-
-  procedure AddChunk(aStart, aLen: Integer);
-  begin
-    if aLen <= 0 then Exit;
-    Inc(count);
-    SetLength(Chunks, count);
-    Chunks[Count - 1] := Copy(Text, aStart, aLen);
-  end;
-
-begin
-  SetLength(Chunks, 0);
-  Count := 0;
-  Mode := mNone;
-  Start := 1;
-
-  for i := 1 to Length(Text) do begin
-    c := Text[i];
-
-    if IsLetterOrDigit(c) then begin
-      if Mode <> mWord then begin
-        AddChunk(Start, i - Start);
-        Start := i;
-        Mode := mWord;
-      end;
-    end
-    else if IsWhitespace(c) then begin
-      if Mode <> mSpace then begin
-        AddChunk(Start, i - Start);
-        Start := i;
-        Mode := mSpace;
-      end;
-    end
-    else begin
-      if mode <> mPunct then begin
-        AddChunk(Start, i - Start);
-        Start := i;
-        Mode := mPunct;
-      end;
-    end;
-  end;
-
-  AddChunk(start, Length(Text) - start + 1);
-
-  Writeln('Chunks (first 10) Length =', Length(Chunks));
-  for i := 0 to 9 {High(Chunks)} do begin
-    Writeln(i, ' *', Chunks[i], '*  Raw: ');
-    for j := 1 to Length(Chunks[i]) do
-      Write(' @', ord(Chunks[i][j]), '@   ');
-    Readln;
-  end;
-end;}
-
 procedure DisplayVocab(const a, b: Integer);
 var
   i, j: Integer;
@@ -451,59 +350,6 @@ begin
   Writeln('End of loading vocabulary. Length of Vocab: ', Vocab.Count);
 end;
 
-{procedure LoadVocab(const FileName: string; Vocab: TStringList);
-var
-  Raw: RawByteString;
-  JSON: TJSONData;
-  Obj: TJSONObject;
-  i: Integer;
-  FS: TFileStream;
-begin
-  Vocab.Clear;
-  Vocab.Sorted := False;
-  Vocab.Duplicates := dupIgnore;
-  Vocab.CaseSensitive := True;
-  Vocab.OwnsObjects := False;
-
-  if not FileExists(FileName) then begin
-    Writeln('ERROR: File not found.');
-    Exit;
-  end;
-
-  FS := TFileStream.Create(FileName, fmOpenRead or fmShareDenyNone);
-  try
-    SetLength(Raw, FS.Size);
-    if FS.Size > 0 then
-      FS.ReadBuffer(Raw[1], FS.Size);
-  finally
-    FS.Free;
-  end;
-
-  JSON := GetJSON(Raw);   // Pass RAW bytes.
-  try
-    if not (JSON is TJSONObject) then begin
-      Writeln('Invalid vocab.json.');
-      Halt;
-    end;
-
-    Obj := JSON as TJSONObject;
-    // Writeln('Size of JSON symbol table: ', Obj.count);
-
-    for i := 0 to Obj.Count - 1 do
-      Vocab.AddObject(Obj.Names[i], TObject(PtrInt(Obj.Items[i].AsInteger)));
-  finally
-    JSON.Free;
-  end;
-
-  WriteLn('End of loading symbol table. Length of vocab: ', Vocab.Count);
-  if VeryVerboseTokenize then begin
-    DisplayVocab(0, 9);
-    DisplayVocab(120, 130);
-    DisplayVocab(288, 301);
-    if VeryVerboseTokenize then Pause;
-  end;
-end;}
-
 procedure LoadMerges(const FileName: string; Merges: TStringList);
 var
   SL: TStringList;
@@ -511,9 +357,15 @@ var
   Parts: TRBStringArray;
   i: Integer;
 begin
+  if not FileExists(FileName) then begin
+    Writeln('ERROR: GPT-2 merges file not found: ', ExpandFileName(FileName));
+    Pause;
+    Halt;
+  end;
+
   Merges.Clear;
   Merges.CaseSensitive := True;
-  Merges.Sorted := True;     // Changed from False to speed up.
+  Merges.Sorted := True;
   Merges.Duplicates := dupIgnore;
 
   SL := TStringList.Create;
@@ -522,78 +374,22 @@ begin
 
     for i := 0 to SL.Count - 1 do begin
       Line := Trim(SL[i]);
-      if (Line = '') or (Line[1] = '#') then Continue;
+
+      if (Line = '') or (Line[1] = '#') then
+        Continue;
 
       Parts := Line.Split([' ']);
-      // Rank = insertion order.
-      if Length(Parts) = 2 then
-        Merges.AddObject(Parts[0] + ' ' + Parts[1], TObject(PtrInt(Merges.Count)));
-    end;
 
+      if Length(Parts) = 2 then
+        Merges.AddObject(Parts[0] + ' ' + Parts[1],
+          TObject(PtrInt(Merges.Count)));
+    end;
   finally
     SL.Free;
   end;
 
   Writeln('End of loading merges. Length of merges: ', Merges.Count);
-  if VeryVerboseTokenize then begin
-    Write('Merges 0: ',Merges[0],'   Raw: ');
-    for i := 1 to Length(Merges[0]) do
-      Write(ord(merges[0][i]), ' ');
-    Writeln;
-    Write('Merges 1: ', Merges[1],'   Raw: ');
-    for i := 1 to Length(Merges[1]) do
-      Write(ord(merges[1][i]), ' ');
-    Writeln;
-    Write('Merges 2: ', Merges[2],'   Raw: ');
-    for i := 1 to Length(Merges[2]) do
-      Write(ord(merges[2][i]), ' ');
-    Writeln;
-  end;
 end;
-
-{This version returns words split at the spce as Words[_].
-The tokenizer runs faster.}
-{procedure PreTokenize(const Text: String; var Words: TStringArray);
-var
-  Parts: TStringArray;
-  i: Integer;
-const
-  GPTSpace: AnsiString = #$C4#$A0;  { UTF-8 for Ġ }
-begin
- Parts := Text.Split([' ']);
- SetLength(Words, Length(Parts));
-
-  for i := 0 to High(Parts) do
-    if i = 0 then
-      Words[i] := Parts[i]
-    else  begin
-      Words[i] := GPTSpace + Parts[i];
-    end;
-end;}
-
-{This version returns a complete line as Words[0].
-The tokenizer runs much slower.}
-{procedure PreTokenize(const Text: String; var Words: TStringArray);
-var
-  Parts: TStringArray;
-  i, j, k: Integer;
-const
-  GPTSpace: AnsiString = #$C4#$A0;  { UTF-8 for Ġ }
- begin
-   Writeln('start pre ', Text);
-
-   setlength(words, 1);
-   Words[0] := '';
-   for i := 1 to High(Text) do
-     if Text[i] = ' ' then
-       Words[0] := Words[0] + GPTSpace
-     else
-       Words[0] := Words[0] + Text[i];
-
-   Writeln('Pretoken result: ', words[0], ' Raw: ');
-   for k := 1 to High(Words[0]) do
-     Write(Words[0][k]);
-end;}
 
 function UTF8CharLen(P: PChar): Integer;
 var
@@ -682,8 +478,8 @@ begin
   Writeln;
 end;
 
-procedure TokenizeFile(const Corpus: String; const Vocab, Merges: TStringList;
-  var TokenIDs: TIVector);
+// Tokenize a text file.
+procedure TokenizeGPT2Text(const Input: RawByteString; const Vocab, Merges: TStringList; var TokenIDs: TIVector);
 var
   Words: TUStringArray;
   Pieces: TStringArray;
@@ -693,8 +489,7 @@ begin
   Count := 0;
   SetLength(TokenIDs, 0);
 
-  InputBytes := LoadFileRaw(Corpus);  // This is 1-based.
-  EncodedText := EncodeBytesToUnicode(InputBytes); // This is 1-based.
+  EncodedText := EncodeBytesToUnicode(Input);
 
   // Because NextToken needs a leading $0120.
   EncodedText := WideChar($0120) + EncodedText;
@@ -704,9 +499,9 @@ begin
   while True do begin
     tok := NextToken(EncodedText, i);
     if tok = '' then Break;
+
     SetLength(Words, iWord + 1);
-    // Writeln('iword ', iword, ' tok', tok); Readln;
-    Words[iWord] := Tok;
+    Words[iWord] := tok;
     Inc(iWord);
   end;
 
@@ -726,15 +521,22 @@ begin
         SetLength(TokenIDs, Count);
         TokenIDs[Count - 1] := idx;
       end;
-
-      {idx := Vocab.IndexOf(Pieces[k]);
-      if idx >= 0 then begin
-        Inc(Count);
-        SetLength(TokenIDs, Count);
-        TokenIDs[Count - 1] := PtrInt(Vocab.Objects[idx]);
-      end;}
     end;
   end;
+end;
+
+procedure RunGPT2TokenizeText(const Input: RawByteString; var OutTokens: TIVector);
+begin
+  EnsureGPT2VocabLoaded;
+  EnsureGPT2MergesLoaded;
+
+  TokenizeGPT2Text(Input, Vocab, GPT2Merges, OutTokens);
+end;
+
+procedure TokenizeFile(const Corpus: string; const Vocab, Merges: TStringList; var TokenIDs: TIVector);
+begin
+  InputBytes := LoadFileRaw(Corpus);
+  TokenizeGPT2Text(InputBytes, Vocab, Merges, TokenIDs);
 end;
 
 function DecodeToken(const s: UTF8String): UnicodeString;
@@ -766,115 +568,28 @@ begin
 end;
 
 // Main work flow.
-procedure RunGPT2Tokenize(const FileName: string; var TokenizedCorpus: TIVector);
-var
-  Merges: TStringList;
-  Tokens: TIVector;
-  i, j: Integer;
-  s: string;
-  SaveOut: Text;
+procedure RunGPT2TokenizeFile(const FileName: string; var OutTokens: TIVector);
 begin
   EnsureGPT2VocabLoaded;
-  // Vocab := TStringList.Create;
-  // LoadVocab('vocab1.json', Vocab);
+  EnsureGPT2MergesLoaded;
 
-  Merges := TStringList.Create;
-  LoadMerges('merges.txt', Merges);
-
-  if VeryVerboseTokenize then Pause;
-  t0 := Now;
-  Write('Tokenizing started.');
-  TokenizeFile(FileName, Vocab, Merges, Tokens);
-  t1 := Now;
-
-  Writeln('End of three routines in tokenizing.');
-
-  SetLength(TokenizedCorpus, Length(Tokens));
-
-  nTokenizedCorpus := Length(TokenizedCorpus);
-  for i := 0 to High(Tokens) do
-    TokenizedCorpus[i] := Tokens[i];
-
-  Writeln('After 3 routines, 100 tokens.');
-  for i := 0 to Min(99, High(Tokens)) do begin
-    Write(' *', i, ' ', Tokens[i], ' ', Vocab[Tokens[i]], '*  ');
-    s := Vocab[Tokens[i]];
-    Write('=');
-    for j := 1 to Length(s) do
-      Write(Ord(s[j]), ' ');
-    Write('=');
-  end;
-  Writeln;
-  if VeryVerboseTokenize then Pause;
-
-  Writeln('Tokenizing ended.');
-  if DisplayTokenVerification then begin
-    Writeln('TokenizedCorpus: ');
-    for i := 0 to High(TokenizedCorpus) do
-      Write(TokenizedCorpus[i], ' ');
-    Writeln;
-  end;
-  if VeryVerboseTokenize then Pause;
-
-  // Report statistics.
-  {if VerboseTokenize then
-    ReportGPT2Statistics(TokenizedCorpus);}
-
-  // Save TokenizedCorpus and other data.
-  if SaveFiles and SaveTokenizationFiles then begin
-    // Save token list.
-    SaveTokenList(TokenizedCorpus, TokenDir + WorkingName + '.tok');
-
-    // Save current Output.
-    SaveOut := Output;
-
-    // Redirect Output to log file.
-    Assign(Output, LogDir + WorkingName + '.log');
-
-    if FileExists(LogDir + WorkingName + '.log') then
-      Append(Output)
-    else
-      Rewrite(Output);
-
-    // ReportGPT2Statistics(TokenizedCorpus);
-
-    // Restore Output to console.
-    Close(Output);
-    Output := SaveOut;
-  end;
-
-  // Need to Write out TC with j loop to deal with chr183.
-  Readln;
-  Writeln('Vocabulary for TokenizedCorpus:', High(TokenizedCorpus));
-
-  for i := 0 to High(TokenizedCorpus) do begin
-    s := Vocab[TokenizedCorpus[i]];
-    Write(DecodeToken(s));
-  end;
-
-{  for i := 0 to High(TokenizedCorpus) do begin
-    s := Vocab[TokenizedCorpus[i]];
-    // Replace the GPT-2 "Ġ" marker with a space.
-    if s = 'Ġ' then
-      Write(' ')
-    else begin
-      for j := 1 to Length(s) do
-        Write(s[j]);
-    end;
-  end;}
-  Writeln;
-  if VeryVerboseTokenize then Pause;
-
-  if DisplayCorpusVerification then Begin
-    Write('First ', DisplayLength, ' tokens of detokenized corpus: ');
-    for i := 0 to DisplayLength do
-      Write(DisplayToken(UTF8Decode(Vocab[TokenizedCorpus[i]])));
-    Writeln;
-    Pause;
-  end;
-
-  Merges.Free;
+  TokenizeFile(FileName, Vocab, GPT2Merges, OutTokens);
 end;
 
+procedure RunGPT2TokenizeString(const InputString: string; var TokenizedCorpus: TIVector);
+begin
+  try
+    EnsureGPT2VocabLoaded;
+    EnsureGPT2MergesLoaded;
+
+    TokenizeGPT2Text(RawByteString(InputString), Vocab, GPT2Merges, TokenizedCorpus);
+
+    finally
+      if GPT2Merges <> nil then begin
+        GPT2Merges.Free;
+        GPT2Merges := nil;
+      end;
+  end;
+end;
 end.
 

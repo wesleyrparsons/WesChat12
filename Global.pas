@@ -270,10 +270,13 @@ var
   CurrentBaseName: string = 'weschat';
   CorpusFileNames: array of string;
   CorpusFileName: string = '';
-  SymbolFileName: string = '';
-  MergeFileName: string = '';
   TokenFileName: string = '';
+  SymbolFileName: string = '';
+  VocabFileName: string = '';
+  MergeFileName: string = '';
   ModelFileName: string = '';
+  BestModelFileName: string = '';
+  RunFileName: string = '';
   ListFile: string = '';
   LogFileName: string = '';
   // Corpus vars.
@@ -321,6 +324,8 @@ var
   DisplaySubstage:      Boolean = False;         // Display progress by stage in train and transform.
   DisplayEpoch:         Boolean = True;          // Display progress by epoch in train and transform.
   Stage:                Byte;                    // Indentation for stage;
+  // Adaptive Learning var.
+  AdaptiveLearning: Boolean = True;
   // Saving vars.
   WorkRoot:             string = '';             // Work folder name set by user or default.
   CorpusDir:            string = '';             // Folder for corpus files.
@@ -333,7 +338,7 @@ var
   ListDir:              string = '';             // Folder for list files (not used).
   ScratchDir:           string = '';             // Folder for scratch files (not used).
   SymbolMagic:          array[0..3] of Char = ('S', 'Y', 'M', 'T');  // Global magic, for saving symbol table.
-  // Adam Hyperparameters.
+  // Adam hyperparameters.
   AdamBeta1:            Single = 0.90000;
   AdamBeta2:            Single = 0.99900;
   AdamEpsilon:          Single = 1.0e-8;

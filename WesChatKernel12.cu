@@ -161,25 +161,14 @@ void LaunchLayerNormBackward(
     int ModelDim)
 {
     cudaMemset(dGamma, 0, ModelDim * sizeof(float));
-    cudaMemset(dBeta,  0, ModelDim * sizeof(float));
+    cudaMemset(dBeta, 0, ModelDim * sizeof(float));
 
     int threads = 256;
     int blocks = SeqLen;
     int sharedBytes = 2 * threads * sizeof(float);
 
     LayerNormBackwardKernel<<<blocks, threads, sharedBytes>>>(
-        dY,
-        dX,
-        Gamma,
-        LNXhat,
-        LNInvStd,
-        dGamma,
-        dBeta,
-        SeqLen,
-        ModelDim
-    );
-
-    cudaDeviceSynchronize();
+        dY, dX, Gamma, LNXhat, LNInvStd, dGamma, dBeta, SeqLen, ModelDim);
 }
 
 // AutoRegressive Mask.
@@ -239,8 +228,6 @@ void LaunchAutoRegressiveMaskBackward(
         ScoresGrad,
         SeqLen
     );
-
-    cudaDeviceSynchronize();
 }
 
 // RoPE Forward.
@@ -413,7 +400,6 @@ void LaunchRoPEBackward(
 }
 
 // DropOut.
-
 #include <cuda_runtime.h>
 #include <curand_kernel.h>
 
@@ -454,38 +440,22 @@ void LaunchDropout(
 
 // Dropout Backward.
 #include <cuda_runtime.h>
-#include <stdint.h>
-
-__device__ unsigned int HashUInt(unsigned int x)
-{
-    x ^= x >> 17;
-    x *= 0xed5ad4bbU;
-    x ^= x >> 11;
-    x *= 0xac4c1b51U;
-    x ^= x >> 15;
-    x *= 0x31848babU;
-    x ^= x >> 14;
-    return x;
-}
-
-__device__ float Random01(uint64_t seed, int idx)
-{
-    unsigned int x = (unsigned int)(seed ^ (uint64_t)idx);
-    x = HashUInt(x);
-    return (x & 0x00FFFFFF) / 16777216.0f;
-}
+#include <curand_kernel.h>
 
 extern "C" __global__
 void DropoutBackwardKernel(
     float* dX,
     int N,
     float DropProb,
-    uint64_t Seed)
+    unsigned long long Seed)
 {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (idx < N) {
-        float r = Random01(Seed, idx);
+        curandState state;
+        curand_init(Seed, idx, 0, &state);
+
+        float r = curand_uniform(&state);
 
         if (r < DropProb)
             dX[idx] = 0.0f;
@@ -499,19 +469,13 @@ void LaunchDropoutBackward(
     float* dX,
     int N,
     float DropProb,
-    uint64_t Seed)
+    unsigned long long Seed)
 {
     int threads = 256;
     int blocks = (N + threads - 1) / threads;
 
     DropoutBackwardKernel<<<blocks, threads>>>(
-        dX,
-        N,
-        DropProb,
-        Seed
-    );
-
-    cudaDeviceSynchronize();
+        dX, N, DropProb, Seed);
 }
 
 // ReLU Forward.
@@ -585,7 +549,6 @@ void LaunchReLUBackward(
         N
     );
 
-    cudaDeviceSynchronize();  // good for debugging
 }
 
 // Softmax Forward Strided.
@@ -742,8 +705,6 @@ void LaunchSoftmaxBackward(
     SoftmaxBackwardStridedKernel<<<Rows, threads, sharedBytes>>>(
         Y, dY, dX, Rows, D
     );
-
-    cudaDeviceSynchronize();
 }
 
 // Cross Entropy Gradient Strided from Probabilities.
@@ -938,8 +899,6 @@ void LaunchAddInputEmbeddingGrad(
     AddInputEmbeddingGradKernel<<<blocks, threads>>>(
         XGrad, EmbGrad, InputTokens, SeqLen, ModelDim, nVocab
     );
-
-    cudaDeviceSynchronize();
 }
 
 // Add Bias Rows.
@@ -977,8 +936,6 @@ void LaunchAddBiasRows(
         Rows,
         Cols
     );
-
-    cudaDeviceSynchronize();
 }
 
 // Add Bias Rows Backward.
@@ -1016,8 +973,6 @@ void LaunchAddBiasRowsBackward(
         Rows,
         Cols
     );
-
-    cudaDeviceSynchronize();
 }
 
 // Clip Vector.

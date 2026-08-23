@@ -270,10 +270,13 @@ var
   CurrentBaseName: string = 'weschat';
   CorpusFileNames: array of string;
   CorpusFileName: string = '';
-  SymbolFileName: string = '';
-  MergeFileName: string = '';
   TokenFileName: string = '';
+  SymbolFileName: string = '';
+  VocabFileName: string = '';
+  MergeFileName: string = '';
   ModelFileName: string = '';
+  BestModelFileName: string = '';
+  RunFileName: string = '';
   ListFile: string = '';
   LogFileName: string = '';
   // Corpus vars.
@@ -295,13 +298,13 @@ var
   UNK: Integer = 259;                            // Unknown.
   // Model settings vars.
   Training:             Boolean = False;         // True = training mode: training temperature and dropout enabled.
-  LearningStyle:        TLearning = FlatLearning;// Style of learning.
+  LearningStyle:        TLearning = SlowLearning;// Style of learning.
   ShuffleWindows:       Boolean = True;          // Shuffle the windows each epoch.
-  BaseLearningRate:     Double = 0.000100;        // Base learning rate for Gradient.
+  BaseLearningRate:     Double = 0.000100;       // Base learning rate for Gradient.
   FloorLearningRate:    Double = 0.000005;       // Floor learning rate for Gradient.
-  OverrideLearningRate: Double = -1.00000;        // Override learning rate for Gradient.
-  RollOff:              Double = 0.999900;        // Reduction in learning rate.
-  WeightDecay:          Double = 0.000100;        // Decay (multiplicative) for learning rate.
+  OverrideLearningRate: Double = -1.00000;       // Override learning rate for Gradient.
+  RollOff:              Double = 0.999900;       // Reduction in learning rate.
+  WeightDecay:          Double = 0.000100;       // Decay (multiplicative) for learning rate.
   DecayScale:           Double;                  // 1.0 - LearningRate * WeightDecay.
   LearningRate:         Double;                  // Derived learningRate for Gradient.
   GlobalStep:           Int64;                   // Increments once per window.
@@ -333,7 +336,7 @@ var
   ListDir:              string = '';             // Folder for list files (not used).
   ScratchDir:           string = '';             // Folder for scratch files (not used).
   SymbolMagic:          array[0..3] of Char = ('S', 'Y', 'M', 'T');  // Global magic, for saving symbol table.
-  // Adam Hyperparameters.
+  // Adam hyperparameters.
   AdamBeta1:            Single = 0.90000;
   AdamBeta2:            Single = 0.99900;
   AdamEpsilon:          Single = 1.0e-8;

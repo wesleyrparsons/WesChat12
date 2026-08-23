@@ -218,13 +218,18 @@ begin
   EnsureWesTrie;
 
   while i < Length(Corpus) do begin
-    // Tiny Stories separator byte becomes EOS.
+    // Ensure corpus ends with EOS.
+    if (Length(Tokens) = 0) or (Tokens[High(Tokens)] <> EOS) then begin
+      SetLength(Tokens, Length(Tokens) + 1);
+      Tokens[High(Tokens)] := EOS;
+    end;
+    {// Tiny Stories separator byte becomes EOS.
     if Corpus[i] = 254 then begin
       SetLength(TokenizedCorpus, Length(TokenizedCorpus) + 1);
       TokenizedCorpus[High(TokenizedCorpus)] := EOS;
       Inc(i);
       Continue;
-    end;
+    end;}
 
     if MatchLongest(TrieHead, Corpus, i, BestSym, BestLen) then begin
       SetLength(TokenizedCorpus, Length(TokenizedCorpus) + 1);
@@ -238,14 +243,20 @@ begin
     end;
   end;
 
-  // Add an EOS to the end of TC.
+  // Ensure corpus ends with EOS.
+  if (Length(TokenizedCorpus) = 0) or
+     (TokenizedCorpus[High(TokenizedCorpus)] <> EOS) then begin
+    SetLength(TokenizedCorpus, Length(TokenizedCorpus) + 1);
+    TokenizedCorpus[High(TokenizedCorpus)] := EOS;
+  end;
+  {// Add an EOS to the end of TC.
   SetLength(TokenizedCorpus, Length(TokenizedCorpus) + 1);
   TokenizedCorpus[High(TokenizedCorpus)] := EOS;
 
   if TokenizedCorpus[High(TokenizedCorpus)] <> EOS then begin
     SetLength(TokenizedCorpus, Length(TokenizedCorpus) + 1);
     TokenizedCorpus[High(TokenizedCorpus)] := EOS;
-  end;
+  end;}
 
   // Set nTC.
   nTokenizedCorpus := Length(TokenizedCorpus);
@@ -255,7 +266,7 @@ begin
 
   if VerboseTokenize then begin
     Write('Input corpus (first ', DisplayLength, ' bytes) is: ');
-    for i := 0 to (Min(High(Corpus)), DisplayLength) do
+    for i := 0 to Min(High(Corpus), DisplayLength) do
       Write(Corpus[i], ' ');
     Writeln;
   end;
@@ -597,14 +608,21 @@ begin
 end;
 
 // Detokenize tokenized corpus to text.
+// Detokenize tokenized corpus to text.
 procedure DetokenizeToDisplay(const TokenizedCorpus: TIVector; const Part: TPart = B);
 var
   i, iB, iE, Cutoff: Integer;
 begin
-  if Length(TokenizedCorpus) < 499 then
+  if Length(TokenizedCorpus) = 0 then begin
+    Writeln('Detokenized Corpus is empty.');
+    Exit;
+  end;
+
+  if Length(TokenizedCorpus) < 500 then
     Cutoff := Length(TokenizedCorpus) - 1
   else
     Cutoff := 499;
+
   Case Part of
     B: begin
       iB := 0;
@@ -622,13 +640,15 @@ begin
 
   Write('Detokenized Corpus, ');
   Case Part of
-    B: Write('First 500 bytes: ');
-    E: Write('Last 500 bytes: ');
-    F: Write('All bytes: ');
+    B: Write('First 500 tokens: ');
+    E: Write('Last 500 tokens: ');
+    F: Write('All tokens: ');
   end;
   Writeln;
+
   for i := iB to iE do
     Write(SymbolTable[TokenizedCorpus[i]]);
+
   Writeln;
 end;
 

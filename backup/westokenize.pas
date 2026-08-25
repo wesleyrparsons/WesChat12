@@ -206,7 +206,7 @@ begin
     Result := False;
 end;
 
-// Tokenize Corpus from SymbolTable loaded by program. ``
+// Tokenize Corpus from SymbolTable loaded by program.
 procedure TokenizeFromSymbolTable(var TokenizedCorpus: TIVector; const Corpus: TBVector);
 var
   i, BestSym, BestLen: Integer;
@@ -218,18 +218,15 @@ begin
   EnsureWesTrie;
 
   while i < Length(Corpus) do begin
-    // Ensure corpus ends with EOS.
-    if (Length(Tokens) = 0) or (Tokens[High(Tokens)] <> EOS) then begin
-      SetLength(Tokens, Length(Tokens) + 1);
-      Tokens[High(Tokens)] := EOS;
-    end;
-    {// Tiny Stories separator byte becomes EOS.
-    if Corpus[i] = 254 then begin
+
+    // Tiny Stories UTF-8 separator "■" becomes EOS.
+    if (i + 2 < Length(Corpus)) and (Corpus[i] = $E2) and
+       (Corpus[i + 1] = $96) and (Corpus[i + 2] = $A0) then begin
       SetLength(TokenizedCorpus, Length(TokenizedCorpus) + 1);
       TokenizedCorpus[High(TokenizedCorpus)] := EOS;
-      Inc(i);
+      Inc(i, 3);
       Continue;
-    end;}
+    end;
 
     if MatchLongest(TrieHead, Corpus, i, BestSym, BestLen) then begin
       SetLength(TokenizedCorpus, Length(TokenizedCorpus) + 1);
@@ -249,19 +246,9 @@ begin
     SetLength(TokenizedCorpus, Length(TokenizedCorpus) + 1);
     TokenizedCorpus[High(TokenizedCorpus)] := EOS;
   end;
-  {// Add an EOS to the end of TC.
-  SetLength(TokenizedCorpus, Length(TokenizedCorpus) + 1);
-  TokenizedCorpus[High(TokenizedCorpus)] := EOS;
 
-  if TokenizedCorpus[High(TokenizedCorpus)] <> EOS then begin
-    SetLength(TokenizedCorpus, Length(TokenizedCorpus) + 1);
-    TokenizedCorpus[High(TokenizedCorpus)] := EOS;
-  end;}
-
-  // Set nTC.
   nTokenizedCorpus := Length(TokenizedCorpus);
 
-  // Free the trie memory.
   FreeTrie(TrieHead);
 
   if VerboseTokenize then begin
@@ -729,13 +716,20 @@ begin
 
   i := 0;
   while i < Length(Corpus) do begin
-    // Tiny Stories separator byte becomes EOS.
+    // Legacy single-byte Tiny Stories separator becomes EOS.
     if Corpus[i] = 254 then begin
       SetLength(Tokens, Length(Tokens) + 1);
       Tokens[High(Tokens)] := EOS;
       Inc(i);
       Continue;
     end;
+    // Tiny Stories UTF-8 separator "■" becomes EOS.
+    if (i + 2 < Length(Corpus)) and (Corpus[i] = $E2) and (Corpus[i + 1] = $96) and (Corpus[i + 2] = $A0) then begin
+      SetLength(Tokens, Length(Tokens) + 1);
+      Tokens[High(Tokens)] := EOS;
+      Inc(i, 3);
+      Continue;
+   end;
 
     if MatchLongest(TrieHead, Corpus, i, BestSym, BestLen) then begin
       SetLength(Tokens, Length(Tokens) + 1);

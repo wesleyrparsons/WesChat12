@@ -21,6 +21,7 @@ function CheckForControlKey: Char;
 // Display symbols procedures.
 function CleanUpSymbol(const x: RawByteString): RawByteString;
 procedure DisplayByteSymbolTable(const SymbolTable: TSymbolTable);
+function ConsoleText(const S: UnicodeString): UnicodeString;
 
 // Display vectors and matrices.
 procedure DisplayVector(const V: TIVector);
@@ -122,7 +123,8 @@ begin
   ComputeTrainableParameters;
   AllBlockParams := Int64(nBlock) * BlockParams;
 
-  Writeln('--- Summary Trainable Parameter Calculation ---');
+  Writeln('--- Summary Specs and Trainable Parameters Calculation ---');
+  Writeln('Trainable Parameters: Embeddings, Wq, Wk, Wv, W0, W1, b1, W2, b2, Gamma1, Beta1, Gamma2, Beta2');
   Writeln('nVocab        = ', Global.nVocab);
   Writeln('ModelDim      = ', ModelDim);
   Writeln('ModelDimProj  = ', ModelDimProj);
@@ -132,18 +134,15 @@ begin
   Writeln('Embeddings:');
   Writeln('  nVocab * ModelDim');
   Writeln('  ', Global.nVocab, ' * ', ModelDim, ' = ', EmbeddingParams);
-
   Writeln('Attention parameters per block:');
   Writeln('  4 * ModelDim * ModelDim');
   Writeln('  4 * ', ModelDim, ' * ', ModelDim, ' = ', AttentionParams, ' (Includes Wq, Wk, Wv, and W0).');
   Writeln('FFN parameters per block:');
   Writeln('  2 * ModelDim * ModelDimProj + ModelDimProj + ModelDim');
-  Writeln('  2 * ', ModelDim, ' * ', ModelDimProj, ' + ', ModelDimProj, ' + ', ModelDim, ' = ', FFNParams);
-  Writeln('  Includes W1, W2, b1, and b2.');
+  Writeln('  2 * ', ModelDim, ' * ', ModelDimProj, ' + ', ModelDimProj, ' + ', ModelDim, ' = ', FFNParams, '  Includes W1, W2, b1, and b2.');
   Writeln('LayerNorm parameters per block:');
   Writeln('  4 * ModelDim');
-  Writeln('  4 * ', ModelDim, ' = ', LayerNormParams);
-  Writeln('  Includes Gamma1, Beta1, Gamma2, and Beta2.');
+  Writeln('  4 * ', ModelDim, ' = ', LayerNormParams, '  Includes Gamma1, Beta1, Gamma2, and Beta2.');
   Writeln('Total parameters per transformer block:');
   Writeln('  Attention + FFN + LayerNorm');
   Writeln('  ', AttentionParams, ' + ', FFNParams, ' + ', LayerNormParams, ' = ', BlockParams);
@@ -182,9 +181,9 @@ end;
 procedure ReportPath(const PathLabel, PathValue: string);
 begin
   if Trim(PathValue) = '' then
-    Writeln('  ', PathLabel, ': (none)')
+    Writeln(PathLabel, ': (none)')
   else
-    Writeln('  ', PathLabel, ': ', PathValue);
+    Writeln(PathLabel, ': ', PathValue);
 end;
 
 // Write information on state of program.
@@ -227,8 +226,6 @@ begin
   Writeln('Temperature: ', TTemperature: 9: 7);
   Writeln('Global step: ', GlobalStep);
   Writeln('Dropouts for Attention, MLP, Residual (A, MLP, RDropout): ', ADropout: 4: 4, ' ', MLPDropout: 4: 4, ' ', RDropout: 4: 4);
-  Writeln('--- Parameter Specs ---');
-  Writeln('Trainable Parameters: Embeddings, Wq, Wk, Wv, W0, W1, b1, W2, b2, gamma1, beta1, gamma2, beta2');
   FullReportTrainableParameters;
 end;
 
@@ -266,6 +263,14 @@ begin
     if (i > 0) and (i mod 100 = 99) then Pause;
   end;
   Writeln('Symbol table length = ', Length(SymbolTable));
+end;
+
+// Display for inference CR/LF.
+function ConsoleText(const S: UnicodeString): UnicodeString;
+begin
+  Result := StringReplace(S, #13#10, #10, [rfReplaceAll]);
+  Result := StringReplace(Result, #13, #10, [rfReplaceAll]);
+  Result := StringReplace(Result, #10, #13#10, [rfReplaceAll]);
 end;
 
 // Display a vector, character by character, then pause.

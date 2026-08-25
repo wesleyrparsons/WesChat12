@@ -113,8 +113,8 @@ begin
   RunFileName := RunDir + WorkingName + '.run';
   LogFileName := LogDir + WorkingName + '.log';
 
-  Writeln('Using work folder: ', WorkRoot);
-  Writeln('Automatic best model file: ', BestModelFileName);
+  Writeln('Using work folder: ', WorkRoot, '.');
+  // Writeln('Automatic best model file: ', BestModelFileName);
 end;
 
 // Set the file names when resuming a model.
@@ -260,7 +260,7 @@ begin
   Close(Output);
   Output := SaveOut;
 
-  Writeln('Log written: ', LogName);
+  Writeln('Log written: ', LogName, '.');
 end;
 
 // Set tokenizer as WesTokenize or GPT2TTokenize.
@@ -592,13 +592,13 @@ begin
   finally
     SaveFiles := OldSaveFiles;
   end;
+  RawTokenCount := Length(TokenizedCorpus);
 end;
 
 // Main workflow.
 procedure TokenizeWithWes;
 var
   SourceChoice, SymbolChoice: string;
-  RawTokenCount, PaddedTokenCount: Integer;
 begin
   SetLength(TokenizedCorpus, 0);
 
@@ -633,11 +633,9 @@ begin
       ResetWesTrie;
       SetLength(SymbolTable, 0);
 
-      Writeln('Before RunSymbolize: Length(SymbolTable) = ', Length(SymbolTable));
-
+      // Writeln('Before RunSymbolize: Length(SymbolTable) = ', Length(SymbolTable));
       Symbolize.RunSymbolize(Corpus);
-
-      Writeln('After RunSymbolize: Length(SymbolTable) = ', Length(SymbolTable));
+      // Writeln('After RunSymbolize: Length(SymbolTable) = ', Length(SymbolTable));
 
       nSymbols := Length(SymbolTable);
       nVocab := nSymbols;
@@ -785,7 +783,7 @@ begin
   Writeln('Creates a token list from one corpus file or from a list of corpus files.');
   Writeln('WesTokenize can create a new symbol table or use an existing one.');
   Writeln('GPT2Tokenize uses the GPT-2 vocabulary.');
-  Writeln;
+  // Writeln;
 
   TokChoice := AskChoice('Tokenizer: W = WesTokenize, G = GPT2Tokenize', 'W/G');
 
@@ -1390,11 +1388,9 @@ procedure Options;
 begin
   Writeln('Options:');
   Writeln('  T: Tokenize -- create a token list from a corpus file or a file list.');
-  Writeln('     Uses WesTokenize or GPT2Tokenize.');
-  Writeln('     WesTokenize may create a symbol table or use an existing one.');
+  Writeln('     Uses WesTokenize or GPT2Tokenize. WesTokenize may create a symbol table or use an existing one.');
   Writeln('  R: Train -- train a model on a token list.');
-  Writeln('     Requires a token list and matching symbol table.');
-  Writeln('     Can start a new model or resume from a saved model.');
+  Writeln('     Requires a token list and matching symbol table. Can start a new model or resume from a saved model.');
   Writeln('  I: Infer -- run inference.');
   Writeln('     Requires a saved model and matching symbol table.');
   Writeln('  J: Join symbol tables.');

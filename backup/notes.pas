@@ -10,14 +10,23 @@ unit Notes;
  Folder layout: WorkRoot \corpus \lists \logs \merges \models \scratch \symbols \tokens }
 
 Good models.
-Model gibbon816, at about 10mb. Goog as of 818.
+Model gibbon816, at about 10mb. Good as of 818.
+
 Model ts20mb818, down to 2.316 at LR= .000005 on 8-19-26. Using slow AdamW LR schedule. Almost all betters. Stopped, then restarted at 7 pm on 8/19.
 On restart, LR started much higher (0.0001) than where it ended (0.0000015). Fixed, so now override continues, but adaptivenest dopes not continue into
 next start. Ended with Loss = 1.876 om 8/21. Eventually save adaptive LR value to checkpoint. This is WesTokenize.
-Model ts20mb822g. Stared with Loss=2.98. Adaptive LR at 0.0001. Loss going down fast over first 4 epochs to 2.037. This is a ChatGPT2 tokenization.
+
+Model ts20mb822g. ChatGPT2 with 50,260 vocab. Stared with Loss=2.98. Adaptive LR at 0.0001. Loss going down fast over first 4 epochs to 2.037. This is a ChatGPT2 tokenization.
+In epoch 34, down to Loss=1.66. Seconds = 2068. Epoch 50, 1.60. All betters so far.
 Would the LR start so low with WesTokenize and 50K symbols?
 
-1. For training, add Extrafield1 and ExtraField2, etc. in CheckPoint. Also add saved AdaptiveLR.
+Modelts20mb824s50 is a WesTokenize model with 50260 symbols. It started with Loss = 8.5!Same Lr of 0.0001, that is, adaptive. At epoch 15, down to Loss =3.3.
+Training speed = 4900. Afyer 72 epochs, Loss=2.29.
+
+Model tem77. Using ChatGPT2, and damendthing.txt, I had an initial Loss of >9, then down to 8 in epoch 0, then quickly down to 1.
+What dos this mean?
+
+1. For training, add Extrafield1 and ExtraField2, etc. in CheckPoint. Also add saved AdaptiveLR.  Also add CorpusByteCount.
 
 2.  Systematize nTC.
 nRawTokenizedCorpus := Length(TokenizedCorpus);

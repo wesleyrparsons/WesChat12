@@ -182,7 +182,10 @@ begin
 
   CloseFile(F);
   nTokenizedCorpus := Length(TokenizedCorpus);
-  Writeln('Loaded ', Count, ' tokens from ', TokenFileName);
+  RawTokenCount := Length(TokenizedCorpus);
+
+  while (RawTokenCount > 0) and (TokenizedCorpus[RawTokenCount - 1] = PAD) do
+    Dec(RawTokenCount);  Writeln('Loaded ', Count, ' tokens from ', TokenFileName);
 end;
 
 // Save the output tokenized corpus to a token file.
@@ -474,8 +477,7 @@ var
   IOModelDim, IONVocab, IONBlock, IOSeqLen,
     IODimVocab, IOModelDimProj, IOProj, IONHead: Integer;
   Checkpoint: TTrainingCheckpoint;
-  HasTrainingCheckpoint: Boolean;
-  HasAdamWState: Boolean;
+  IsWES2: Boolean; // That is, WES2 has AdamW state, and some other changes from WES1.
 begin
   Result := False;
 
@@ -484,6 +486,19 @@ begin
     Reset(F, 1);
 
     BlockRead(F, FileMagic, SizeOf(FileMagic));
+
+    if (FileMagic[0] = 'W') and (FileMagic[1] = 'E') and (FileMagic[2] = 'S') and (FileMagic[3] = '2') then begin
+      IsWES2 := True;
+    end
+    else if (FileMagic[0] = 'W') and (FileMagic[1] = 'E') and (FileMagic[2] = 'S') and (FileMagic[3] = '1') then begin
+      IsWES2 := False;
+    end
+    else begin
+      CloseFile(F);
+      Writeln('Invalid model file.');
+      Exit;
+    end;
+    {BlockRead(F, FileMagic, SizeOf(FileMagic));
     HasTrainingCheckpoint := False;
     HasAdamWState := False;
 
@@ -499,7 +514,7 @@ begin
       CloseFile(F);
       Writeln('Invalid model file.');
       Exit;
-    end;
+    end;}
 
     BlockRead(F, Version, SizeOf(Version));
     BlockRead(F, IOModelDim,     SizeOf(IOModelDim));
@@ -561,14 +576,12 @@ begin
 
     BlockRead(F, Model, SizeOf(Model));
 
-    if HasAdamWState then begin
-      // WES3 checkpoint.
+    if IsWES2 then begin
+      // WES2 checkpoint.
       BlockRead(F, Checkpoint, SizeOf(Checkpoint));
       LoadAdamWState(F, AdamWState);
-
       RestoreTrainingCheckpoint(Checkpoint);
       AdamWStateLoaded := True;
-
     end
     else begin
       // WES1.

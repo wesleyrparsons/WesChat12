@@ -39,13 +39,18 @@ end;
 procedure WriteInferenceTokens(const Tokens: TIVector);
 var
   i: Integer;
+  S: UnicodeString;
 begin
+  S := '';
+
   if Tokenizer = WesTokenizer then begin
     for i := 0 to High(Tokens) do
-      Write(UTF8Encode(Decode(Tokens[i])));
+      S := S + Decode(Tokens[i]);
   end
   else
-    Write(UTF8Encode(DecodeGPT2Tokens(Tokens)));
+    S := DecodeGPT2Tokens(Tokens);
+
+  Write(UTF8Encode(ConsoleText(S)));
 end;
 
 // Compute probability entropy in nats.
@@ -68,8 +73,8 @@ end;
 procedure ReportInferenceDiagnostics(const Tok: Integer; const RawProb, AdjProb,
   SampleProb, Top1Prob, Top2Prob, TopKMass, Entropy, EOSProb: Double);
 begin
-  Writeln('Tok=', Tok, ' "', UTF8Encode(DecodeInferenceToken(Tok)), '" RawP=', RawProb:0:6, ' AdjP=', AdjProb:0:6, ' SampP=', SampleProb:0:6);
-  Writeln('Top1=', Top1Prob:0:6, ' Top2=', Top2Prob:0:6, ' Top5Mass=', TopKMass:0:6, ' Entropy=', Entropy:0:4, ' EOS=', EOSProb:0:6);
+  Write('Token = ', Tok, ' "', UTF8Encode(DecodeInferenceToken(Tok)), '"    RawP = ', RawProb: 0: 6, ' AdjP = ', AdjProb: 0: 6, ' SampP = ', SampleProb: 0: 6);
+  Writeln('    Top1 = ', Top1Prob:0:6, ' Top2 = ', Top2Prob:0:6, ' Top5Mass = ', TopKMass:0:6, ' Entropy = ', Entropy:0:4, ' EOS = ', EOSProb:0:6);
 end;
 
 // Sample the top probs.
@@ -156,7 +161,7 @@ begin
 end;
 
 // Infer a single token.
-procedure InferOneToken(var WModelParams: TWModelParams; var WModelState: TWModelState;
+procedure InferOneToken(var WModelParams: TWModelParams; var WModelState: TWModelState; const Step: Integer;
   const QueryTokenized: TIVector; var QueryToken: Integer; var AdjustedProb: Single);
 const
   Scale = Sqrt(ModelDim);         // Optional transformer-style embedding scaling by sqrt(d_model).
@@ -208,7 +213,7 @@ var
           Write(UTF8Encode(DecodeInferenceToken(TopTokVector[j])))
         else
           Write('BADTOKEN');
-        Write('  ');
+        Write('    ');
       end;
 
       Writeln;
@@ -239,8 +244,8 @@ begin
     BuildInferenceInputTokens(InputTokens, QueryTokenized, SeqLen, LastPos);
 
     if VerboseInfer then begin
-      Write('Step ', LastPos, '. Length(QueryTokenized) = ', Length(QueryTokenized), '.');
-      Write('Last 20 InputTokens: ');
+      Write('Step ', Step, '. Context tokens = ', Length(QueryTokenized), '.');
+      Write(' Last 20 InputTokens: ');
       for j := Max(0, LastPos - 19) to LastPos do
         Write(InputTokens[j], ' ');
       Writeln;
@@ -453,7 +458,7 @@ begin
 
       for Step := 1 to MaxNewTokens do begin
         // Run Infer to get one additional token.
-        InferOneToken(WModelParams, WModelState, WorkTokens, QueryToken, AdjustedProb);
+        InferOneToken(WModelParams, WModelState, Step, WorkTokens, QueryToken, AdjustedProb);
 
         // Add the newly generated token to the output.
         SetLength(QueryOutput, Length(QueryOutput) + 1);
@@ -465,10 +470,6 @@ begin
         // EOS does not need to be placed back into the next input.
         SetLength(WorkTokens, Length(WorkTokens) + 1);
         WorkTokens[High(WorkTokens)] := QueryToken;
-
-        if VerboseInfer then begin
-          Writeln('Single query token number = ', QueryToken, '. Probability = ', AdjustedProb: 6: 6, '. Decoded = <<', UTF8Encode(DecodeInferenceToken(QueryToken)), '>>.');
-        end;
 
         Write('WorkTokens: <<');
         WriteInferenceTokens(WorkTokens);

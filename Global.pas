@@ -46,7 +46,7 @@ const
   nHead = 8;                      // Number of heads for multi-headed attention.
   HeadDim = ModelDim div nHead;   // Length of one head.
   nBlock = 6;                     // Number of blocks in transformer.
-  MaxSymbols = 10000;             // Maximum WesTokenizer symbol count during BPE construction.
+  MaxSymbols = 50260;             // Maximum WesTokenizer symbol count during BPE construction.
   DimVocab   = 50260;             // Physical model vocabulary capacity; must be >= nVocab. Use 50260 for GPT2.
   // GPT2 constants.
   GPT2BaseVocabSize = 50257;
@@ -286,6 +286,7 @@ var
   CorpusFileInfo: string;                        // Saving long string of info on corpus.
   MultipleFileName: string;                      // Using multiple corpuses and outputting single file name.
   nTokenizedCorpus: Integer;                     // Length of tokenized corpus.
+  RawTokenCount, PaddedTokenCount: Integer;      // Raw and padded token count.
   // Target and Query vars.
   InputTokens: TIDimVector;                      // Input tokens.
   dInputTokens: PInteger;                        // Input tokens.

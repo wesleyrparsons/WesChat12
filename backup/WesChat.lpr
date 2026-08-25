@@ -113,8 +113,8 @@ begin
   RunFileName := RunDir + WorkingName + '.run';
   LogFileName := LogDir + WorkingName + '.log';
 
-  Writeln('Using work folder: ', WorkRoot);
-  Writeln('Automatic best model file: ', BestModelFileName);
+  Writeln('Using work folder: ', WorkRoot, '.');
+  // Writeln('Automatic best model file: ', BestModelFileName);
 end;
 
 // Set the file names when resuming a model.
@@ -260,7 +260,7 @@ begin
   Close(Output);
   Output := SaveOut;
 
-  Writeln('Log written: ', LogName);
+  Writeln('Log written: ', LogName, '.');
 end;
 
 // Set tokenizer as WesTokenize or GPT2TTokenize.
@@ -592,13 +592,13 @@ begin
   finally
     SaveFiles := OldSaveFiles;
   end;
+  RawTokenCount := Length(TokenizedCorpus);
 end;
 
 // Main workflow.
 procedure TokenizeWithWes;
 var
   SourceChoice, SymbolChoice: string;
-  RawTokenCount, PaddedTokenCount: Integer;
 begin
   SetLength(TokenizedCorpus, 0);
 
@@ -633,11 +633,9 @@ begin
       ResetWesTrie;
       SetLength(SymbolTable, 0);
 
-      Writeln('Before RunSymbolize: Length(SymbolTable) = ', Length(SymbolTable));
-
+      // Writeln('Before RunSymbolize: Length(SymbolTable) = ', Length(SymbolTable));
       Symbolize.RunSymbolize(Corpus);
-
-      Writeln('After RunSymbolize: Length(SymbolTable) = ', Length(SymbolTable));
+      // Writeln('After RunSymbolize: Length(SymbolTable) = ', Length(SymbolTable));
 
       nSymbols := Length(SymbolTable);
       nVocab := nSymbols;
@@ -785,14 +783,14 @@ begin
   Writeln('Creates a token list from one corpus file or from a list of corpus files.');
   Writeln('WesTokenize can create a new symbol table or use an existing one.');
   Writeln('GPT2Tokenize uses the GPT-2 vocabulary.');
-  Writeln;
+  // Writeln;
 
   TokChoice := AskChoice('Tokenizer: W = WesTokenize, G = GPT2Tokenize', 'W/G');
 
   if TokChoice = 'G' then begin
     SetTokenizerMode(GPT2Tokenizer);
 
-    if not EnsureGPT2VocabLoaded then Exit;
+    EnsureGPT2VocabLoaded;
 
     SourceChoice := AskChoice(
       'Corpus source: F = one file, L = list of corpus file names', 'F/L');

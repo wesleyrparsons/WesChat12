@@ -100,7 +100,7 @@ procedure AdamWOptimizeEmbeddings(var WModelParams: TWModelParams; var WAdamWSta
 procedure UpdateEmbeddingGradient(var WModelParams: TWModelParams; var WModelState: TWModelState);
 procedure GetAdamWStatistics(var WModelParams: TWModelParams; var WAdamWState: TWAdamWState;
   out ParamRMS, UpdateRMS, UpdateRatio, MRMS, SqrtVRMS: Double);
-procedure ReportCompactTensorStatistics(var WModelParams: TWModelParams; const Epoch: Integer; out Stats: TCompactTensorStats);
+procedure ReportCompactTensorStatistics(var WModelParams: TWModelParams; const Epoch: Integer; out Stats: TCompactTensorStats);  // Do not need Epoch param.
 procedure ReportAdamWTensorStatistics(var WModelParams: TWModelParams; var WAdamWState: TWAdamWState);
 procedure GetClippedGradientPercent(dGrad: PSingle; const Count: Integer;
   const ClipLimit: Single; out ClippedCount: Integer; out ClippedPercent: Double);
@@ -1590,9 +1590,7 @@ var
   G2P, G2Max: Double;
 begin
   FillChar(Stats, SizeOf(Stats), 0);
-
-  Writeln;
-  Writeln('Epoch ', Epoch, ' compact tensor statistics.');
+  Writeln('++Compact tensor statistics.');
 
   // Embeddings.
   GetTensorStats(WModelParams.Embeddings.dValue, nVocab * ModelDim, EmbPRMS, EmbMaxP);
@@ -1608,9 +1606,8 @@ begin
   Stats.EmbClippedCount := EmbClippedCount;
   Stats.EmbClippedPercent := EmbClippedPercent;
 
-  Writeln('Embeddings: ParamRMS=', EmbPRMS:9:7, ' GradRMS=', EmbGRMS:9:7,
-    ' MaxP=', EmbMaxP:9:7, ' MaxG=', EmbMaxG:9:7,
-    ' Clipped=', EmbClippedCount, ' (', EmbClippedPercent:0:4, '%)');
+  Writeln('++Embeddings: ParamRMS=', EmbPRMS: 9: 7, ' GradRMS=', EmbGRMS: 9: 7, ' MaxP=', EmbMaxP: 9: 7, ' MaxG=', EmbMaxG: 9: 7,
+    ' Clipped=', EmbClippedCount, ' (', EmbClippedPercent: 0: 4, '%)');
 
   // Transformer blocks.
   for k := 0 to nBlock - 1 do begin
@@ -1631,8 +1628,7 @@ begin
       if G1P > Stats.MaxGammaRMS then Stats.MaxGammaRMS := G1P;
       if G2P > Stats.MaxGammaRMS then Stats.MaxGammaRMS := G2P;
 
-      Writeln('Block ', k, ': WqG=', WqG:9:7, ' W1G=', W1G:9:7,
-        ' W2G=', W2G:9:7, ' G1P=', G1P:9:7, ' G2P=', G2P:9:7);
+      Writeln('++Block ', k, ': WqG=', WqG: 9: 7, ' W1G=', W1G: 9: 7, ' W2G=', W2G: 9: 7, ' G1P=', G1P: 9: 7, ' G2P=', G2P: 9: 7);
     end;
   end;
 

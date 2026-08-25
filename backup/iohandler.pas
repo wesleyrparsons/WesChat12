@@ -21,8 +21,8 @@ procedure LoadTokenList(const TokenFileName: string; var TokenizedCorpus: TIVect
 procedure SaveSymbolTable(const SymbolFileName: string; const SymbolTable: TSymbolTable);
 procedure SaveTokenList(const TokenizedCorpus: TIVector; const TokenFileName: String);
 procedure RestoreTrainingCheckpoint(const C: TTrainingCheckpoint);
-function SaveModel(const FileName: string; var Model: TWModelParams; var AdamWState: TWAdamState): Boolean;
-function LoadModel(const FileName: string; var Model: TWModelParams; var AdamWState: TWAdamState): Boolean;
+function SaveModel(const FileName: string; var Model: TWModelParams; var AdamWState: TWAdamWState): Boolean;
+function LoadModel(const FileName: string; var Model: TWModelParams; var AdamWState: TWAdamWState): Boolean;
 
 implementation
 
@@ -182,7 +182,10 @@ begin
 
   CloseFile(F);
   nTokenizedCorpus := Length(TokenizedCorpus);
-  Writeln('Loaded ', Count, ' tokens from ', TokenFileName);
+  RawTokenCount := Length(TokenizedCorpus);
+
+  while (RawTokenCount > 0) and (TokenizedCorpus[RawTokenCount - 1] = PAD) do
+    Dec(RawTokenCount);  Writeln('Loaded ', Count, ' tokens from ', TokenFileName);
 end;
 
 // Save the output tokenized corpus to a token file.
@@ -295,19 +298,19 @@ end;
 
 // Save AdamW first and second moments.
 // Only host M and V arrays are written; CUDA pointers are not written.
-procedure SaveAdamWState(var F: file; const WAdamState: TWAdamState);
+procedure SaveAdamWState(var F: file; const WAdamWState: TWAdamWState);
 var
   k: Integer;
 begin
   // Tied embeddings.
-  with WAdamState.Embeddings do begin
+  with WAdamWState.Embeddings do begin
     BlockWrite(F, M, EmbeddingsSize);
     BlockWrite(F, V, EmbeddingsSize);
   end;
 
   // Per-block AdamW state.
   for k := 0 to nBlock - 1 do
-    with WAdamState.ParamBlock[k] do begin
+    with WAdamWState.ParamBlock[k] do begin
 
       // Attention weights.
       BlockWrite(F, Wq.M, WeightSize);
@@ -353,7 +356,7 @@ begin
 end;
 
 // Save a model.
-function SaveModel(const FileName: string; var Model: TWModelParams; var AdamWState: TWAdamState): Boolean;
+function SaveModel(const FileName: string; var Model: TWModelParams; var AdamWState: TWAdamWState): Boolean;
 var
   F: file;
   IOModelDim, IONVocab, IONBlock, IOSeqLen,
@@ -409,19 +412,19 @@ end;
 
 // Load AdamW first and second moments.
 // CUDA dM and dV pointers are allocated separately by MAllocCublas.
-procedure LoadAdamWState(var F: file; var WAdamState: TWAdamState);
+procedure LoadAdamWState(var F: file; var WAdamWState: TWAdamWState);
 var
   k: Integer;
 begin
   // Tied embeddings.
-  with WAdamState.Embeddings do begin
+  with WAdamWState.Embeddings do begin
     BlockRead(F, M, EmbeddingsSize);
     BlockRead(F, V, EmbeddingsSize);
   end;
 
   // Per-block AdamW state.
   for k := 0 to nBlock - 1 do
-    with WAdamState.ParamBlock[k] do begin
+    with WAdamWState.ParamBlock[k] do begin
 
       // Attention weights.
       BlockRead(F, Wq.M, WeightSize);
@@ -466,7 +469,7 @@ begin
     end;
 end;
 // Load a model.
-function LoadModel(const FileName: string; var Model: TWModelParams; var AdamWState: TWAdamState): Boolean;
+function LoadModel(const FileName: string; var Model: TWModelParams; var AdamWState: TWAdamWState): Boolean;
 var
   F: file;
 var

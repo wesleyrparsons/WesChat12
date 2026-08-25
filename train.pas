@@ -216,6 +216,7 @@ var
   CompactStats: TCompactTensorStats;
   AdaptiveLRState: TAdaptiveLRState;
   AdaptiveLRReason: string = '';
+  PreTrainingLOss, LossImprovementPerHour, TokensPerSecond, LossImprovementPerMTok, BitsPerByte: Single;
 
   function TrainReadIfKeyPressed: Boolean;
   var
@@ -325,33 +326,38 @@ var
 begin
   // For saving models.
   LastBestSaveEpoch := -1000000000;    // Sentinel for no best model saved.
-  AutoSaveEpoch := 25;                 // Start auto save of bext model at epoch 25.
+  AutoSaveEpoch := 25;                 // Start auto save of bext model at this epoch.
   BestSavedLoss := MaxDouble;          // The prior best saved loss.
   MinSaveGap := 5;                     // Wait this many epochs to save a best model again.
-  MinSaveDelta := 0.00025;             // Adjust for saving best model.
+  MinSaveDelta := 0.00025;             // Smallest loss improvement needed for saving best model.
 
   // Getting working name right.
   if Trim(WorkingName) = '' then begin
     Writeln('WorkingName is blank. Using "weschat".');
     WorkingName := 'weschat';
   end;
-  Writeln('Automatic best model file: ', BestModelFileName);
+  // Writeln('Automatic best model filename: ', BestModelFileName, '.');
 
-  // For each epoch's loss.
+  // Initializing each epoch's loss.
   MEL := 0;
   MinLoss := 1000000;
   MinLossEpoch := -1;
 
-  // Initialization.
+  // Initializing at zero the speed and efficiency statistics.
+  LossImprovementPerHour := 0.0;
+  TokensPerSecond := 0.0;
+  LossImprovementPerMTok := 0.0;
+  BitsPerByte := 0.0;
+
+  // General initialization.
   StopTraining := False;
   Training := True;
   WasNewModel := NewModel;
   InitializeAdaptiveLRState(AdaptiveLRState);
-
   if WasNewModel then
     InitializeNewTrainingSettings;
 
-  // Initialize rolling improvement variables.
+  // Initializing rolling improvement variables.
   RecentImprovementIndex := 0;
   RecentImprovementCount := 0;
   RecentImprovementSum := 0.0;
@@ -367,10 +373,10 @@ begin
     Exit;
   end;
 
-  // Initialize state.
+  // Initializing state.
   InitializeTransformerState(WModelState);
 
-  // Initialize params if new model.
+  // Initializing params if new model.
   NeedParamCopy := (not CudaAllocated) or ParamsNeedCopyToDevice or WasNewModel;
 
   if WasNewModel then
@@ -378,8 +384,7 @@ begin
 
   NewModel := False;
 
-  // Initiate CUDA and allocate all CUDA buffers,
-  // including AdamW dM and dV.
+  // Initiate CUDA and allocate all CUDA buffers, including AdamW dM and dV.
   StartCuda(WModelParams, WModelState, WAdamWState);
 
   try
@@ -411,8 +416,8 @@ begin
     // Initialize epoch/sequence loop.
     Start := 0;
     FirstEpoch := CompletedEpochs;
-    // EpochTime := Now;
-    Writeln('Training started.');
+    PreTrainingLoss := ComputeLossOnly(WModelParams, WModelState, InputTokens, TargetTokens);
+    Writeln('Training started. Initial loss before training = ', PreTrainingLoss: 8: 6, '; Perplexity = ', Exp(PreTrainingLoss): 0: 7, '.');
     Writeln;
     Write(DateTimeToStr(Now), '  I = get program Information. L = set Learning rate. N = go to iNference. P = Pause. ');
     Writeln('S = Save. T = set sTride. V = toggle Verbose mode. W = set Weight decay. X = eXit training. Training...');
@@ -671,19 +676,19 @@ begin
         if (Epoch >= AutoSaveEpoch) and ((Epoch - LastBestSaveEpoch) >= MinSaveGap) and
           ((BestSavedLoss = MaxDouble) or ((BestSavedLoss - MEL) >= MinSaveDelta)) then begin
 
-            // Display saving of first and subsequent best models.
-            if LastBestSaveEpoch < 0 then   // First time.
-              Write('--Saving first best model in epoch ', Epoch)
-            else                            // Subsequent times.
-              Write('--Saving new best model. Previous saved best = ', BestSavedLoss: 9: 7, ' in epoch ', LastBestSaveEpoch, '; new best = ', MEL: 9: 7, ' in epoch ', Epoch);
-            // For saving all best models.
-            if SaveModel(BestModelFileName, WModelParams, WAdamWState) then begin
-              LastBestSaveEpoch := Epoch;
-              BestSavedLoss := MEL;
-              Writeln('. Best model saved.');
-            end
-            else
-              Writeln('. Best model not saved.');
+          // Display saving of first and subsequent best models.
+          if LastBestSaveEpoch < 0 then   // First time.
+            Write('--Saving first best model in epoch ', Epoch)
+          else                            // Subsequent times.
+            Write('--Saving new best model. Previous saved best = ', BestSavedLoss: 9: 7, ' in epoch ', LastBestSaveEpoch, '; new best = ', MEL: 9: 7, ' in epoch ', Epoch);
+          // For saving all best models.
+          if SaveModel(BestModelFileName, WModelParams, WAdamWState) then begin
+            LastBestSaveEpoch := Epoch;
+            BestSavedLoss := MEL;
+            Writeln('. Best model saved: ', BestModelFileName, '.');
+          end
+          else
+            Writeln('. Best model not saved.');
         end;
       end;
 
@@ -706,7 +711,7 @@ begin
           Writeln('; Worse by ', -DiffLoss: 8: 6, '.');
       end
       else
-        Writeln('.');
+        Writeln('; Initial improvement = ', (PreTrainingLOss - MEL): 8: 6, '.');
 
       // Display loss progress every 10 epochs.
       if (Epoch mod 10) = 0 then begin
@@ -718,8 +723,9 @@ begin
           MeanElapsedEpochTime := (Now - EpochTime) * 86400.0 / 10;
         EpochTime := Now;
 
-        // Parameters.
-        Write('>>Work = ', ExtractFileName(ExcludeTrailingPathDelimiter(WorkingDir)), '; nTC = ', Length(TokenizedCorpus), '; nVocab = ', nVocab,
+        // Display parameters.
+        // Writeln;
+        Write('>>{Epoch ', Epoch, '.}Work = ', ExtractFileName(ExcludeTrailingPathDelimiter(WorkingDir)), '; nTC = ', Length(TokenizedCorpus), '; nVocab = ', nVocab,
           '; DimVocab = ', DimVocab, '; Seqlen = ', SeqLen, '; Stride = ', Stride, '; ModelDim = ', ModelDim, '; nHead = ', nHead, '; nBlock =  ', nBlock,
           '; Proj = ', Proj, '; Shuffling = ', ShuffleWindows, '; DropOut = ', Training);
         if Training then
@@ -734,34 +740,48 @@ begin
 
         // Display learning-rate mode.
         if OverrideLearningRate <> -1.0 then begin
-          Write('>>Learning rate (override) = ', LearningRate:8:6);
+          Writeln('>>Learning rate (override) = ', LearningRate: 8: 6, '.');
         end
         else if AdaptiveLearning then begin
-          Write('>>Learning rate (adaptive) = ', LearningRate:9:7);
+          Writeln('>>Learning rate (adaptive) = ', LearningRate: 9: 7, '. ', AdaptiveLRReason);
         end
         else begin
           Case LearningStyle of
             FlatLearning:
-              Write('>>Learning rate (flat) = ', LearningRate:9:7, '.');
+              Writeln('>>Learning rate (flat) = ', LearningRate: 9: 7, '.');
 
             SlowLearning:
-              Write('>>Learning rate (slow) = ', LearningRate:9:7, ' with 0..2: 0.000100; 3..7: 0.000075; 8..15: 0.000050; ',
-                '16..30: 0.000025; 31..60: 0.000015; 61..100: 0.000010; else 0.000005');
+              Writeln('>>Learning rate (slow) = ', LearningRate: 9: 7, ' with 0..2: 0.000100; 3..7: 0.000075; 8..15: 0.000050; ',
+                '16..30: 0.000025; 31..60: 0.000015; 61..100: 0.000010; else 0.000005.');
 
             FastLearning:
-              Write('>>Learning rate (fast) = ', LearningRate:9:7, ' with 0..2: 0.00030; 3..10: 0.00020; 11..30: 0.00010; ',
-                '31..100: 0.000050; 101..400: 0.000025; 401..800: 0.000010; else 0.000005');
+              Writeln('>>Learning rate (fast) = ', LearningRate: 9: 7, ' with 0..2: 0.00030; 3..10: 0.00020; 11..30: 0.00010; ',
+                '31..100: 0.000050; 101..400: 0.000025; 401..800: 0.000010; else 0.000005.');
 
             RolledOffLearning:
-              Write('>>Learning rate (rolloff) = ', LearningRate:9:7,
-                ' Floor LR = ', FloorLearningRate:9:7, ' Base LR = ', BaseLearningRate:9:7, ' LR rolloff = ', RollOff: 9: 7);
+              Writeln('>>Learning rate (rolloff) = ', LearningRate: 9: 7,
+                ' Floor LR = ', FloorLearningRate: 9: 7, ' Base LR = ', BaseLearningRate: 9: 7, ' LR rolloff = ', RollOff: 9: 7, '.');
           end;
         end;
 
+        // Claculate speed statistics.
+        if MeanElapsedEpochTime > 0.0 then begin
+          LossImprovementPerHour := MeanRunningImprovement * 3600.0 / MeanElapsedEpochTime;
+          TokensPerSecond := (WindowCount * SeqLen) / MeanElapsedEpochTime;
+          if (WindowCount > 0) and (SeqLen > 0) then
+            LossImprovementPerMTok := MeanRunningImprovement * 1000000.0 / (WindowCount * SeqLen);
+        end;
+        // Writeln('BPB DEBUG: MEL=', MEL:0:6, ' RawTokenCount=', RawTokenCount, ' nCorpus=', nCorpus);
+        // Calculate efficiency statistic.
+        if nCorpus > 0 then
+          BitsPerByte := MEL * RawTokenCount / nCorpus / Ln(2.0)
+        else
+          BitsPerByte := 0.0;
+
         // Display training and LR information.
-        Writeln('; Window # = ', WindowCount, '; Mean epoch time = ', MeanElapsedEpochTime: 0: 2, ' seconds; Loss per hour = ', MeanRunningImprovement / MeanElapsedEpochTime * 3600.0: 8: 6,
-          '; Weight decay = ', WeightDecay: 8: 6, '; Clip limit = ', ClipLimit: 8: 6, '.');
-        Writeln('>>Adaptive LR = ', LearningRate: 9: 7, '. ', AdaptiveLRReason);
+        Writeln('>>Window # = ', WindowCount, '; Weight decay = ', WeightDecay: 8: 6, '; Clip limit = ', ClipLimit: 8: 6,
+          '; Mean epoch time = ', MeanElapsedEpochTime: 0: 2, ' secs; Bits per byte = ', BitsPerByte: 0: 4, '; Training speed = ', TokensPerSecond: 0: 0,
+          ' tok/sec; Loss improvement/hour = ', LossImprovementPerHour: 0: 4, '; Loss improvement/Mtok = ', LossImprovementPerMTok: 0: 4, '.');
 
         // Report full tensor stats.
         if VerboseTransform then

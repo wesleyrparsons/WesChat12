@@ -8,6 +8,7 @@ interface
 
 uses
   Classes,
+  Display,
   Fpjson,
   Global,
   Jsonparser,
@@ -295,7 +296,10 @@ begin
   Vocab.CaseSensitive := True;
   Vocab.OwnsObjects := False;
 
-  if not FileExists(FileName) then begin
+  if FileExists(FileName) then begin
+    Writeln('Vocabulary file ', FileName, ' found.');
+  end
+  else begin
     Writeln('ERROR: Vocabulary file not found: ', FileName);
     Exit;
   end;
@@ -313,7 +317,7 @@ begin
   JSON := GetJSON(Raw);
   try
     if not (JSON is TJSONObject) then begin
-      Writeln('Invalid vocabulary JSON.');
+      Writeln('Invalid vocabulary file JSON.');
       Exit;
     end;
 
@@ -338,12 +342,12 @@ begin
     // Place each token at its actual ID.
     for i := 0 to Obj.Count - 1 do begin
       TokenID := Obj.Items[i].AsInteger;
-
       if (TokenID >= 0) and (TokenID <= MaxTokenID) then
         Vocab[TokenID] := Obj.Names[i];
     end;
 
   finally
+    Writeln('Vocabulary file ', FileName, ' loaded.');
     JSON.Free;
   end;
 
@@ -388,7 +392,7 @@ begin
     SL.Free;
   end;
 
-  Writeln('End of loading merges. Length of merges: ', Merges.Count);
+  Writeln('End of loading merges. Length of merges: ', Merges.Count, '. Tokeninizing...');
 end;
 
 function UTF8CharLen(P: PChar): Integer;
@@ -574,6 +578,7 @@ begin
   EnsureGPT2MergesLoaded;
 
   TokenizeFile(FileName, Vocab, GPT2Merges, OutTokens);
+
 end;
 
 procedure RunGPT2TokenizeString(const InputString: string; var TokenizedCorpus: TIVector);

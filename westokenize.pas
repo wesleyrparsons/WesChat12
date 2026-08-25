@@ -101,32 +101,13 @@ begin
   Root^.TokenID := -1;
 
   for i := 0 to High(SymbolTable) do begin
-    if (i = BOS) or (i = EOS) or (i = PAD) or (i = UNK) then
-      Continue;
-
-    if SymbolTable[i] = '' then
-      Continue;
-
-    InsertTrieSymbol(Root, SymbolTable[i], i);
-  end;
-end;
-
-{procedure BuildTrie(out Root: PTrieNode);
-var
-  i: Integer;
-begin
-  New(Root);
-  FillChar(Root^, SizeOf(TTrieNode), 0);
-  Root^.TokenID := -1;
-
-  for i := 0 to High(SymbolTable) do begin
-    // Skip special tokens 256..259.
     if (i = BOS) or (i = EOS) or (i = PAD) or (i = UNK) then Continue;
+
     if SymbolTable[i] = '' then Continue;
 
     InsertTrieSymbol(Root, SymbolTable[i], i);
   end;
-end;}
+end;
 
 // Free trie nodes.
 procedure FreeTrie(var Node: PTrieNode);

@@ -204,18 +204,6 @@ Other diagnostics include:
 * Parameter and gradient RMS statistics
 * LayerNorm gamma statistics
 
-### Bits per Byte
-
-Bits per byte is particularly useful when comparing different tokenizers.
-
-WesChat calculates:
-
-```text
-BPB = MeanEpochLoss × RawTokenCount / CorpusByteCount / ln(2)
-```
-
-Unlike token-level perplexity, BPB provides a common basis for comparing models trained on different tokenizations of the same corpus.
-
 ---
 
 ## CUDA and cuBLAS

@@ -130,8 +130,6 @@ WesChat can also use the standard GPT-2 vocabulary and merge table.
 
 This provides a useful reference tokenizer and makes it possible to compare WesChat's native tokenization with an established byte-level BPE tokenizer.
 
-Tokenizer experiments are evaluated not only with token-level cross-entropy but also with **bits per byte (BPB)**, since raw token loss and perplexity cannot be compared directly when two tokenizers produce different token streams.
-
 ---
 
 ## Training

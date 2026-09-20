@@ -9,8 +9,8 @@
         <Filename Value="WesChat.lpr"/>
         <IsPartOfProject Value="True"/>
         <IsVisibleTab Value="True"/>
-        <TopLine Value="823"/>
-        <CursorPos Y="855"/>
+        <TopLine Value="748"/>
+        <CursorPos Y="780"/>
         <UsageCount Value="233"/>
         <Loaded Value="True"/>
       </Unit>
@@ -223,10 +223,6 @@
     <JumpHistory HistoryIndex="29">
       <Position>
         <Filename Value="WesChat.lpr"/>
-        <Caret Line="404" Column="23" TopLine="396"/>
-      </Position>
-      <Position>
-        <Filename Value="WesChat.lpr"/>
         <Caret Line="780" TopLine="748"/>
       </Position>
       <Position>
@@ -339,6 +335,10 @@
       <Position>
         <Filename Value="WesChat.lpr"/>
         <Caret Line="658" Column="27" TopLine="642"/>
+      </Position>
+      <Position>
+        <Filename Value="WesChat.lpr"/>
+        <Caret Line="855" TopLine="823"/>
       </Position>
     </JumpHistory>
     <RunParams>

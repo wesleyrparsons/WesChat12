@@ -613,7 +613,7 @@ begin
   if Length(TokenizedCorpus) = 0 then Exit;
 
   if AskYesNo('Save token list?', True) then begin
-    Write('Output token list file name, blank for ', ExtractFileName(DefaultTokenFile(CurrentBaseName)), ': ');
+    Write('Enter token list file name, blank for ', ExtractFileName(DefaultTokenFile(CurrentBaseName)), ': ');
     Readln(S);
 
     TokenFileName := MakeOutputFileName(S, TokenDir, CurrentBaseName, '.tok');
@@ -672,32 +672,6 @@ begin
     SaveFiles := OldSaveFiles;
   end;
   RawTokenCount := Length(TokenizedCorpus);
-end;
-
-procedure TokenizeWithWes;
-var
-  SourceChoice: string;
-begin
-  SetTokenizerMode(WesTokenizer);
-
-  SourceChoice := AskChoice(
-    'Corpus source: F = one file, L = list of corpus file names', 'F/L');
-
-  if SourceChoice = 'L' then begin
-    ProcessFileList(ListFile, Corpus);
-
-    if Length(Corpus) < MinCorpus then begin
-      Writeln('Combined corpus too small. Aborting tokenization.');
-      Exit;
-    end;
-  end
-  else
-    if not ReadCorpusFilePrompt(CorpusFileName, Corpus) then Exit;
-
-  // Explicit selection remains authoritative.
-  SetTokenizerMode(WesTokenizer);
-
-  TokenizePreparedWesCorpus;
 end;
 
 // Main workflow.
@@ -775,6 +749,32 @@ begin
 
   if AskYesNo('Save tokenization files?', True) then
     SaveTokenizationFilesDefault(CurrentBaseName);
+end;
+
+procedure TokenizeWithWes;
+var
+  SourceChoice: string;
+begin
+  SetTokenizerMode(WesTokenizer);
+
+  SourceChoice := AskChoice(
+    'Corpus source: F = one file, L = list of corpus file names', 'F/L');
+
+  if SourceChoice = 'L' then begin
+    ProcessFileList(ListFile, Corpus);
+
+    if Length(Corpus) < MinCorpus then begin
+      Writeln('Combined corpus too small. Aborting tokenization.');
+      Exit;
+    end;
+  end
+  else
+    if not ReadCorpusFilePrompt(CorpusFileName, Corpus) then Exit;
+
+  // Explicit selection remains authoritative.
+  SetTokenizerMode(WesTokenizer);
+
+  TokenizePreparedWesCorpus;
 end;
 
 function CreateUDTaggedCorpus(out TaggedFileName: string): Boolean;
@@ -1117,7 +1117,7 @@ begin
     'J': begin
       MergeSymbolTables(CombinedSymbolTable);
 
-      Write('Output combined symbol table name, blank for combined.sym: ');
+      Write('Enter combined symbol table name, blank for combined.sym: ');
       Readln(S);
 
       SymbolFileName := MakeOutputFileName(S, SymbolDir, 'joined', '.sym');
@@ -1129,7 +1129,8 @@ begin
   ResetWesTrie;
 end;
 
-// Folder utilities.
+{ Folder Utilities }
+// Display folder utilities.
 procedure ShowWorkFolders;
 begin
   Writeln;
@@ -1147,6 +1148,7 @@ begin
   Writeln('ScratchDir       = ', ScratchDir);
 end;
 
+// Function to count the number of files in dir.
 function CountFilesInDir(const DirName: string): Integer;
 var
   SR: TSearchRec;
@@ -1171,6 +1173,7 @@ begin
   end;
 end;
 
+// proc to show work folders.
 procedure ShowWorkFolderFileCounts;
 begin
   Writeln;
@@ -1184,6 +1187,7 @@ begin
   Writeln('ScratchDir : ', CountFilesInDir(ScratchDir));
 end;
 
+// Proc to list work subfolders.
 procedure ListWorkFolderSubfolders;
 begin
   Writeln;
@@ -1198,6 +1202,7 @@ begin
   Writeln('scratch : ', ScratchDir);
 end;
 
+// Proc to change existing work root.
 procedure ChangeExistingWorkRoot;
 var
   NewDir, OldDir: string;
@@ -1237,6 +1242,7 @@ begin
   Writeln('The current active work folder remains: ', WorkRoot);
 end;
 
+// Proc to change work folder.
 procedure ChangeWorkFolder;
 var
   NewDir: string;
@@ -1259,6 +1265,7 @@ begin
   ShowWorkFolders;
 end;
 
+// Folder utilities menu.
 procedure DoFolderUtilities;
 var
   Choice: string;
@@ -1291,7 +1298,7 @@ begin
   until Choice = 'X';
 end;
 
-// Main workflow for Bela.
+// Work flow: Bela model.
 procedure DoBelaModel;
 begin
   Writeln;
@@ -1359,7 +1366,7 @@ begin
   end;
 end;
 
-// Main work flow: Damned Thing.
+// Work flow: Damned Thing model.
 procedure DoDamnedThingModel;
 begin
   Writeln;
@@ -1419,6 +1426,7 @@ begin
   end;
 end;
 
+{ Resume Models }
 // Enhance an existing model, with symbol table.
 procedure DoEnhanceModel;
 begin
@@ -1694,21 +1702,20 @@ begin
     RunInfer(WModelParams, WModelState, WAdamWState);
 end;
 
+{ Predefined Models }
+// Wes predefined models.
 procedure DoGibbon905Model;
 begin
-  //nCorpus := 10708492;
   DoResumeBestWesTModel('Gibbon 905 Best Model', 'gibbon905', 'gibbon', WesTokenizer);
 end;
 
 procedure DoUFS904Model;
 begin
-  //nCorpus := 10708492;
   DoResumeBestWesTModel('UFS 904 Best Model', 'UFS904', 'UFS', WesTokenizer);
 end;
 
 procedure DoChurchill905Model;
 begin
-  //nCorpus := 9540294;
   DoResumeBestWesTModel('Churchill 831 Best Model', 'churchill831', 'churchill', WesTokenizer);
 end;
 
@@ -1717,10 +1724,15 @@ begin
   DoResumeBestWesTModel('TWON 906 Best Model', 'TWON906', 'TWON', WesTokenizer);
 end;
 
+// UD predefined models.
 procedure DoTS2UDModel;
 begin
-  TokenizerKind := UDTokenizer;
   DoResumeBestWesTModel('Tiny Stories 2MB WesUD 916 Best Model', 'ts2mb916ud', 'tinystories_2mb_ud', UDTokenizer);
+end;
+
+procedure DoTS5UDModel;
+begin
+  DoResumeBestWesTModel('Tiny Stories 5MB WesUD 919 Best Model', 'ts5mb919ud', 'tinystories_5mb_ud', UDTokenizer);
 end;
 
 procedure DoTS10WModel;
@@ -1728,30 +1740,28 @@ begin
   DoResumeBestWesTModel('Tiny Stories 10MB WesT 910 Best Model', 'ts10mb910', 'tinystories_10mb', WesTokenizer);
 end;
 
-procedure DoTS20GModel;
-begin
-  //nCorpus := 20000000;
-  DoResumeBestGPT2Model('Tiny Stories 20MB GPT2 906 Best Model', 'ts20mb906g', 'tinystories_20mb');
-end;
-
 procedure DoTS40WModel;
 begin
-  //nCorpus := 20000000;
   DoResumeBestWesTModel('Tiny Stories 40MB WesT 904 Best Model', 'ts40mb904', 'tinystories_40mb', WesTokenizer);
-end;
-
-procedure DoTS60GModel;
-begin
-  //nCorpus := 60000000;
-  DoResumeBestGPT2Model('Tiny Stories 60MB GPT2 827 Best Model', 'ts60mb827g', 'tinystories_60mb');
 end;
 
 procedure DoTS100WModel;
 begin
-  //nCorpus := 20000000;
   DoResumeBestWesTModel('Tiny Stories 100MB WesT 905 Best Model', 'ts40mb905', 'tinystories_100mb', WesTokenizer);
 end;
 
+// ChatGPT2 predefined models.
+procedure DoTS20GModel;
+begin
+  DoResumeBestGPT2Model('Tiny Stories 20MB GPT2 906 Best Model', 'ts20mb906g', 'tinystories_20mb', GPT2Tokenizer);
+end;
+
+procedure DoTS60GModel;
+begin
+  DoResumeBestGPT2Model('Tiny Stories 60MB GPT2 827 Best Model', 'ts60mb827g', 'tinystories_60mb', GPT2Tokenizer);
+end;
+
+// Menu for predefined work.
 procedure DoPredefinedWork;
 var
   TChoice: string;
@@ -1764,6 +1774,7 @@ begin
     Writeln('C: Resume the Churchill 905 WesT best model.');
     Writeln('T: Resume the The Wealth of Nations 906 WesT best model.');
     Writeln('TS2UD: Resume the Tiny Stories 2MB WesUD model.');
+    Writeln('TS5UD: Resume the Tiny Stories 5MB WesUD model.');
     Writeln('TS10W: Resume the Tiny Stories 10MB WesT model.');
     Writeln('TS20G: Resume the Tiny Stories 20MB GPT2 model.');
     Writeln('TS40W: Resume the Tiny Stories 40MB WesT model.');
@@ -1789,7 +1800,8 @@ begin
   until TChoice = 'X';
 end;
 
-// Display menu.
+{ Main, Options, and Help Menus }
+// Display main user menu.
 procedure Options;
 var
   Creator: string = 'Wesley R. Parsons, wespar@bellouth.net, www.wesparsons.com';
@@ -1797,7 +1809,6 @@ begin
   Writeln('Options:');
   Writeln('  T: Tokenize -- create a token list from a corpus or a corpus file list.');
   Writeln('     Uses WesTokenize or GPT2Tokenize. WesTokenize may create a symbol table or use an existing one.');
-  Writeln('  U: Pre-Tokenize with UD Tags -- before tokenizing, add universal dependencies tags to the corpus.');
   Writeln('  R: Train -- train a model on a token list.');
   Writeln('     Requires a token list and matching symbol table. Can start a new model or resume from a saved model.');
   Writeln('  I: Infer -- run inference.');
@@ -1807,9 +1818,10 @@ begin
   Writeln('  M: Do predefined work -- train corpora or resume models: Bela, Damned Thing, Gibbon, Locke, TWON, Churchill, or TinyS tories.');
   Writeln('  E: Enhance -- continue training an existing model on a new corpus using its existing symbol table.');
   Writeln('  F: File/folder utilities.     P: Program information.     H: Help and options.     X: Exit.');
-  if Length(Creator) = 0 then Writeln;
+  if Length(Creator) = 0 then Writeln; // Ensure my name is in code.
 end;
 
+// Display help information and optional choices.
 procedure Help;
 begin
   Options;
@@ -1847,12 +1859,13 @@ begin
   Writeln('  LR:   Override learning rate');
   Writeln('  TEMP: Temperature');
   Writeln;
-  Writeln('Tokenizer:');
+  Writeln('Tokenizer:');      // Do I want these?
   Writeln('  UTOK:    Universal Dependencies');
   Writeln('  WTOK:    Wes');
   Writeln('  CTOK:    ChatGPT2');
 end;
 
+// Handle the optional user choices.
 procedure HandleSettingCommand(const Cmd: string);
 begin
   case Cmd of
@@ -1996,38 +2009,43 @@ begin
   end;
 end;
 
-// Program startup
+// Main program.
 begin
+  // Set the console display.
   SetMultiByteConversionCodePage(CP_UTF8);
   SetMultiByteRTLFileSystemCodePage(CP_UTF8);
-
   SetConsoleOutputCP(CP_UTF8);
   SetConsoleCP(CP_UTF8);
 
-  Writeln('WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons.');
+  // Splash the program information.
+  Writeln('WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellsouth.net..');
   Writeln;
 
+  // Splash the key program variables needed for options.
   ReportKeyVariables;
   Writeln;
 
+  // Make work root c:\wc\, but allow user to change working dir.
   NormalizeExistingWorkRoot;
-
   Writeln('Work folders are created under ', ExistingWorkRoot);
   Write('Enter work folder name, blank for WesChatWork: ');
   Readln(WorkingDir);
 
+  // Initialize working dir. Default is WesChatWork.
   WorkingDir := ResolveWorkFolder(WorkingDir);
   InitWorkFolders(WorkingDir);
-
   Writeln('Work folder: ', WorkRoot);
 
+  // Display the options for user.
   Options;
 
+  // Get a choice from user.
   while True do begin
     Write('W>');
     Readln(Ch);
     Ch := UpperCase(Trim(Ch));
 
+    // Main choices.
     case Ch of
       'T': DoTokenize;
       'R': DoTrain;
@@ -2040,6 +2058,7 @@ begin
       'H': Help;
       'X', 'EXIT': Break;
 
+    //Optional choices.
       'VTO', 'NVTO', 'DC', 'NDC', 'DTW', 'NDTW',
       'DMW', 'NDMW', 'DTV', 'NDTV', 'DEBR', 'NDEBR',
       'VTR', 'NVTR', 'VI', 'NVI',
@@ -2047,14 +2066,14 @@ begin
       'DW', 'NDW', 'DNP', 'DP', 'SF', 'NSF',
       'TEMP', 'LR', 'MM', 'PC',
       'WTOK', 'UTOK', 'GTOK':
-        HandleSettingCommand(Ch);
+        HandleSettingCommand(Ch); // Handle under separate proc.
 
       else
         Writeln('Invalid input. Enter H for help.');
     end;
   end;
 
-  // Stop cuda.
+  // End program. Stop cuda.
   if CudaAllocated or (CuHandle <> nil) then
     EndCuda(WModelParams, WModelState, WAdamWState);
 

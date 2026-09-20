@@ -2,7 +2,7 @@ unit Matrix;
 
 {$mode ObjFPC}{$H+}{$I proprietary.txt}
 
-{ WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wesparsons.com.}
+{ WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellsouth.net, www.wesparsons.com.}
 // Matrix wrappers assume CUBLAS_POINTER_MODE_HOST.
 
 interface

@@ -22,7 +22,7 @@ implementation
 procedure RunOutputForward(var WModelParams: TWModelParams; var WModelState: TWModelState);
 var
   Temperature: Single;
-  begin
+begin
   // 3. FORWARD HEAD OUTPUT STAGE.
   Stage := nBlock * 4 + 2;
 

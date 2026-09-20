@@ -2,12 +2,13 @@ program WesChat;
 
 {$mode ObjFPC}{$H+}{$R-}{$I proprietary.txt}  // Use ling strings. Range checking off.
 
-{ WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wesparsons.com.}
-{ Note: Edited 8/18/2026 4 pm -- working from WesChat12 on OneDrive }
+{ WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellsouth.net, www.wesparsons.com.}
+{ Note: Edited 9/16/2026 9 am -- working from WesChat12 on OneDrive }
 { The TokenizedCorpusPresent, SymbolTablePresent, and ModelPresent flags are maintained only in the predefined-model paths, not the ordinary workflows }
-{ In procedure RunGPT2Tokenize(const FileName: string; var TokenizedCorpus: TIVector); the input is a filename, but I don;t have
-a file in Infer, I have a string. How do I tokenize? }
-{ Move adaptiveLR routines to Train unit }
+{ ExistingWorkRoot = C:\wc\ The default base drive/root for works.
+  WorkingDir = C:\wc\gibbon816\ The selected work directory for the current project.
+  WorkRoot The normalized authoritative version of that working directory, usually set by InitWorkFolders. }
+
 uses
   Classes,
   CombineTables,
@@ -22,8 +23,10 @@ uses
   OutputHead,
   ShellAPI,
   Symbolize,
+  StrUtils,
   SysUtils,
   Train,
+  UDTag,
   Util,
   WesTokenize,
   Windows;
@@ -89,14 +92,20 @@ begin
   Result := FormatDateTime('yyyy-mm-dd_hhnnss', Now);
 end;
 
-// Use the existing work root set above.
-{procedure SetWorkFileNames;
+// Set the counts for raw and padded tokens, and nTC.
+procedure SetLoadedTokenCounts(var Tokens: TIVector);
 begin
-  BestModelFileName := ModelDir + WorkingName + '_best.model';
-  TokenFileName := TokenDir + WorkingName + '.tok';
-  SymbolFileName := SymbolDir + WorkingName + '.sym';
-  RunFileName := RunDir + WorkingName + '.run';
-end;}
+  // Loaded token lists may already contain padding.
+  RawTokenCount := Length(Tokens);
+
+  while (RawTokenCount > 0) and (Tokens[RawTokenCount - 1] = PAD) do
+    Dec(RawTokenCount);
+
+  PadToSeqMultiple(Tokens, SeqLen);
+
+  PaddedTokenCount := Length(Tokens);
+  nTokenizedCorpus := PaddedTokenCount;
+end;
 
 // Set the filenames of the various files for saving.
 procedure SetWorkIdentity(const RootDir, BaseName: string);
@@ -128,26 +137,35 @@ begin
   Result := ExtractFilePath(S) <> '';
 end;
 
+// Resolve an input file name.
 function ResolveInputFile(const UserName, PreferredDir: string): string;
+var
+  S: string;
 begin
-  Result := Trim(UserName);
+  S := Trim(UserName);
+  Result := S;
+  if S = '' then Exit;
 
-  if Result = '' then
-    Exit;
-
-  if FileExists(Result) then begin
-    Result := ExpandFileName(Result);
+  // Use an existing filename or path exactly as entered.
+  if FileExists(S) then begin
+    Result := ExpandFileName(S);
     Exit;
   end;
 
-  if not PathHasDirectory(Result) then begin
-    if FileExists(PreferredDir + Result) then begin
-      Result := PreferredDir + Result;
+  // Search for a bare filename.
+  if not PathHasDirectory(S) then begin
+    if FileExists(WorkingDir + S) then begin
+      Result := WorkingDir + S;
       Exit;
     end;
 
-    if FileExists(WorkRoot + Result) then begin
-      Result := WorkRoot + Result;
+    if FileExists(PreferredDir + S) then begin
+      Result := PreferredDir + S;
+      Exit;
+    end;
+
+    if FileExists('C:\wc\' + S) then begin
+      Result := 'C:\wc\' + S;
       Exit;
     end;
   end;
@@ -263,13 +281,35 @@ begin
   Writeln('Log written: ', LogName, '.');
 end;
 
-// Set tokenizer as WesTokenize or GPT2TTokenize.
-procedure SetTokenizerMode(const NewTokenizer: TTokenizer);
+// Detect the tokenizer kind used from examining the filename.
+function TokenizerKindFromFileName(const FileName: string; out Kind: TTokenizerKind): Boolean;
+var
+  S: string;
 begin
-  Tokenizer := NewTokenizer;
+  S := LowerCase(ExtractFileName(FileName));
 
-  case Tokenizer of
-    WesTokenizer: begin
+  if EndsText('_ud.tok', S) or EndsText('_ud.sym', S) then
+    Kind := UDTokenizer
+  else if EndsText('_g.tok', S) or EndsText('_g.sym', S) or EndsText('_gpt2.tok', S) or EndsText('_gpt2.sym', S) then
+    Kind := GPT2Tokenizer
+  else if EndsText('_w.tok', S) or EndsText('_w.sym', S) or EndsText('_wes.tok', S) or EndsText('_wes.sym', S) or
+    EndsText('_west.tok', S) or EndsText('_west.sym', S) then
+    Kind := WesTokenizer
+  else begin
+    Result := False;
+    Exit;
+  end;
+
+  Result := True;
+end;
+
+// Set tokenizer as WesTokenize or GPT2TTokenize.
+procedure SetTokenizerMode(const NewTokenizerKind: TTokenizerKind);
+begin
+  TokenizerKind := NewTokenizerKind;
+
+  case TokenizerKind of
+    WesTokenizer, UDTokenizer: begin
       BOS := 256;
       EOS := 257;
       PAD := 258;
@@ -332,6 +372,33 @@ begin
 
   if not Result then
     Writeln('File too small: ', FileName, '. Size = ', FileSize(FileName), ' minimum = ', MinSize, '.');
+end;
+
+// Find the TokenizerKind from the end of the basename.
+function TokenizerKindFromBaseName(const BaseName: string; out Kind: TTokenizerKind): Boolean;
+var
+  S: string;
+begin
+  S := LowerCase(BaseName);
+
+  if RightStr(S, 3) = '_ud' then
+    Kind := UDTokenizer
+  else if RightStr(S, 5) = '_gpt2' then
+    Kind := GPT2Tokenizer
+  else if RightStr(S, 2) = '_g' then
+    Kind := GPT2Tokenizer
+  else if RightStr(S, 5) = '_west' then
+    Kind := WesTokenizer
+  else if RightStr(S, 4) = '_wes' then
+    Kind := WesTokenizer
+  else if RightStr(S, 2) = '_w' then
+    Kind := WesTokenizer
+  else begin
+    Result := False;
+    Exit;
+  end;
+
+  Result := True;
 end;
 
 function ReadCorpusFilePrompt(var OutCorpusFileName: string; var OutCorpus: TBVector): Boolean;
@@ -442,6 +509,8 @@ end;
 
 // Load helpers.
 function LoadSymbolTablePrompt: Boolean;
+var
+  DetectedKind: TTokenizerKind;
 begin
   Result := False;
 
@@ -449,6 +518,12 @@ begin
   Readln(SymbolFileName);
 
   if not RequireExistingFile(SymbolFileName, SymbolDir) then Exit;
+
+  if TokenizerKindFromFileName(SymbolFileName, DetectedKind) then begin
+    SetTokenizerMode(DetectedKind);
+    Writeln('Tokenizer selected from symbol file name: ',
+      TokenizerKindName(TokenizerKind));
+  end;
 
   FromSymbolTable := True;
   LoadSymbolTable(SymbolFileName, SymbolTable);
@@ -468,24 +543,28 @@ begin
 end;
 
 function LoadTokenListPrompt: Boolean;
+var
+  DetectedKind: TTokenizerKind;
 begin
   Result := False;
 
   Write('Enter token list file name: ');
   Readln(TokenFileName);
 
-  if not RequireExistingFile(TokenFileName, TokenDir) then
-    Exit;
+  if not RequireExistingFile(TokenFileName, TokenDir) then Exit;
+
+  if TokenizerKindFromFileName(TokenFileName, DetectedKind) then begin
+    SetTokenizerMode(DetectedKind);
+    Writeln('Tokenizer selected from token file name: ', TokenizerKindName(TokenizerKind));
+  end;
 
   IOHandler.LoadTokenList(TokenFileName, TokenizedCorpus);
+  SetLoadedTokenCounts(TokenizedCorpus);
 
   if Length(TokenizedCorpus) < MinTokens then begin
     Writeln('Token list too small. Length = ', Length(TokenizedCorpus));
     Exit;
   end;
-
-  PadToSeqMultiple(TokenizedCorpus, SeqLen);
-  nTokenizedCorpus := Length(TokenizedCorpus);
 
   CurrentBaseName := CleanBaseName(TokenFileName);
 
@@ -572,7 +651,7 @@ begin
   SaveTokenizationFiles := False;
 
   try
-    Writeln('Before WesTokenize: Length(SymbolTable) = ', Length(SymbolTable), '; nSymbols = ', nSymbols, '; nVocab = ', nVocab);
+    // Writeln('Before WesTokenize: Length(SymbolTable) = ', Length(SymbolTable), '; nSymbols = ', nSymbols, '; nVocab = ', nVocab);
     RunWesTokenize(InCorpus, OutTokens);
   finally
     SaveTokenizationFiles := OldSaveTokenizationFiles;
@@ -595,14 +674,14 @@ begin
   RawTokenCount := Length(TokenizedCorpus);
 end;
 
-// Main workflow.
 procedure TokenizeWithWes;
 var
-  SourceChoice, SymbolChoice: string;
+  SourceChoice: string;
 begin
-  SetLength(TokenizedCorpus, 0);
+  SetTokenizerMode(WesTokenizer);
 
-  SourceChoice := AskChoice('Corpus source: F = one file, L = list of corpus file names', 'F/L');
+  SourceChoice := AskChoice(
+    'Corpus source: F = one file, L = list of corpus file names', 'F/L');
 
   if SourceChoice = 'L' then begin
     ProcessFileList(ListFile, Corpus);
@@ -615,12 +694,26 @@ begin
   else
     if not ReadCorpusFilePrompt(CorpusFileName, Corpus) then Exit;
 
+  // Explicit selection remains authoritative.
   SetTokenizerMode(WesTokenizer);
 
-  SymbolChoice := AskChoice('Symbol table: C = create from corpus, S = load existing symbol table', 'C/S');
+  TokenizePreparedWesCorpus;
+end;
+
+// Main workflow.
+// Symbolize and tokenize a corpus already loaded into Corpus.
+// Used by both WesTokenizer and UDTokenizer.
+procedure TokenizePreparedWesCorpus;
+var
+  SymbolChoice: string;
+begin
+  SetLength(TokenizedCorpus, 0);
+
+  SymbolChoice := AskChoice(
+    'Symbol table: C = create from corpus, S = load existing symbol table',
+    'C/S');
 
   case SymbolChoice of
-
     'S': begin
       if not LoadSymbolTablePrompt then Exit;
     end;
@@ -633,21 +726,20 @@ begin
       ResetWesTrie;
       SetLength(SymbolTable, 0);
 
-      // Writeln('Before RunSymbolize: Length(SymbolTable) = ', Length(SymbolTable));
       Symbolize.RunSymbolize(Corpus);
-      // Writeln('After RunSymbolize: Length(SymbolTable) = ', Length(SymbolTable));
 
       nSymbols := Length(SymbolTable);
       nVocab := nSymbols;
 
-      Writeln('After RunSymbolize: nSymbols = ', nSymbols, '; nVocab = ', nVocab);
+      Writeln('After RunSymbolize: nSymbols = ', nSymbols,
+        '; nVocab = ', nVocab);
 
       if nSymbols < MinSymbols then begin
-        Writeln('Too few symbols found after symbolization. nSymbols = ', nSymbols);
+        Writeln('Too few symbols found after symbolization. nSymbols = ',
+          nSymbols);
         Exit;
       end;
 
-      // SymbolTable has changed, so force the Wes trie to be rebuilt.
       ResetWesTrie;
 
       if AskYesNo('Save symbolization files?', True) then
@@ -660,11 +752,13 @@ begin
     end;
   end;
 
-  Writeln('Tokenizing with WesChat...');
-  Writeln('Before WesTokenize: Length(SymbolTable) = ', Length(SymbolTable),
-    '; nSymbols = ', nSymbols, '; nVocab = ', nVocab);
+  Writeln('Tokenizing with ', TokenizerKindName(TokenizerKind), '...');
 
-  Writeln('Tokenizing with WesChat...');
+  if VerboseTokenize then
+    Writeln('Before WesTokenize: Length(SymbolTable) = ',
+      Length(SymbolTable), '; nSymbols = ', nSymbols,
+      '; nVocab = ', nVocab, '.');
+
   RunWesTokenizeNoAutoSave(Corpus, TokenizedCorpus);
 
   RawTokenCount := Length(TokenizedCorpus);
@@ -673,11 +767,89 @@ begin
   PaddedTokenCount := Length(TokenizedCorpus);
   nTokenizedCorpus := PaddedTokenCount;
 
-  Writeln('WesChat tokenization complete. Raw tokens = ', RawTokenCount, '; Padded tokens = ', PaddedTokenCount, '; Padding added = ',
-    PaddedTokenCount - RawTokenCount, '; Symbols = ', nSymbols, '.');
+  Writeln(TokenizerKindName(TokenizerKind),
+    ' tokenization complete. Raw tokens = ', RawTokenCount,
+    '; Padded tokens = ', PaddedTokenCount,
+    '; Padding added = ', PaddedTokenCount - RawTokenCount,
+    '; Symbols = ', nSymbols, '.');
 
   if AskYesNo('Save tokenization files?', True) then
     SaveTokenizationFilesDefault(CurrentBaseName);
+end;
+
+function CreateUDTaggedCorpus(out TaggedFileName: string): Boolean;
+var
+  InputFileName, S: string;
+begin
+  Result := False;
+
+  Writeln;
+  Writeln('--- Universal Dependencies Tokenization ---');
+
+  Write('Enter input corpus file name: ');
+  ReadLn(InputFileName);
+  InputFileName := Trim(InputFileName);
+
+  if InputFileName = '' then Exit;
+
+  if not RequireExistingFile(InputFileName, CorpusDir) then Exit;
+
+  TaggedFileName := ChangeFileExt(InputFileName, '') + '_ud.txt';
+
+  Write('Default tagged corpus is ', TaggedFileName, '. Change to: ');
+  ReadLn(S);
+
+  if Trim(S) <> '' then
+    TaggedFileName := Trim(S);
+
+  try
+    Writeln;
+    Writeln('Tagging corpus with Universal Dependencies...');
+
+    UDTagFile(UDPipeFileName, UDModelFileName,
+      InputFileName, TaggedFileName);
+
+    SetTokenizerMode(UDTokenizer);
+
+    Writeln('UD tagging complete.');
+    Writeln('Tagged corpus: ', TaggedFileName);
+    Writeln('Tokenizer is ', TokenizerKindName(TokenizerKind), '.');
+
+    Result := True;
+
+  except
+    on E: Exception do
+      Writeln('UD tagging error: ', E.Message);
+  end;
+end;
+
+procedure TokenizeWithUD;
+begin
+  SetTokenizerMode(UDTokenizer);
+
+  if not CreateUDTaggedCorpus(CorpusFileName) then Exit;
+
+  if not RequireMinFileSize(CorpusFileName, MinCorpus) then Exit;
+
+  ReadFileBytes(CorpusFileName, Corpus);
+  nCorpus := Length(Corpus);
+
+  CurrentBaseName := CleanBaseName(CorpusFileName);
+
+  SetLength(CorpusFileNames, 1);
+  CorpusFileNames[0] :=
+    CorpusFileName + '   ' +
+    IntToStr(FileSize(CorpusFileName)) + ' bytes   ' +
+    DateTimeToStr(FileDateToDateTime(FileAge(CorpusFileName)));
+
+  // Important: UD is still the tokenizer kind even though
+  // the underlying BPE engine is WesTokenize.
+  SetTokenizerMode(UDTokenizer);
+
+  Writeln('Using UD-tagged corpus: ', CorpusFileName);
+  Writeln('Tokenizer is ', TokenizerKindName(TokenizerKind), '.');
+
+  TokenizePreparedWesCorpus;
 end;
 
 procedure TokenizeGPTSingleFile;
@@ -773,44 +945,62 @@ begin
   MaybeSaveTokenList;
 end;
 
-// Do a tokenization procedure.
+// Do tokenization procedure.
+// Do tokenization procedure.
 procedure DoTokenize;
 var
   TokChoice, SourceChoice: string;
 begin
   Writeln;
   Writeln('--- Tokenize ---');
-  Writeln('Creates a token list from one corpus file or from a list of corpus files.');
-  Writeln('WesTokenize can create a new symbol table or use an existing one.');
-  Writeln('GPT2Tokenize uses the GPT-2 vocabulary.');
-  // Writeln;
+  Writeln('W = Wes tokenizer');
+  Writeln('U = Universal Dependencies tokenizer');
+  Writeln('G = GPT-2 tokenizer');
+  Writeln;
 
-  TokChoice := AskChoice('Tokenizer: W = WesTokenize, G = GPT2Tokenize', 'W/G');
+  TokChoice := AskChoice(
+    'Tokenizer: W = Wes, U = Universal Dependencies, G = GPT-2',
+    'W/U/G');
 
-  if TokChoice = 'G' then begin
-    SetTokenizerMode(GPT2Tokenizer);
+  case TokChoice of
+    'W': begin
+      SetTokenizerMode(WesTokenizer);
+      TokenizeWithWes;
+    end;
 
-    EnsureGPT2VocabLoaded;
+    'U': begin
+      SetTokenizerMode(UDTokenizer);
+      TokenizeWithUD;
+    end;
 
-    SourceChoice := AskChoice(
-      'Corpus source: F = one file, L = list of corpus file names', 'F/L');
+    'G': begin
+      SetTokenizerMode(GPT2Tokenizer);
+      EnsureGPT2VocabLoaded;
 
-    if SourceChoice = 'L' then
-      TokenizeGPTFileList
-    else
-      TokenizeGPTSingleFile;
-  end
-  else begin
-    SetTokenizerMode(WesTokenizer);
-    TokenizeWithWes;
+      SourceChoice := AskChoice(
+        'Corpus source: F = one file, L = list of corpus file names',
+        'F/L');
+
+      if SourceChoice = 'L' then
+        TokenizeGPTFileList
+      else
+        TokenizeGPTSingleFile;
+    end;
+
+    else begin
+      Writeln('Invalid tokenizer selection.');
+      Exit;
+    end;
   end;
 
   if Length(TokenizedCorpus) > 0 then begin
+    Writeln('Tokenizer kind before training: ',
+      TokenizerKindName(TokenizerKind));
+
     if AskYesNo('Proceed to training now?', True) then begin
       NewModel := True;
       ParamsNeedCopyToDevice := True;
 
-      // CurrentBaseName is now final. Establish all output names.
       SetWorkIdentity(WorkingDir, CurrentBaseName);
 
       WriteInfoLog(CurrentBaseName);
@@ -832,8 +1022,7 @@ var
 begin
   Writeln;
   Writeln('--- Train ---');
-  Writeln('Required: token list and matching symbol table.');
-  Writeln('You may start a new model or resume from a saved model.');
+  Writeln('Required: token list and matching symbol table. You may start a new model or resume from a saved model.');
 
   if Length(TokenizedCorpus) = 0 then begin
     if not LoadTokenListPrompt then
@@ -893,10 +1082,7 @@ begin
   Writeln;
 
   // Establish tokenizer and symbol-table information first.
-  if not LoadSymbolTablePrompt then
-    Exit;
-
-  SetTokenizerMode(WesTokenizer);
+  if not LoadSymbolTablePrompt then Exit;
 
   // LoadModel now restores the saved model nVocab.
   if not LoadModelPrompt then Exit;
@@ -1111,6 +1297,7 @@ begin
   Writeln;
   Writeln('--- Bela Corpus ---');
 
+  nCorpus := 1036;
   SelectExistingWork('bela', 'bela');
   TokenizedCorpusPresent := False;
   SymbolTablePresent := False;
@@ -1178,13 +1365,14 @@ begin
   Writeln;
   Writeln('--- Damned Thing Corpus ---');
 
-  SelectExistingWork('dt327', 'dt327');
+  nCorpus := 18457;
+  SelectExistingWork('dt904', 'dt904');
   TokenizedCorpusPresent := False;
   SymbolTablePresent := False;
   ModelPresent := False;
 
-  TokenFileName := ResolveInputFile('dt327.tok', TokenDir);
-  SymbolFileName := ResolveInputFile('dt327.sym', SymbolDir);
+  TokenFileName := ResolveInputFile('damnedthing.tok', TokenDir);
+  SymbolFileName := ResolveInputFile('damnedthing.sym', SymbolDir);
 
   if not FileExists(TokenFileName) then begin
     Writeln('File not found: ', TokenFileName);
@@ -1196,9 +1384,11 @@ begin
     Exit;
   end;
 
+  SetTokenizerMode(WesTokenizer);
+
   IOHandler.LoadTokenList(TokenFileName, TokenizedCorpus);
-  PadToSeqMultiple(TokenizedCorpus, SeqLen);
-  nTokenizedCorpus := Length(TokenizedCorpus);
+  SetLoadedTokenCounts(TokenizedCorpus);
+
   TokenizedCorpusPresent := True;
   SymbolTablePresent := True;
   ModelPresent := False;
@@ -1208,13 +1398,12 @@ begin
   ResetWesTrie;
 
   nSymbols := Length(SymbolTable);
-  SetTokenizerMode(WesTokenizer);
+  nVocab := nSymbols;
 
   NewModel := True;
   ParamsNeedCopyToDevice := True;
 
-  Writeln('Damned Thing data loaded. Tokens = ', Length(TokenizedCorpus),
-    '; Symbols = ', nSymbols, '.');
+  Writeln('Damned Thing data loaded. Tokens = ', Length(TokenizedCorpus), '; Symbols = ', nSymbols, '; Corpus size = ', nCorpus, '.');
 
   if AskYesNo('Proceed to training?', True) then begin
     WorkingName := CurrentBaseName;
@@ -1230,12 +1419,81 @@ begin
   end;
 end;
 
-procedure DoResumeBestModel(const ModelTitle, FolderName, DataBaseName: string);
+// Enhance an existing model, with symbol table.
+procedure DoEnhanceModel;
+begin
+  Writeln;
+  Writeln('--- Enhance Existing Model ---');
+  Writeln('Train an existing model on a new corpus using its existing symbol table.');
+
+  // Load the existing symbol table.
+  if not LoadSymbolTablePrompt then Exit;
+
+  SetTokenizerMode(WesTokenizer);
+
+  // Load the existing model and weights.
+  if not LoadModelPrompt then Exit;
+
+  if nVocab <> nSymbols then begin
+    Writeln('Vocabulary mismatch. Enhancement aborted. Model nVocab       = ', nVocab, '. Symbol table count = ', nSymbols, '.');
+    Exit;
+  end;
+
+  // Read the new corpus.
+  if not ReadCorpusFilePrompt(CorpusFileName, Corpus) then Exit;
+
+  // Tokenize new corpus with the existing symbol table.
+  FromSymbolTable := True;
+  ResetWesTrie;
+
+  SetLength(TokenizedCorpus, 0);
+  RunWesTokenizeNoAutoSave(Corpus, TokenizedCorpus);
+
+  RawTokenCount := Length(TokenizedCorpus);
+
+  PadToSeqMultiple(TokenizedCorpus, SeqLen);
+
+  PaddedTokenCount := Length(TokenizedCorpus);
+  nTokenizedCorpus := PaddedTokenCount;
+
+  Writeln('New corpus tokenized.');
+  Writeln('Raw tokens = ', RawTokenCount, '; Padded tokens = ', PaddedTokenCount, '; Symbols = ', nSymbols, '.');
+
+  // The model already contains trained weights.
+  NewModel := False;
+  ParamsNeedCopyToDevice := True;
+
+  // Use the new corpus name for subsequent files/logs.
+  SetWorkIdentity(WorkingDir, CurrentBaseName);
+
+  WriteInfoLog(CurrentBaseName);
+
+  ResetTrainingStateForEnhancement(WAdamWState);
+
+  RunTrain(WModelParams, WModelState, WAdamWState, TokenizedCorpus);
+
+  if TrainSuccess then begin
+    if AskYesNo('Save enhanced model?', True) then
+      MaybeSaveModel;
+
+    if AskYesNo('Proceed to inference?', False) then
+      RunInfer(WModelParams, WModelState, WAdamWState);
+  end;
+end;
+
+// Resume a best Wes or UD model.
+procedure DoResumeBestWesTModel(const ModelTitle, FolderName, DataBaseName: string; const ATokenizerKind: TTokenizerKind);
 begin
   Writeln;
   Writeln('--- ', ModelTitle, ' ---');
 
+  if not (ATokenizerKind in [WesTokenizer, UDTokenizer]) then begin
+    Writeln('Invalid tokenizer kind for Wes-style model.');
+    Exit;
+  end;
+
   SelectExistingWork(FolderName, DataBaseName);
+  SetTokenizerMode(ATokenizerKind);
 
   TokenizedCorpusPresent := False;
   SymbolTablePresent := False;
@@ -1264,14 +1522,12 @@ begin
   // Load tokenized corpus.
   SetLength(TokenizedCorpus, 0);
   IOHandler.LoadTokenList(TokenFileName, TokenizedCorpus);
+  SetLoadedTokenCounts(TokenizedCorpus);
 
   if Length(TokenizedCorpus) < MinTokens then begin
     Writeln('Token list is too small. Length = ', Length(TokenizedCorpus), '.');
     Exit;
   end;
-
-  PadToSeqMultiple(TokenizedCorpus, SeqLen);
-  nTokenizedCorpus := Length(TokenizedCorpus);
 
   // Load matching Wes symbol table.
   ResetWesTrie;
@@ -1286,7 +1542,6 @@ begin
   end;
 
   nSymbols := Length(SymbolTable);
-  SetTokenizerMode(WesTokenizer);
 
   // Discard CUDA storage belonging to the preceding model.
   if CudaAllocated or (CuHandle <> nil) then
@@ -1320,42 +1575,181 @@ begin
   SymbolTablePresent := True;
   ModelPresent := True;
 
-  Write('Loaded: Token list = ', TokenFileName, '; Symbol table = ', SymbolFileName, '; Model = ', ModelFileName);
-  Writeln('; Tokens = ', nTokenizedCorpus, '; Symbols = ', nSymbols, '; nVocab = ', nVocab, '.');
+  Write('Loaded: Token list = ', TokenFileName, '; Model = ', ModelFileName);
+  Writeln('; Raw tokens = ', RawTokenCount, '; Padded tokens = ', PaddedTokenCount,
+    '; nVocab = ', nVocab, '.');
 
-  if not AskYesNo('Proceed to resumed training?', True) then Exit;
-
-  // Preserve weschat_best.model and save new best models under the corpus name.
   WorkingName := CurrentBaseName;
 
-  Writeln('Loaded checkpoint remains: ', ModelFileName);
-  Writeln('New automatic best model: ', ModelDir + WorkingName + '_best.model');
+  Writeln('Loaded checkpoint: ', ModelFileName, '.');
 
-  WriteInfoLog(CurrentBaseName);
-  RunTrain(WModelParams, WModelState, WAdamWState, TokenizedCorpus);
+  if AskYesNo('Proceed to resumed training?', True) then begin
 
-  if TrainSuccess then begin
-    if AskYesNo('Save an additional model?', False) then
-      MaybeSaveModel;
+    WriteInfoLog(CurrentBaseName);
 
-    if AskYesNo('Proceed to inference?', False) then
-      RunInfer(WModelParams, WModelState, WAdamWState);
+    RunTrain(WModelParams, WModelState, WAdamWState, TokenizedCorpus);
+
+    if TrainSuccess then begin
+      if AskYesNo('Save an additional model?', False) then
+        MaybeSaveModel;
+    end;
   end;
+
+  if AskYesNo('Proceed to inference?', False) then
+    RunInfer(WModelParams, WModelState, WAdamWState);
 end;
 
-procedure DoGibbon816Model;
+// Resume a best GPT-2 model.
+procedure DoResumeBestGPT2Model(const ModelTitle, FolderName, DataBaseName: string);
 begin
-  DoResumeBestModel('Gibbon 816 Best Model', 'gibbon816', 'gibbon');
+  Writeln;
+  Writeln('--- ', ModelTitle, ' ---');
+
+  SelectExistingWork(FolderName, DataBaseName);
+
+  TokenizedCorpusPresent := False;
+  SymbolTablePresent := False;
+  ModelPresent := False;
+
+  TokenFileName := TokenDir + DataBaseName + '.tok';
+  ModelFileName := ModelDir + DataBaseName + '_best.model';
+
+  // Verify all required files before replacing in-memory data.
+  if not FileExists(TokenFileName) then begin
+    Writeln('Token file not found: ', TokenFileName);
+    Exit;
+  end;
+
+  if not FileExists(ModelFileName) then begin
+    Writeln('Model file not found: ', ModelFileName);
+    Exit;
+  end;
+
+  // Establish GPT-2 token values, especially PAD, before counting tokens.
+  SetTokenizerMode(GPT2Tokenizer);
+  EnsureGPT2VocabLoaded;
+
+  // Load tokenized corpus.
+  SetLength(TokenizedCorpus, 0);
+  IOHandler.LoadTokenList(TokenFileName, TokenizedCorpus);
+  SetLoadedTokenCounts(TokenizedCorpus);
+
+  if Length(TokenizedCorpus) < MinTokens then begin
+    Writeln('Token list is too small. Length = ', Length(TokenizedCorpus), '.');
+    Exit;
+  end;
+
+  // No Wes symbol table is required for GPT-2.
+  ResetWesTrie;
+  SetLength(SymbolTable, 0);
+  nSymbols := 0;
+  FromSymbolTable := False;
+
+  // Discard CUDA storage belonging to the preceding model.
+  if CudaAllocated or (CuHandle <> nil) then
+    EndCuda(WModelParams, WModelState, WAdamWState);
+
+  // Load saved parameters and checkpoint information.
+  if not LoadModel(ModelFileName, WModelParams, WAdamWState) then begin
+    Writeln('Model not loaded: ', ModelFileName);
+    Exit;
+  end;
+
+  NewModel := False;
+  ParamsNeedCopyToDevice := True;
+
+  // LoadModel restores the model's nVocab.
+  if nVocab > DimVocab then begin
+    Writeln('Model vocabulary exceeds DimVocab. Training aborted.');
+    Writeln('nVocab   = ', nVocab);
+    Writeln('DimVocab = ', DimVocab);
+    Exit;
+  end;
+
+  TokenizedCorpusPresent := True;
+  SymbolTablePresent := False;
+  ModelPresent := True;
+
+  Write('Loaded: Token list = ', TokenFileName, '; Model = ', ModelFileName);
+  Writeln('; Raw tokens = ', RawTokenCount, '; Padded tokens = ', PaddedTokenCount,
+    '; nVocab = ', nVocab, '.');
+
+  WorkingName := CurrentBaseName;
+
+  Writeln('Loaded checkpoint: ', ModelFileName, '.');
+
+  if AskYesNo('Proceed to resumed training?', True) then begin
+
+    WriteInfoLog(CurrentBaseName);
+
+    RunTrain(WModelParams, WModelState, WAdamWState, TokenizedCorpus);
+
+    if TrainSuccess then begin
+      if AskYesNo('Save an additional model?', False) then
+        MaybeSaveModel;
+    end;
+  end;
+
+  if AskYesNo('Proceed to inference?', False) then
+    RunInfer(WModelParams, WModelState, WAdamWState);
 end;
 
-procedure DoLocke730Model;
+procedure DoGibbon905Model;
 begin
-  DoResumeBestModel('Locke 730 Best Model', 'locke730', 'locke');
+  //nCorpus := 10708492;
+  DoResumeBestWesTModel('Gibbon 905 Best Model', 'gibbon905', 'gibbon', WesTokenizer);
 end;
 
-procedure DoChurchill814Model;
+procedure DoUFS904Model;
 begin
-  DoResumeBestModel('Churchill 814 Best Model', 'churchill814', 'churchill');
+  //nCorpus := 10708492;
+  DoResumeBestWesTModel('UFS 904 Best Model', 'UFS904', 'UFS', WesTokenizer);
+end;
+
+procedure DoChurchill905Model;
+begin
+  //nCorpus := 9540294;
+  DoResumeBestWesTModel('Churchill 831 Best Model', 'churchill831', 'churchill', WesTokenizer);
+end;
+
+procedure DoTWON906Model;
+begin
+  DoResumeBestWesTModel('TWON 906 Best Model', 'TWON906', 'TWON', WesTokenizer);
+end;
+
+procedure DoTS2UDModel;
+begin
+  TokenizerKind := UDTokenizer;
+  DoResumeBestWesTModel('Tiny Stories 2MB WesUD 916 Best Model', 'ts2mb916ud', 'tinystories_2mb_ud', UDTokenizer);
+end;
+
+procedure DoTS10WModel;
+begin
+  DoResumeBestWesTModel('Tiny Stories 10MB WesT 910 Best Model', 'ts10mb910', 'tinystories_10mb', WesTokenizer);
+end;
+
+procedure DoTS20GModel;
+begin
+  //nCorpus := 20000000;
+  DoResumeBestGPT2Model('Tiny Stories 20MB GPT2 906 Best Model', 'ts20mb906g', 'tinystories_20mb');
+end;
+
+procedure DoTS40WModel;
+begin
+  //nCorpus := 20000000;
+  DoResumeBestWesTModel('Tiny Stories 40MB WesT 904 Best Model', 'ts40mb904', 'tinystories_40mb', WesTokenizer);
+end;
+
+procedure DoTS60GModel;
+begin
+  //nCorpus := 60000000;
+  DoResumeBestGPT2Model('Tiny Stories 60MB GPT2 827 Best Model', 'ts60mb827g', 'tinystories_60mb');
+end;
+
+procedure DoTS100WModel;
+begin
+  //nCorpus := 20000000;
+  DoResumeBestWesTModel('Tiny Stories 100MB WesT 905 Best Model', 'ts40mb905', 'tinystories_100mb', WesTokenizer);
 end;
 
 procedure DoPredefinedWork;
@@ -1364,41 +1758,56 @@ var
 begin
   repeat
     Writeln('--- Predefined Corpora and Models ---');
-    Writeln('B: Train a new model on the Bela corpus');
-    Writeln('D: Train a new model on the Damned Thing token list');
-    Writeln('G: Resume the Gibbon 816 best model');
-    Writeln('C: Resume the Churchill 814 best model');
-    Writeln('L: Resume the Locke 730 best model');
+    Writeln('B: Train a new model, using an existing symbol table with WesT on the Bela corpus.');
+    Writeln('D: Train a new model with WesT on the Damned Thing token list and symbol table.');
+    Writeln('G: Resume the Gibbon 905 WesT best model.');
+    Writeln('C: Resume the Churchill 905 WesT best model.');
+    Writeln('T: Resume the The Wealth of Nations 906 WesT best model.');
+    Writeln('TS2UD: Resume the Tiny Stories 2MB WesUD model.');
+    Writeln('TS10W: Resume the Tiny Stories 10MB WesT model.');
+    Writeln('TS20G: Resume the Tiny Stories 20MB GPT2 model.');
+    Writeln('TS40W: Resume the Tiny Stories 40MB WesT model.');
+    Writeln('TS60G: Resume the Tiny Stories 60MB GPT2 model.');
+    Writeln('TS100W: Resume the Tiny Stories 100MB WesT model.');
     Writeln('X: Return to main menu');
 
-    TChoice := AskChoice('Selection', 'B/D/G/C/L/X');
+    TChoice := AskChoice('Selection', 'B/D/G/U/C/T/TS20G/TS40W/TS60G/TS100W/X');
     case TChoice of
       'B', 'BELA': DoBelaModel;
       'D', 'DT': DoDamnedThingModel;
-      'G', 'GIBBON': DoGibbon816Model;
-      'C', 'CHURCHILL': DoChurchill814Model;
-      'L', 'LOCKE': DoLocke730Model;
+      'G', 'GIBBON': DoGibbon905Model;
+      'U', 'UFS': DoUFS904Model;
+      'C', 'CHURCHILL': DoChurchill905Model;
+      'T', 'TWON': DoTWON906Model;
+      'TS2UD': DoTS2UDModel;
+      'TS10W': DoTS10WModel;
+      'TS20G': DoTS20GModel;
+      'TS40W': DoTS40WModel;
+      'TS60G': DoTS60GModel;
+      'TS100W': DoTS100WModel;
     end;
-
   until TChoice = 'X';
 end;
 
-// Display / menu.
+// Display menu.
 procedure Options;
+var
+  Creator: string = 'Wesley R. Parsons, wespar@bellouth.net, www.wesparsons.com';
 begin
   Writeln('Options:');
-  Writeln('  T: Tokenize -- create a token list from a corpus file or a file list.');
-  Writeln('     Uses WesTokenize or GPT2Tokenize.');
-  Writeln('     WesTokenize may create a symbol table or use an existing one.');
+  Writeln('  T: Tokenize -- create a token list from a corpus or a corpus file list.');
+  Writeln('     Uses WesTokenize or GPT2Tokenize. WesTokenize may create a symbol table or use an existing one.');
+  Writeln('  U: Pre-Tokenize with UD Tags -- before tokenizing, add universal dependencies tags to the corpus.');
   Writeln('  R: Train -- train a model on a token list.');
-  Writeln('     Requires a token list and matching symbol table.');
-  Writeln('     Can start a new model or resume from a saved model.');
+  Writeln('     Requires a token list and matching symbol table. Can start a new model or resume from a saved model.');
   Writeln('  I: Infer -- run inference.');
   Writeln('     Requires a saved model and matching symbol table.');
   Writeln('  J: Join symbol tables.');
   Writeln('     Requires two symbol tables.');
-  Writeln('  M: Do predefined work -- train corpora or resume models: Bela, Damned Thing, Gibbon, Locke, or Churchill.');
+  Writeln('  M: Do predefined work -- train corpora or resume models: Bela, Damned Thing, Gibbon, Locke, TWON, Churchill, or TinyS tories.');
+  Writeln('  E: Enhance -- continue training an existing model on a new corpus using its existing symbol table.');
   Writeln('  F: File/folder utilities.     P: Program information.     H: Help and options.     X: Exit.');
+  if Length(Creator) = 0 then Writeln;
 end;
 
 procedure Help;
@@ -1427,10 +1836,10 @@ begin
   Writeln('  SF / NSF: SaveFiles on/off');
   Writeln;
   Writeln('Training display:');
-  Writeln('  DE:  Display epochs');
-  Writeln('  DS:  Display stages');
-  Writeln('  DSS: Display substages');
-  Writeln('  ND:  Reduce display');
+  Writeln('  DE:   Display epochs');
+  Writeln('  DS:   Display stages');
+  Writeln('  DSS:  Display substages');
+  Writeln('  ND:   Reduce display');
   Writeln;
   Writeln('Parameters:');
   Writeln('  MM:   Maximum merges');
@@ -1438,6 +1847,10 @@ begin
   Writeln('  LR:   Override learning rate');
   Writeln('  TEMP: Temperature');
   Writeln;
+  Writeln('Tokenizer:');
+  Writeln('  UTOK:    Universal Dependencies');
+  Writeln('  WTOK:    Wes');
+  Writeln('  CTOK:    ChatGPT2');
 end;
 
 procedure HandleSettingCommand(const Cmd: string);
@@ -1568,6 +1981,18 @@ begin
       Write('Maximum pair count: ');
       Readln(MaxPairCount);
     end;
+    'UTOK': begin
+      TokenizerKind := UDTokenizer;
+      Writeln('Tokenizer is ', TokenizerKindName(TokenizerKind));
+    end;
+    'WTOK': begin
+      TokenizerKind := WesTokenizer;
+      Writeln('Tokenizer is ', TokenizerKindName(TokenizerKind));
+    end;
+    'CTOK': begin
+      TokenizerKind := GPT2Tokenizer;
+      Writeln('Tokenizer is ', TokenizerKindName(TokenizerKind));
+    end;
   end;
 end;
 
@@ -1587,7 +2012,7 @@ begin
 
   NormalizeExistingWorkRoot;
 
-  Writeln('Work folders are normally created under ', ExistingWorkRoot);
+  Writeln('Work folders are created under ', ExistingWorkRoot);
   Write('Enter work folder name, blank for WesChatWork: ');
   Readln(WorkingDir);
 
@@ -1609,6 +2034,7 @@ begin
       'I': DoInfer;
       'J': DoJoinSymbolTables;
       'M': DoPredefinedWork;
+      'E': DoEnhanceModel;
       'F': DoFolderUtilities;
       'P': ReportProgramInfo;
       'H': Help;
@@ -1619,7 +2045,8 @@ begin
       'VTR', 'NVTR', 'VI', 'NVI',
       'DE', 'DS', 'DSS', 'ND',
       'DW', 'NDW', 'DNP', 'DP', 'SF', 'NSF',
-      'TEMP', 'LR', 'MM', 'PC':
+      'TEMP', 'LR', 'MM', 'PC',
+      'WTOK', 'UTOK', 'GTOK':
         HandleSettingCommand(Ch);
 
       else

@@ -2,12 +2,17 @@ unit Notes;
 
 {$mode ObjFPC}{$H+}{$I proprietary.txt}
 
+interface
+implementation
+end.
 { WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wesparsons.com.}
-{        Input Train        Input Query        Output
+
+Input Train        Input Query        Output
  Raw                        QueryString
  Bytes   Corpus             QueryCorpus
  Token   TokenizedCorpus    QueryTokenized     QueryOutput
- Folder layout: WorkRoot \corpus \lists \logs \merges \models \scratch \symbols \tokens }
+
+Folder layout: WorkRoot \corpus \lists \logs \merges \models \scratch \symbols \tokens
 
 Good models.
 Model gibbon816, at about 10mb. Good as of 818.
@@ -21,14 +26,25 @@ In epoch 34, down to Loss=1.66. Seconds = 2068. Epoch 50, 1.60. All betters so f
 Would the LR start so low with WesTokenize and 50K symbols?
 
 Modelts20mb824s50 is a WesTokenize model with 50260 symbols. It started with Loss = 8.5!Same Lr of 0.0001, that is, adaptive. At epoch 15, down to Loss =3.3.
-Training speed = 4900. Afyer 72 epochs, Loss=2.29.
+Training speed = 4900. After 72 epochs, Loss=2.29.
 
 Model tem77. Using ChatGPT2, and damendthing.txt, I had an initial Loss of >9, then down to 8 in epoch 0, then quickly down to 1.
-What dos this mean?
+What does this mean?
 
-1. For training, add Extrafield1 and ExtraField2, etc. in CheckPoint. Also add saved AdaptiveLR.  Also add CorpusByteCount.
+Model ts40mb825g. GPT2 model had pretraining loss > 9, but loss - 2.7 after epoch 0. So massive reduction in loss in first epoch. Epoch 10, Loss=1.84. BPB = 0.67.
+Epoch 18, Loss =1.78. Epoch=22, Loss=1.76, BPB = 0.64.
+Loss better every time.
 
-2.  Systematize nTC.
+Model ts40mb826s50, WesTokenize, 50k nvocab, using 20mb sym, but creating own tokenized corpus. Pretraining Loss=9.48. First epoch down to Loss=5.9, BPB=1.2.
+By Epoch 16, Loss - 4.01, BPB = 0.65 in epoch 10. Epoch 20, BPB 0.611, Loss=3.94. Epoch 30, BPB 0.593, L 3.82.array[Time is 29 minutes for 4,300,000 tokens.
+Slower loss reduction here than in GPT2, but BPB same. Remember loss not directly comparable.
+
+Model ts60mb827g, 60 mb, TC is 14.8M, GPTTokenize. Initial L is 9.4, down in 0 epoch to 2.58. Epoch 19, L is 1.79, BPB is .6666. 1 hrr 41 min.
+
+1. For training, add Extrafield1 and ExtraField2, etc. in CheckPoint. Also add saved AdaptiveLR.  Also add CorpusByteCount and nCorpus and RawTokenCount and padding.
+    Also TAdaptiveLRState, MinLoss MinLossEpoch BestSavedLoss LastBestSaveEpoch and change best model to saved version loaded   Also add whether Wes or GPT tokenized
+    in Model header and in Checkpoint.
+3.  Move creation to different proc?
 nRawTokenizedCorpus := Length(TokenizedCorpus);
 PadToSeqMultiple(TokenizedCorpus, SeqLen);
 nTokenizedCorpus := Length(TokenizedCorpus);
@@ -88,6 +104,8 @@ SetLength(FinalBeta.Grad, ModelDim);
 Transform/Matrix/Utils.
 
 0. Use CPU/GPU or host/device or cblas/cublas nomenclature?
+
+1.  Why is ComputeCELossOnly so high at the start of training? It seems to be a correct reflection of the data.
 
 2. Many models reuse the embedding matrix for output projection.
 This is called weight tying. WVocab not needed. I am doing it.

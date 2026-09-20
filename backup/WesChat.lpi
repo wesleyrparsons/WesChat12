@@ -134,6 +134,11 @@
         <IsPartOfProject Value="True"/>
         <UnitName Value="OutputHead"/>
       </Unit>
+      <Unit>
+        <Filename Value="udtag.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="UDTag"/>
+      </Unit>
     </Units>
   </ProjectOptions>
   <CompilerOptions>

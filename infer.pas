@@ -2,11 +2,12 @@ unit Infer;
 
 {$mode ObjFPC}{$H+}{$I proprietary.txt}
 
-{ WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wesparsons.com.}
+{ WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellsouth.net, www.wesparsons.com.}
 
 interface
 
 uses
+  Classes,
   DateUtils,
   Display,
   Global,
@@ -17,6 +18,7 @@ uses
   SysUtils,
   TransformForward,
   WesTokenize,
+  UDTag,
   Util;
 
  {TokenizedCorpus is a vector of Integers, which become InputTokens and TargetTokens.
@@ -27,10 +29,171 @@ procedure RunInfer(var WModelParams: TWModelParams; var WModelState: TWModelStat
 
 implementation
 
+// Return the word portion of a UD-tagged token. Example: dogs|noun|pl -> dogs
+function GetUDWord(const TaggedToken: string): string;
+var
+  P: SizeInt;
+begin
+  // Special case for an original literal vertical bar:
+  // ||sym -> |
+  if Copy(TaggedToken, 1, 2) = '||' then begin
+    Result := '|';
+    Exit;
+  end;
+
+  P := Pos('|', TaggedToken);
+
+  if P > 0 then
+    Result := Copy(TaggedToken, 1, P - 1)
+  else
+    Result := TaggedToken;
+end;
+
+// True if Word should not have a space before it.
+function UDNoSpaceBefore(const Word: string): Boolean;
+begin
+  Result := (Word = '.') or (Word = ',') or (Word = ';') or (Word = ':') or (Word = '!') or (Word = '?') or (Word = '%') or (Word = ')') or (Word = ']') or (Word = '}') or (Word = '…') or
+
+  // English contractions produced as separate UD tokens.
+    (Word = 'n''t') or (Word = '''s') or (Word = '''re') or (Word = '''ve') or (Word = '''ll') or (Word = '''d') or (Word = '''m');
+end;
+
+// True if the following word should not have a space before it.
+function UDNoSpaceAfter(const Word: string): Boolean;
+begin
+  Result := (Word = '(') or (Word = '[') or (Word = '{') or (Word = '$') or (Word = '£') or (Word = '€') or (Word = '“') or (Word = '‘');
+end;
+
+// Strip UD tags from one line and restore normal word spacing.
+function StripUDTagsFromLine(const Line: string): string;
+var
+  i, StartPos: Integer;
+  TaggedToken, Word, PreviousWord: string;
+  DoubleQuoteOpen: Boolean;
+
+  procedure AddWord(const AWord: string);
+  begin
+    if AWord = '' then Exit;
+
+    // Straight double quote needs opening/closing context.
+    if AWord = '"' then begin
+      if DoubleQuoteOpen then begin
+        // Closing quote: no space before it.
+        Result := Result + AWord;
+        DoubleQuoteOpen := False;
+      end
+      else begin
+        // Opening quote.
+        if (Result <> '') and not UDNoSpaceAfter(PreviousWord) then
+          Result := Result + ' ';
+
+        Result := Result + AWord;
+        DoubleQuoteOpen := True;
+      end;
+
+      PreviousWord := AWord;
+      Exit;
+    end;
+
+    // Curly closing quotes never get a space before them.
+    if (AWord = '”') or (AWord = '’') then begin
+      Result := Result + AWord;
+      PreviousWord := AWord;
+      Exit;
+    end;
+
+    if Result = '' then
+      Result := AWord
+    else if UDNoSpaceBefore(AWord) then
+      Result := Result + AWord
+    else if UDNoSpaceAfter(PreviousWord) then
+      Result := Result + AWord
+    else if DoubleQuoteOpen and (PreviousWord = '"') then
+      Result := Result + AWord
+    else
+      Result := Result + ' ' + AWord;
+
+    PreviousWord := AWord;
+  end;
+
+begin
+  Result := '';
+  PreviousWord := '';
+  DoubleQuoteOpen := False;
+  i := 1;
+
+  while i <= Length(Line) do begin
+
+    // Skip spaces.
+    while (i <= Length(Line)) and (Line[i] = ' ') do
+      Inc(i);
+
+    if i > Length(Line) then Break;
+
+    StartPos := i;
+
+    while (i <= Length(Line)) and (Line[i] <> ' ') do
+      Inc(i);
+
+    TaggedToken := Copy(Line, StartPos, i - StartPos);
+    Word := GetUDWord(TaggedToken);
+    AddWord(Word);
+  end;
+end;
+
+// Strip UD tags from possibly multi-line tagged text.
+function StripUDTagsFromText(const TaggedText: string): string;
+var
+  Lines: TStringList;
+  i: Integer;
+  S: string;
+begin
+  Result := '';
+
+  Lines := TStringList.Create;
+  try
+    Lines.Text := TaggedText;
+
+    for i := 0 to Lines.Count - 1 do begin
+      S := StripUDTagsFromLine(Lines[i]);
+
+      if i > 0 then
+        Result := Result + LineEnding;
+
+      Result := Result + S;
+    end;
+
+  finally
+    Lines.Free;
+  end;
+end;
+
+// Reconstruct Wes-token output, remove UD tags, and display normal text.
+procedure WriteUDInferenceTokens(const Tokens: TIVector);
+var
+  i, Tok: Integer;
+  TaggedText, DisplayText: string;
+begin
+  TaggedText := '';
+
+  // Reconstruct exactly what the Wes tokenizer represents.
+  for i := 0 to High(Tokens) do begin
+    Tok := Tokens[i];
+
+    if (Tok = BOS) or (Tok = EOS) or (Tok = PAD) or (Tok = UNK) then Continue;
+
+    if (Tok >= 0) and (Tok < Length(SymbolTable)) then
+      TaggedText := TaggedText + SymbolTable[Tok];
+  end;
+
+  DisplayText := StripUDTagsFromText(TaggedText);
+  Write(UTF8Encode(ConsoleText(UTF8Decode(DisplayText))));
+end;
+
 // Decode tokens for inference.
 function DecodeInferenceToken(const TokenID: Integer): UnicodeString;
 begin
-  if Tokenizer = WesTokenizer then
+  if TokenizerKind = WesTokenizer then
     Result := Decode(TokenID)
   else
     Result := DecodeGPT2Token(TokenID);
@@ -43,7 +206,7 @@ var
 begin
   S := '';
 
-  if Tokenizer = WesTokenizer then begin
+  if TokenizerKind = WesTokenizer then begin
     for i := 0 to High(Tokens) do
       S := S + Decode(Tokens[i]);
   end
@@ -164,15 +327,13 @@ end;
 procedure InferOneToken(var WModelParams: TWModelParams; var WModelState: TWModelState; const Step: Integer;
   const QueryTokenized: TIVector; var QueryToken: Integer; var AdjustedProb: Single);
 const
-  Scale = Sqrt(ModelDim);         // Optional transformer-style embedding scaling by sqrt(d_model).
-  KSample = 5;
+  Scale = Sqrt(ModelDim);         // Transformer-style embedding scaling by sqrt(d_model).
+  KSample = 5;                    // Top n probable tokens.
 var
   j, Blk, LastPos, BestTok, TopTok: Integer;
   TopTokVector: array[0..KSample - 1] of Integer;
   TopProbVector: array[0..KSample - 1] of Single;
-  ModelProb, TopKSampleProb: Single;
-  RawProb, AdjProb: Single;
-  RawEOSProb, Top1Prob, Top2Prob: Single;
+  {ModelProb, }TopKSampleProb, RawProb, AdjProb, RawEOSProb, Top1Prob, Top2Prob: Single;
   TopKMass, Entropy: Double;
   RawProbs: array of Single;
 
@@ -227,13 +388,6 @@ var
         TopKMass := TopKMass + TopProbVector[j];  end;
 
 begin
-  // Check for valid query.
-  if Length(QueryTokenized) = 0 then begin
-    QueryToken := EOS;
-    AdjustedProb := 0.0;
-    Exit;
-  end;
-
   if VerboseTransform then with WModelParams do begin
     cudaMemcpy(@Embeddings.Value[0, 0], Embeddings.dValue, EmbeddingsSize, cudaMemcpyDeviceToHost);
     VTPDisplayX('Display Embeddings.Value prior to Transform.', Embeddings.Value, B);
@@ -251,9 +405,10 @@ begin
       Writeln;
     end;
 
-    for j := 0 to LastPos do
-      if (InputTokens[j] < 0) or (InputTokens[j] >= nVocab) then
-        Writeln('BAD TOKEN at ', j, ': ', InputTokens[j], '. nVocab = ', nVocab, '.');
+    // if VerboseInfer then
+      for j := 0 to LastPos do
+        if (InputTokens[j] < 0) or (InputTokens[j] >= nVocab) then
+          Writeln('BAD TOKEN at ', j, ': ', InputTokens[j], '. nVocab = ', nVocab, '.');
 
     cudaMemcpy(dInputTokens, @InputTokens[0], SeqLen * SizeOf(Integer), cudaMemcpyHostToDevice);
 
@@ -296,20 +451,17 @@ begin
       CheckCudaError('Copy final probability row for inference.');
 
     // Set special tokens to zero probability.
-    if Tokenizer = WesTokenizer then begin
+    if TokenizerKind = WesTokenizer then begin
       Probs[LastPos, BOS] := 0.0;
       Probs[LastPos, PAD] := 0.0;
       Probs[LastPos, UNK] := 0.0;
     end
     else begin
-      // Suppress only GPT-2-specific custom special IDs that really exist
-      // in this model's vocabulary.
+      // Suppress only GPT-2-specific custom special IDs that really exist in this model's vocabulary.
       if (GPT2BOS >= 0) and (GPT2BOS < nVocab) then
         Probs[LastPos, GPT2BOS] := 0.0;
-
       if (GPT2PAD >= 0) and (GPT2PAD < nVocab) then
         Probs[LastPos, GPT2PAD] := 0.0;
-
       if (GPT2UNK >= 0) and (GPT2UNK < nVocab) then
         Probs[LastPos, GPT2UNK] := 0.0;
     end;
@@ -334,28 +486,25 @@ begin
       ReportInferenceDiagnostics(BestTok, RawProb, AdjProb, TopKSampleProb,
         Top1Prob, Top2Prob, TopKMass, Entropy, RawEOSProb);
 
-    {// Raw model probability after special-token suppression and repetition penalty.
+    { Raw model probability after special-token suppression and repetition penalty.
     ModelProb := Probs[LastPos, BestTok];
 
     // Return the selected token and its adjusted model probability.
     QueryToken := BestTok;
-    AdjustedProb := ModelProb;}
+    AdjustedProb := ModelProb; }
 
   end;
 end;
 
 procedure RunInfer(var WModelParams: TWModelParams; var WModelState: TWModelState; var WAdamWState: TWAdamWState);
-const
-  MaxNewTokens = 500;
 var
-  i, Step, QueryToken: Integer;
-  OldNVocab: Integer;
-  OldTraining, OldVerboseTransform, OldSaveTokenizationFiles: Boolean;
-  OwnsCuda, StartedCudaHere: Boolean;
+  i, Step, QueryToken, Code, nDetailInference, OldNVocab: Integer;
+  OldTraining, OldVerboseTransform, OldSaveTokenizationFiles, OwnsCuda, StartedCudaHere: Boolean;
   QueryTokenized, WorkTokens, QueryOutput: TIVector;
-  AdjustedProb: Single;
   QueryInput: TBVector;
-  QueryString: string;
+  AdjustedProb: Single;
+  MaxNewTokens: Integer = 800;
+  QueryString, TaggedQueryString, TokenizeString, StrLenInf: string;
 begin
   OldTraining := Training;
   OldVerboseTransform := VerboseTransform;
@@ -365,12 +514,15 @@ begin
   OwnsCuda := False;
   StartedCudaHere := False;
 
+  // Set verbosity and detail.
+  DetailInfer := False;
+  VerboseTransform := False;
+
   try
     Training := False;
-    VerboseTransform := False;
     SaveTokenizationFiles := False;
 
-    if Tokenizer = WesTokenizer then
+    if TokenizerKind = WesTokenizer then
       if nVocab <> Length(SymbolTable) then
         raise Exception.CreateFmt('Inference vocabulary mismatch: model nVocab=%d, symbol table length=%d.', [nVocab, Length(SymbolTable)]);
 
@@ -397,35 +549,134 @@ begin
 
     CopyInvFreqToDevice(WModelState);
 
+    nDetailInference := 100;
+    Writeln('Staring inference...');
+
     // Query loop.
     while True do begin
 
       // Get a query from user.
-      Write('Enter query, blank to return: ');
-      Readln(QueryString);
+      Writeln('V = toggle Verbose mode. D = toggle Detail mode. I = program Information. L = set detail Length. M = Max new tokens. X = eXit inference.');
 
-      if UpCase(QueryString) = 'V' then begin
-        VerboseInfer := not (VerboseInfer);
-        Writeln('Verbose infer = ', VerboseInfer);
-      end;
+      while True do begin
+        Write('Enter query, blank to return: ');
+        ReadLn(QueryString);
 
-      if (QueryString = EmptyStr) or (UpCase(QueryString) = 'X') or (UpCase(QueryString) = 'EXIT') then begin
-        Writeln('Leaving inference.');
+        if Trim(QueryString) = '' then begin
+          Writeln('>>Leaving inference.');
+          Exit;
+        end;
+
+        if UpperCase(Trim(QueryString)) = 'X' then begin
+          Writeln('>>Leaving inference.');
+          Exit;
+        end;
+
+        if UpperCase(Trim(QueryString)) = 'V' then begin
+          VerboseInfer := not VerboseInfer;
+          Writeln('Verbose inference = ', VerboseInfer);
+          Continue;
+        end;
+
+        if UpperCase(Trim(QueryString)) = 'D' then begin
+          DetailInfer := not DetailInfer;
+          Writeln('Detail inference = ', DetailInfer);
+          Continue;
+        end;
+
+        if UpperCase(Trim(QueryString)) = 'I' then begin
+          ReportProgramInfo;
+          WriteLn('Model ', ExtractFileName(ExcludeTrailingPathDelimiter(WorkingDir)), ': nTC = ', nTokenizedCorpus, '; nCorpus = ', nCorpus, '; nVocab = ', nVocab,
+            '; DimVocab = ', DimVocab, '; SeqLen = ', SeqLen, '; Stride = ', Stride, '; ModelDim = ', ModelDim, '; nHead = ', nHead, '; nBlock = ', nBlock, '; Proj = ', Proj);
+          Continue;
+        end;
+
+        if UpperCase(Trim(QueryString)) = 'M' then begin
+          Write('Enter maximum number of tokens to generate: ');
+
+          repeat
+            ReadLn(StrLenInf);
+            Val(StrLenInf, MaxNewTokens, Code);
+
+            if (Code <> 0) or (MaxNewTokens < 1) then
+              Writeln('Invalid number, try again.');
+          until (Code = 0) and (MaxNewTokens >= 1);
+
+          if nDetailInference > MaxNewTokens then
+            nDetailInference := MaxNewTokens;
+
+          Writeln('Maximum new tokens = ', MaxNewTokens, '.');
+          Continue;
+        end;
+
+        if UpperCase(Trim(QueryString)) = 'L' then begin
+          Write('Enter length of inference in tokens: ');
+
+          repeat
+            ReadLn(StrLenInf);
+            Val(StrLenInf, nDetailInference, Code);
+
+            if (Code <> 0) or (nDetailInference < 1) then
+              Writeln('Invalid length, try again.');
+          until (Code = 0) and (nDetailInference >= 1);
+
+          if nDetailInference > MaxNewTokens then
+            nDetailInference := MaxNewTokens;
+
+          Writeln('Inference length = ', nDetailInference, ' tokens.');
+          Continue;
+        end;
+
+        // Anything other than a single-letter command is the query.
         Break;
       end;
 
-      if (QueryString = '?') or (UpCase(QueryString) = 'H') or (UpCase(QueryString) = 'HELP') then begin
-        Write(DateTimeToStr(Now), '  X = Exit program. V = toggle Verbose mode. I = program Information. ');
+      // A query is now available in QueryString.
+      TokenizeString := QueryString;
+
+      // For a UD-tagged Wes model, tag the user's ordinary-text query before passing it to the Wes tokenizer.
+      if (TokenizerKind = UDTokenizer) then begin
+        try
+          TaggedQueryString := UDTagText(UDPipeFileName, UDModelFileName, QueryString);
+        except
+          on E: Exception do begin
+            Writeln('UD tagging error: ', E.Message);
+            Continue;
+          end;
+        end;
+
+        if TaggedQueryString = '' then begin
+          Writeln('UDPipe returned an empty tagged query.');
+          Continue;
+        end;
+
+        TokenizeString := TaggedQueryString;
+
+        if VerboseInfer then begin
+          Writeln('Original query: ', QueryString);
+          Writeln('UD tagged query: ', TaggedQueryString);
+        end;
       end;
 
-      if (QueryString = 'I') or (UpCase(QueryString) = 'INFO') then begin
-        ReportProgramInfo;
-        Writeln('nVocab = ', nVocab, ' DimVocab = ', DimVocab, ' Seqlen = ', SeqLen, ' ModelDim = ', ModelDim, ' Projection = ', Proj,
-          ' Epoch = ', MaxEpochs, ' Blocks = ', nBlock, ' Heads = ', nHead);
-      end;
+      if TokenizerKind = WesTokenizer then begin
+        SetLength(QueryInput, Length(TokenizeString));
 
-      Writeln('Query string: ', QueryString);
+        for i := 0 to Length(TokenizeString) - 1 do
+          QueryInput[i] := Ord(TokenizeString[i + 1]);
 
+        if VerboseInfer then begin
+          Write(Length(QueryInput), ' Query bytes: ');
+          for i := 0 to Length(QueryInput) - 1 do
+            Write(QueryInput[i], ' ');
+          Writeln;
+        end;
+
+        TokenizeWesBytes(QueryInput, QueryTokenized);
+      end
+      else
+        RunGPT2TokenizeString(QueryString, QueryTokenized);
+
+      {// A query is now available in QueryString.
       SetLength(QueryInput, Length(QueryString));
       for i := 0 to Length(QueryString) - 1 do
         QueryInput[i] := Ord(QueryString[i + 1]);
@@ -437,10 +688,10 @@ begin
         Writeln;
       end;
 
-      if Tokenizer = WesTokenizer then
+      if TokenizerKind = WesTokenizer then
         TokenizeWesBytes(QueryInput, QueryTokenized)
       else
-        RunGPT2TokenizeString(QueryString, QueryTokenized);
+        RunGPT2TokenizeString(QueryString, QueryTokenized);}
 
       if (Length(QueryTokenized) > 0) and (QueryTokenized[High(QueryTokenized)] = EOS) then
         SetLength(QueryTokenized, Length(QueryTokenized) - 1);
@@ -450,54 +701,72 @@ begin
         Exit;
       end;
 
-      if VerboseInfer and (Tokenizer = WesTokenizer) then
+      if VerboseInfer and (TokenizerKind = WesTokenizer) then
         TCFull(QueryTokenized);
 
       SetLength(QueryOutput, 0);
       WorkTokens := Copy(QueryTokenized);
+      QueryToken := -1;
+      AdjustedProb := 0.0;
 
+      // Step loop to generate new token.
       for Step := 1 to MaxNewTokens do begin
         // Run Infer to get one additional token.
         InferOneToken(WModelParams, WModelState, Step, WorkTokens, QueryToken, AdjustedProb);
+
+        // Stop after recording EOS.
+        if QueryToken = EOS then Break;
 
         // Add the newly generated token to the output.
         SetLength(QueryOutput, Length(QueryOutput) + 1);
         QueryOutput[High(QueryOutput)] := QueryToken;
 
-        // Stop after recording EOS.
-        if QueryToken = EOS then Break;
-
         // EOS does not need to be placed back into the next input.
         SetLength(WorkTokens, Length(WorkTokens) + 1);
         WorkTokens[High(WorkTokens)] := QueryToken;
 
-        Write('WorkTokens: <<');
-        WriteInferenceTokens(WorkTokens);
-        Writeln('>>');
-        Pause;
+        if DetailInfer then begin
+          Write('WorkTokens: <<');
+          WriteInferenceTokens(WorkTokens);
+          Writeln('>>');
+          PauseNNL;
+        end;
+        // Ordinary models can display each generated token immediately.
+        // UD output is displayed after complete tagged text is reconstructed.
+        if not (TokenizerKind = UDTokenizer) then
+          Write(DecodeToken(QueryToken, TokenizerKind));
+      end;  // End step loop.
+
+      // For a UD model, reconstruct complete generated tagged text, strip the tags, and display normal text.
+      if (TokenizerKind = UDTokenizer) then begin
+        WriteUDInferenceTokens(QueryOutput);
+        Writeln;
       end;
 
-      Write('Query decoded token output: ');
-      WriteInferenceTokens(QueryOutput);
-      Writeln;
+      // Show what the model actually generated.
+      if DetailInfer then begin
+        if TokenizerKind = UDTokenizer then
+          Write('Raw UD tagged output: ')
+        else
+          Write('Query decoded token output: ');
+        WriteInferenceTokens(QueryOutput);
+        Writeln;
+      end;
 
-      if Tokenizer = GPT2Tokenizer then begin
+      if TokenizerKind = GPT2Tokenizer then begin
         // GPT2.
-        Write('Query decoded token output: ');
+        if DetailInfer then
+          Write('Query decoded token output: ');
         for i := 0 to High(QueryOutput) do
           if Assigned(Vocab) and (QueryOutput[i] >= 0) and (QueryOutput[i] < Vocab.Count) then
             Write(DisplayToken(UTF8Decode(Vocab[QueryOutput[i]])))
           else
             Writeln('BAD TOKEN at ', i, ': ', QueryOutput[i], '. nVocab = ', nVocab, '.');
-        Writeln;
-      end
-      else begin
-        // WesChat.
-        Write('Query decoded token output: ');
-        DetokenizeToDisplay(QueryOutput, F);
-        Writeln;
+        if DetailInfer then
+          Writeln;
       end;
-      Writeln;
+
+      if (Step mod nDetailInference) = 0 then Pause;
     end;
   finally
     try

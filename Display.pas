@@ -2,7 +2,7 @@ unit Display;
 
 {$mode ObjFPC}{$H+}{$I proprietary.txt}
 
-{ WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wesparsons.com.}
+{ WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellsouth.net, www.wesparsons.com.}
 
 interface
 
@@ -22,6 +22,7 @@ function CheckForControlKey: Char;
 function CleanUpSymbol(const x: RawByteString): RawByteString;
 procedure DisplayByteSymbolTable(const SymbolTable: TSymbolTable);
 function ConsoleText(const S: UnicodeString): UnicodeString;
+function TokenizerKindName(const Kind: TTokenizerKind): string;
 
 // Display vectors and matrices.
 procedure DisplayVector(const V: TIVector);
@@ -35,6 +36,9 @@ procedure DisplayX(const X: TEmbeddingsMatrix; const Part: TPart = B); overload;
 procedure VTPDisplayX(const Mess: string; const X: TEmbeddingsMatrix; const Part: TPart = B); overload;
 procedure DisplayX(const X: TScoresMatrix; const Part: TPart = B); overload;
 procedure VTPDisplayX(const Mess: string; const X: TScoresMatrix; const Part: TPart = B); overload;
+
+// Detokenize.
+procedure WesDetokenizeTextToDisplay(const TokenizedCorpus: TIVector; const Part: TPart = B);
 
 // Report information on program.
 procedure ReportKeyVariables;
@@ -116,6 +120,7 @@ begin
   TotalParams := EmbeddingParams + Int64(nBlock) * BlockParams;
 end;
 
+// Full detailed report on trainable parameters.
 procedure FullReportTrainableParameters;
 var
   AllBlockParams: Int64;
@@ -136,13 +141,13 @@ begin
   Writeln('  ', Global.nVocab, ' * ', ModelDim, ' = ', EmbeddingParams);
   Writeln('Attention parameters per block:');
   Writeln('  4 * ModelDim * ModelDim');
-  Writeln('  4 * ', ModelDim, ' * ', ModelDim, ' = ', AttentionParams, ' (Includes Wq, Wk, Wv, and W0).');
+  Writeln('  4 * ', ModelDim, ' * ', ModelDim, ' = ', AttentionParams, ' (Includes Wq, Wk, Wv, and W0)');
   Writeln('FFN parameters per block:');
   Writeln('  2 * ModelDim * ModelDimProj + ModelDimProj + ModelDim');
-  Writeln('  2 * ', ModelDim, ' * ', ModelDimProj, ' + ', ModelDimProj, ' + ', ModelDim, ' = ', FFNParams, '  Includes W1, W2, b1, and b2.');
+  Writeln('  2 * ', ModelDim, ' * ', ModelDimProj, ' + ', ModelDimProj, ' + ', ModelDim, ' = ', FFNParams, '  Includes W1, W2, b1, and b2');
   Writeln('LayerNorm parameters per block:');
   Writeln('  4 * ModelDim');
-  Writeln('  4 * ', ModelDim, ' = ', LayerNormParams, '  Includes Gamma1, Beta1, Gamma2, and Beta2.');
+  Writeln('  4 * ', ModelDim, ' = ', LayerNormParams, '  (Includes Gamma1, Beta1, Gamma2, and Beta2)');
   Writeln('Total parameters per transformer block:');
   Writeln('  Attention + FFN + LayerNorm');
   Writeln('  ', AttentionParams, ' + ', FFNParams, ' + ', LayerNormParams, ' = ', BlockParams);
@@ -152,6 +157,20 @@ begin
   Writeln('Total trainable parameters:');
   Writeln('  Embeddings + all transformer blocks');
   Writeln('  ', EmbeddingParams, ' + ', AllBlockParams, ' = ', TotalParams);
+end;
+
+// Compact report on trainable parameters.
+procedure ReportTrainableParameters;
+var
+  AllBlockParams: Int64;
+begin
+  ComputeTrainableParameters;
+  AllBlockParams := Int64(nBlock) * BlockParams;
+
+  Writeln('--- Trainable Parameters ---');
+  Writeln('Embeddings = ', EmbeddingParams, '; Attention/block = ', AttentionParams, '; FFN/block = ', FFNParams);
+  Writeln('LayerNorm/block = ', LayerNormParams, '; Total/block = ', BlockParams, '; All blocks = ', AllBlockParams);
+  Writeln('Total trainable parameters = ', TotalParams);
 end;
 
 // Short report of trainable parameters.
@@ -164,17 +183,9 @@ end;
 // Write key variables in program.
 procedure ReportKeyVariables;
 begin
-  Writeln('Maximum symbols: ', MaxSymbols, '; Maximum epochs (MaxEpochs): ', MaxEpochs, '.');
-  Case LearningStyle of
-    SlowLearning:
-      Writeln('Learning rate (slow): 0..10: 0.01; 11..20: 0.005; 21..100: 0.0005; 101..300: 0.0001; else 0.00005.');
-    FastLearning:
-      Writeln('Learning rate (fast): 0..30: 0.01; 31..100: 0.005; 101..800: 0.001; else 0.0005.');
-    RolledOffLearning:
-      Writeln('Learning rate (rolled off): Floor LR = ', FloorLearningRate: 9: 7, ' Base LR = ', BaseLearningRate: 9: 7, ' LR rolloff = ', RollOff: 9: 7, '.');
-  end;
-  Writeln('Weight decay: ', WeightDecay: 9: 7, '; Clip limit: ', ClipLimit: 9: 7, '; Dropouts used: ', Training, '.');
-  Writeln('Number of trainable parameters is ', NumberTrainableParameters, '.');
+  Writeln('Model: D=', ModelDim, '; Proj=', Proj, '; Heads=', nHead, '; Blocks=', nBlock, '; SeqLen=', SeqLen, '; Vocab=', Global.nVocab);
+  Writeln('Training: Epoch=', CompletedEpochs, '; Step=', GlobalStep, '; AdamW=', AdamWStep, '; LR=', LearningRate:0:8, '; Stride=', Stride);
+  Writeln('AdaptiveLR=', AdaptiveLR, '; Shuffle=', ShuffleWindows, '; Training=', Training, '; Dropout=', ADropout:0:3, '/', MLPDropout:0:3, '/', RDropout:0:3);
 end;
 
 // Report path.
@@ -190,43 +201,47 @@ end;
 procedure ReportProgramInfo;
 begin
   Writeln('--- Program Information ---');
-  Writeln('WesChat, Version: ', Version);
-  Writeln('Author: Wesley R. Parsons');
-  Writeln('Date: begun January 10, 2026');
-  Writeln('--- Folder Paths ---');
-  ReportPath('Existing work root', ExistingWorkRoot);
+  Writeln('WesChat ', Version, '; begun January 10, 2026; Author: Wesley R. Parsons');
+
+  Writeln('--- Paths ---');
+  ReportPath('Work root', WorkRoot);
   ReportPath('Working directory', WorkingDir);
-  ReportPath('Work root', WorkRoot);  Writeln('Sequence Length (SeqLen): ', SeqLen);
-  Writeln('--- Model Dimensions ---');
-  Writeln('Stride: (Stride) ', Stride);
-  Writeln('Model Dimensions (ModelDim): ', ModelDim);
-  Writeln('Dimensional Projections (Proj): ', Proj);
-  Writeln('Heads (nHead): ', nHead);
-  Writeln('Blocks (nBlock): ', nBlock);
-  Writeln('Epochs (MaxEpochs): ', MaxEpochs);
-  Writeln('Maximum Vocabulary (MaxVocab): ', DimVocab);
-  Writeln('Number of Vocabulary (nVocab): ', Global.nVocab);
-  Writeln('--- Model Specs ---');
-  Case LearningStyle of
-    SlowLearning:
-      // Display slow learning rate schedule.
-      Writeln('Learning rate (slow): ', LearningRate: 9: 7, ' with 0..10: 0.01; 11..20: 0.005; 21..100: 0.0005; 101..300: 0.0001; else 0.00005. ');
-    FastLearning:
-      // Display fast learning rate schedule.
-      Writeln('Learning rate (fast): ', LearningRate: 9: 7, ' with 0..30: 0.01; 31..100: 0.005; 101..800: 0.001; else 0.0005. ');
-    RolledOffLearning:
-      // Learning Rolled off learning rate.
-      Writeln('Learning rate (rolled of): ', LearningRate: 9: 7, ' Floor LR = ', FloorLearningRate: 9: 7, ' Base LR = ', BaseLearningRate: 9: 7, ' LR rolloff = ', RollOff: 9: 7, '.');
-  end;
+  ReportPath('Best model', BestModelFileName);
+
+  Writeln('--- Corpus / Tokenizer ---');
+  Writeln('Tokenizer = ', TokenizerKindName(TokenizerKind), '; Corpus ID = ', CorpusID);
+  Writeln('Corpus bytes = ', nCorpus, '; Raw tokens = ', RawTokenCount, '; Stored tokens = ', nTokenizedCorpus, '; Symbols = ', nSymbols);
+
+  Writeln('--- Model ---');
+  Writeln('ModelDim = ', ModelDim, '; ModelDimProj = ', ModelDimProj, '; Proj = ', Proj, '; Blocks = ', nBlock, '; Heads = ', nHead);
+  Writeln('SeqLen = ', SeqLen, '; Stride = ', Stride, '; StartStride = ', StartStride, '; Shuffle = ', ShuffleWindows);
+  Writeln('nVocab = ', Global.nVocab, '; DimVocab = ', DimVocab, '; Trainable parameters = ', NumberTrainableParameters);
+
+  Writeln('--- Training ---');
+  Writeln('Epoch = ', CompletedEpochs, '; GlobalStep = ', GlobalStep, '; AdamWStep = ', AdamWStep, '; MaxEpochs = ', MaxEpochs);
+  Writeln('LR = ', LearningRate:0:8, '; BaseLR = ', BaseLearningRate:0:8, '; FloorLR = ', FloorLearningRate:0:8, '; Adaptive = ', AdaptiveLR);
+
   if OverrideLearningRate <> -1.0 then
-    Writeln('Override Learning Rate: ', OverrideLearningRate: 9 :7);
-  Writeln('Current Learning Rate: ', LearningRate: 9: 7);
-  Writeln('Weight decay: ', WeightDecay: 9: 7);
-  Writeln('Clip limit: ', ClipLimit: 9: 7);
-  Writeln('Temperature: ', TTemperature: 9: 7);
-  Writeln('Global step: ', GlobalStep);
-  Writeln('Dropouts for Attention, MLP, Residual (A, MLP, RDropout): ', ADropout: 4: 4, ' ', MLPDropout: 4: 4, ' ', RDropout: 4: 4);
-  FullReportTrainableParameters;
+    Writeln('Override LR = ', OverrideLearningRate:0:8, '; RollOff = ', RollOff:0:8)
+  else
+    Writeln('Override LR = none; RollOff = ', RollOff:0:8);
+
+  Writeln('WeightDecay = ', WeightDecay:0:7, '; ClipLimit = ', ClipLimit:0:4, '; GlobalSeed = ', GlobalSeed);
+  Writeln('Adam: Beta1 = ', AdamBeta1:0:6, '; Beta2 = ', AdamBeta2:0:6, '; Epsilon = ', AdamEpsilon:0:10);
+  Writeln('Dropout: Attention = ', ADropout:0:4, '; MLP = ', MLPDropout:0:4, '; Residual = ', RDropout:0:4);
+  Writeln('Temperature: Training = ', TTemperature:0:4, '; Inference = ', ITemperature:0:4);
+
+  Writeln('--- Best Loss ---');
+  if (MinLoss < MaxDouble) and (MinLoss <> 1000000) then
+    Write('Minimum = ', MinLoss: 0: 7, ' @ epoch ', MinLossEpoch)
+  else
+    Write('Minimum = none');
+
+  if BestSavedLoss < MaxDouble then
+    Writeln('; Saved best = ', BestSavedLoss:0:7, ' @ epoch ', LastBestSaveEpoch)
+  else
+    Writeln('; Saved best = none');
+  ReportTrainableParameters;
 end;
 
 // Replace unprintable symbols with space.
@@ -271,6 +286,16 @@ begin
   Result := StringReplace(S, #13#10, #10, [rfReplaceAll]);
   Result := StringReplace(Result, #13, #10, [rfReplaceAll]);
   Result := StringReplace(Result, #10, #13#10, [rfReplaceAll]);
+end;
+
+// Display the tokenizer kind.
+function TokenizerKindName(const Kind: TTokenizerKind): string;
+begin
+  case Kind of
+    WesTokenizer:  Result := 'WesTokenizer';
+    UDTokenizer:   Result := 'UDTokenizer';
+    GPT2Tokenizer: Result := 'GPT2Tokenizer';
+  end;
 end;
 
 // Display a vector, character by character, then pause.
@@ -648,6 +673,68 @@ begin
     DisplayX(X, Part);
     Pause;
   end;
+end;
+
+// Detokenize Wes tokenized corpus to text.
+procedure WesDetokenizeTextToDisplay(const TokenizedCorpus: TIVector; const Part: TPart = B);
+var
+  i, j, iB, iE, Cutoff: Integer;
+  S: string;
+begin
+  if Length(TokenizedCorpus) = 0 then begin
+    Writeln('Detokenized Corpus is empty.');
+    Exit;
+  end;
+
+  if Length(TokenizedCorpus) < 500 then
+    Cutoff := Length(TokenizedCorpus) - 1
+  else
+    Cutoff := 499;
+
+  Case Part of
+    B: Write('Detokenized Corpus, First 500 tokens: ');
+    E: Write('Detokenized Corpus, Last 500 tokens: ');
+    F: Write('Detokenized Corpus, All 500 tokens: ');
+  end;
+
+  Case Part of
+    B: begin
+      iB := 0;
+      iE := Cutoff;
+    end;
+    E: begin
+      iB := High(TokenizedCorpus) - Cutoff;
+      iE := High(TokenizedCorpus);
+    end;
+    F: begin
+      iB := 0;
+      iE := High(TokenizedCorpus);
+    end;
+  end;
+
+  for i := iB to iE do begin
+    S := SymbolTable[TokenizedCorpus[i]];
+    if TokenizedCorpus[i] = 254 then begin
+      Write(#10, #13);
+      Break;
+    end;
+    {if TokenizedCorpus[i] = 166 then begin
+      Write(#13, #10);
+      Break;
+    end;}
+
+    for j := 1 to Length(S) do begin
+      if S[j] = #10 then begin
+        if (j = 1) or (S[j - 1] <> #13) then
+          Write(#13);
+        Write(#10);
+      end
+      else
+        Write(S[j]);
+    end;
+  end;
+
+  Writeln;
 end;
 
 end.

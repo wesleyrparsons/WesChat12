@@ -2,13 +2,14 @@ unit Util;
 
 {$mode ObjFPC}{$H+}{$I proprietary.txt}
 
-{ WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wesparsons.com.}
+{ WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellsouth.net, www.wesparsons.com.}
 
 interface
 
 uses
   Display,
   Global,
+  GPT2Tokenize,
   Math,
   Matrix,
   SysUtils;
@@ -27,19 +28,6 @@ const
   ProbsSize: Integer = SeqLen * DimVocab * SizeOf(Single);
 
 type
-// Adaptive LR.
-TAdaptiveLRState = record
-  Initialized: Boolean;
-  PrevLoss: Double;
-  PrevParamRMS: Double;
-  PrevUpdateRatio: Double;
-  PrevMRMS: Double;
-  PrevSqrtVRMS: Double;
-  PrevMaxGammaRMS: Double;
-  ConsecutiveWorse: Integer;
-  ConsecutiveFlat: Integer;
-  LastLRChangeEpoch: Integer;
-end;
 // Compact tensor report.
 TCompactTensorStats = record
   EmbParamRMS: Double;
@@ -73,6 +61,7 @@ procedure PadToSeqMultiple(var TokenVectorToPad: TIVector; const Seq: Integer);
 procedure TC100(const TC: TIVector);
 procedure TCFull(const TC: TIVector);
 function Decode(const x: Integer): UnicodeString;
+function DecodeToken(const x: Integer; const TokenizerKind: TTokenizerKind): UnicodeString;
 
 // Loss routines.
 function ComputeLoss(const Probs: TSeqVocabMatrix; const TargetTokens: TIDimVector): Double;
@@ -92,15 +81,17 @@ procedure MDeallocateCublas(var WModelParams: TWModelParams; var WModelState: TW
 procedure CopyInvFreqToDevice(var WModelState: TWModelState);
 procedure InitializeWAdamWState(var WAdamWState: TWAdamWState);
 procedure ZeroGradients(var WModelParams: TWModelParams; var WModelState: TWModelState; const Blk: Integer);
+procedure ResetTrainingStateForEnhancement(var WAdamWState: TWAdamWState);
 
 // Optimization routines.
 procedure AdamWOptimizeBlock(var WModelParams: TWModelParams; var WAdamWState: TWAdamWState; const Blk: Integer;
   const Beta1Power, Beta2Power: Single);
+procedure ResetAdamWStateForEnhancement(var WAdamWState: TWAdamWState);
 procedure AdamWOptimizeEmbeddings(var WModelParams: TWModelParams; var WAdamWState: TWAdamWState; const Beta1Power, Beta2Power: Single);
 procedure UpdateEmbeddingGradient(var WModelParams: TWModelParams; var WModelState: TWModelState);
 procedure GetAdamWStatistics(var WModelParams: TWModelParams; var WAdamWState: TWAdamWState;
   out ParamRMS, UpdateRMS, UpdateRatio, MRMS, SqrtVRMS: Double);
-procedure ReportCompactTensorStatistics(var WModelParams: TWModelParams; const Epoch: Integer; out Stats: TCompactTensorStats);  // Do not need Epoch param.
+procedure ReportCompactTensorStatistics(var WModelParams: TWModelParams; out Stats: TCompactTensorStats);  // Do not need Epoch param.
 procedure ReportAdamWTensorStatistics(var WModelParams: TWModelParams; var WAdamWState: TWAdamWState);
 procedure GetClippedGradientPercent(dGrad: PSingle; const Count: Integer;
   const ClipLimit: Single; out ClippedCount: Integer; out ClippedPercent: Double);
@@ -420,7 +411,7 @@ end;
 // Decode for WesTokenize and GPT2Tokenize, using symbol table, for one token.
 function Decode(const x: Integer): UnicodeString;
 begin
-  if Tokenizer = WesTokenizer then begin
+  if TokenizerKind = WesTokenizer then begin
     Result := UTF8Decode(SymbolTable[x]);
     Exit;
   end;
@@ -435,6 +426,42 @@ begin
     Result := '<UNK>'
   else
     Result := UTF8Decode(Vocab[x]);
+end;
+
+// Do not use. May not be working. General decode for one token for WesTokenize and GPT2Tokenize.
+function DecodeToken(const x: Integer; const TokenizerKind: TTokenizerKind): UnicodeString;
+begin
+  // WesTokenizer.
+  if TokenizerKind = WesTokenizer then begin
+    if x = 254 then begin
+      Write(#10);
+      Result := #13;
+    end
+    else if x = 10 then begin
+      Write(#10);
+      Result := #13;
+    end
+    else
+      Result := UTF8Decode(SymbolTable[x]);
+  end
+  // GPT2Tokenizer.
+  else begin
+    if Assigned(Vocab) and (x >= 0) and (x < Vocab.Count) then
+       Result := DisplayToken(UTF8Decode(Vocab[x]))
+    else
+       Result := 'BAD TOKEN ';
+
+    if x = GPT2BOS then
+      Result := '<BOS>'
+    else if x = GPT2EOS then
+      Result := '<EOS>'
+    else if x = GPT2PAD then
+      Result := '<PAD>'
+    else if x = GPT2UNK then
+      Result := '<UNK>'
+    else
+      Result := UTF8Decode(Vocab[x]);
+  end;
 end;
 
 // Compute cross-entropy loss.
@@ -1207,6 +1234,27 @@ begin
     CheckCudaError('Initialize AdamW state.');
 end;
 
+// Reset the training state when learning from new corpus.
+procedure ResetTrainingStateForEnhancement(var WAdamWState: TWAdamWState);
+begin
+  ResetAdamWStateForEnhancement(WAdamWState);
+
+  GlobalStep := 0;
+  AdamWStep := 0;
+
+  CompletedEpochs := 1;
+
+  MinLoss := MaxDouble;
+  MinLossEpoch := -1;
+
+  BestSavedLoss := MaxDouble;
+  LastBestSaveEpoch := -1;
+
+  FillChar(AdaptiveLRState, SizeOf(AdaptiveLRState), 0);
+
+  GlobalSeed := 123456789;
+end;
+
 // Zero out all gradients.
 procedure ZeroGradients(var WModelParams: TWModelParams; var WModelState: TWModelState; const Blk: Integer);
 var
@@ -1326,6 +1374,13 @@ begin
 
   if DebugCudaChecks then
     CheckCudaError('AdamW optimizer block ' + IntToStr(Blk));
+end;
+
+// Reset AdamW params for learning from new corpus.
+procedure ResetAdamWStateForEnhancement(var WAdamWState: TWAdamWState);
+begin
+  AdamWStep := 0;
+  InitializeWAdamWState(WAdamWState);
 end;
 
 // AdamW optimize embeddings.
@@ -1577,7 +1632,7 @@ begin
 end;
 
 // Compact per-tensor diagnostic report.
-procedure ReportCompactTensorStatistics(var WModelParams: TWModelParams; const Epoch: Integer; out Stats: TCompactTensorStats);
+procedure ReportCompactTensorStatistics(var WModelParams: TWModelParams; out Stats: TCompactTensorStats);
 var
   k: Integer;
   EmbPRMS, EmbGRMS, EmbMaxP, EmbMaxG: Double;
@@ -1606,8 +1661,8 @@ begin
   Stats.EmbClippedCount := EmbClippedCount;
   Stats.EmbClippedPercent := EmbClippedPercent;
 
-  Writeln('++Embeddings: ParamRMS=', EmbPRMS: 9: 7, ' GradRMS=', EmbGRMS: 9: 7, ' MaxP=', EmbMaxP: 9: 7, ' MaxG=', EmbMaxG: 9: 7,
-    ' Clipped=', EmbClippedCount, ' (', EmbClippedPercent: 0: 4, '%)');
+  Writeln('++Embeddings: ParamRMS=', EmbPRMS: 9: 7, ', GradRMS=', EmbGRMS: 9: 7, ', MaxP=', EmbMaxP: 9: 7, ', MaxG=', EmbMaxG: 9: 7,
+    ', Clipped=', EmbClippedCount, ' (', EmbClippedPercent: 0: 4, '%).');
 
   // Transformer blocks.
   for k := 0 to nBlock - 1 do begin
@@ -1628,12 +1683,11 @@ begin
       if G1P > Stats.MaxGammaRMS then Stats.MaxGammaRMS := G1P;
       if G2P > Stats.MaxGammaRMS then Stats.MaxGammaRMS := G2P;
 
-      Writeln('++Block ', k, ': WqG=', WqG: 9: 7, ' W1G=', W1G: 9: 7, ' W2G=', W2G: 9: 7, ' G1P=', G1P: 9: 7, ' G2P=', G2P: 9: 7);
+      Writeln('++Block ', k, ': WqG=', WqG: 9: 7, ', W1G=', W1G: 9: 7, ', W2G=', W2G: 9: 7, ', G1P=', G1P: 9: 7, ', G2P=', G2P: 9: 7, '.');
     end;
   end;
 
-  Writeln('Max weight GradRMS=', Stats.MaxWeightGradRMS:9:7,
-    '; Max Gamma RMS=', Stats.MaxGammaRMS:9:7);
+  Writeln('++Max weight GradRMS=', Stats.MaxWeightGradRMS: 9: 7, '; Max Gamma RMS=', Stats.MaxGammaRMS: 9: 7, '.');
   Writeln;
 end;
 
@@ -1764,9 +1818,7 @@ const
   CooldownEpochs = 5;
 var
   NewLR: Double;
-  LossChange, LossWorseFraction: Double;
-  UpdateRatioChange, MRMSChange, VRMSChange: Double;
-  ParamChange, GammaChange: Double;
+  LossChange, LossWorseFraction, UpdateRatioChange, MRMSChange, VRMSChange, ParamChange, GammaChange: Double;
   SafetyWarnings: Integer;
   CanChangeLR: Boolean;
 begin

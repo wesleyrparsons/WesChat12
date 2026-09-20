@@ -2,7 +2,7 @@ unit Symbolize;
 
 {$mode ObjFPC}{$H+}{$I proprietary.txt}
 
-{ WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wesparsons.com.}
+{ WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellsouth.net, www.wesparsons.com.}
 
 interface
 
@@ -59,13 +59,12 @@ type
   TMergeArray = array of TMerge;       // Array of merges.
 
 var
-  StartSymbol: Integer = 260;                    // UTF-8 0.255, BOS, EOS, PAD, UNK is 259.
+  StartSymbol: Integer = 260;                    // UTF-8 0.255, BOS, EOS, PAD, UNK is 259. 260 to 399 are UD tags.
   FinalTokenCount: Integer;                      // Number of tokens by traversing nodes.
   ElapsedMS: Int64;                              // For timing.
   Hours, Mins: Int64;                            // For timing.
   Secs: Double;                                  // For timing.
   Head, Tail: PTokenNode;                        // Start and end node of list of tokens.
-  MergeCount: Integer;                           // Maximum allowed number of merges and actual number.
   Merges: TMergeArray;                           // Array recording the merges.
 
 procedure ReadFileBytes(const FileName: String; var OneCorpus: TBVector);
@@ -83,6 +82,278 @@ implementation
 //   Corpus: raw byte text.
 // Output:
 //   TokenizedCorpus: dynamic array of token IDs.
+
+// DU tags.
+function ReservedTagToken(const S: string): Integer;
+begin
+  Result := -1;
+
+  // Parts of speech.
+  if S = '|noun' then Result := TokNoun
+  else if S = '|verb' then Result := TokVerb
+  else if S = '|adj' then Result := TokAdj
+  else if S = '|adv' then Result := TokAdv
+  else if S = '|prep' then Result := TokPrep
+  else if S = '|det' then Result := TokDet
+  else if S = '|pron' then Result := TokPron
+  else if S = '|aux' then Result := TokAux
+  else if S = '|sconj' then Result := TokSConj
+  else if S = '|cconj' then Result := TokCConj
+  else if S = '|part' then Result := TokPart
+  else if S = '|intj' then Result := TokIntj
+  else if S = '|num' then Result := TokNum
+  else if S = '|propn' then Result := TokPropn
+  else if S = '|x' then Result := TokX
+  else if S = '|sym' then Result := TokSym
+  else if S = '|punct' then Result := TokPunct
+
+  // Number.
+  else if S = '|sg' then Result := TokSing
+  else if S = '|pl' then Result := TokPlur
+
+  // Person.
+  else if S = '|1p' then Result := TokPerson1
+  else if S = '|2p' then Result := TokPerson2
+  else if S = '|3p' then Result := TokPerson3
+
+  // Case.
+  else if S = '|nom' then Result := TokNom
+  else if S = '|acc' then Result := TokAcc
+  else if S = '|gen' then Result := TokGen
+  else if S = '|dat' then Result := TokDat
+  else if S = '|loc' then Result := TokLoc
+  else if S = '|ins' then Result := TokIns
+  else if S = '|voc' then Result := TokVoc
+
+  // Gender.
+  else if S = '|masc' then Result := TokMasc
+  else if S = '|fem' then Result := TokFem
+  else if S = '|neut' then Result := TokNeut
+  else if S = '|common' then Result := TokCommon
+
+  // Tense.
+  else if S = '|past' then Result := TokPast
+  else if S = '|pres' then Result := TokPres
+  else if S = '|fut' then Result := TokFut
+
+  // Mood.
+  else if S = '|ind' then Result := TokMoodInd
+  else if S = '|imp' then Result := TokMoodImp
+  else if S = '|sub' then Result := TokMoodSub
+  else if S = '|cond' then Result := TokMoodCond
+  else if S = '|opt' then Result := TokMoodOpt
+
+  // Verb form.
+  else if S = '|fin' then Result := TokVerbFin
+  else if S = '|inf' then Result := TokVerbInf
+  else if S = '|ger' then Result := TokVerbGer
+  else if S = '|conv' then Result := TokVerbConv
+  else if S = '|participle' then Result := TokVerbPart
+
+  // Voice.
+  else if S = '|act' then Result := TokVoiceAct
+  else if S = '|pass' then Result := TokVoicePass
+  else if S = '|mid' then Result := TokVoiceMid
+
+  // Aspect.
+  else if S = '|impf' then Result := TokAspectImp
+  else if S = '|perf' then Result := TokAspectPerf
+  else if S = '|prog' then Result := TokAspectProg
+  else if S = '|prosp' then Result := TokAspectProsp
+
+  // Degree.
+  else if S = '|pos' then Result := TokDegreePos
+  else if S = '|cmp' then Result := TokDegreeCmp
+  else if S = '|sup' then Result := TokDegreeSup
+  else if S = '|abs' then Result := TokDegreeAbs
+
+  // Definiteness.
+  else if S = '|def' then Result := TokDefiniteDef
+  else if S = '|indef' then Result := TokDefiniteInd
+
+  // Pronoun type.
+  else if S = '|art' then Result := TokPronArt
+  else if S = '|dem' then Result := TokPronDem
+  else if S = '|int' then Result := TokPronInt
+  else if S = '|prs' then Result := TokPronPrs
+  else if S = '|rel' then Result := TokPronRel
+  else if S = '|indpron' then Result := TokPronInd
+  else if S = '|negpron' then Result := TokPronNeg
+  else if S = '|tot' then Result := TokPronTot
+
+  // Possessive.
+  else if S = '|poss' then Result := TokPoss
+
+  // Reflexive.
+  else if S = '|refl' then Result := TokRefl
+
+  // Polarity.
+  else if S = '|neg' then Result := TokPolarityNeg
+  else if S = '|positive' then Result := TokPolarityPos
+
+  // Numeral type.
+  else if S = '|card' then Result := TokNumCard
+  else if S = '|ord' then Result := TokNumOrd
+  else if S = '|frac' then Result := TokNumFrac
+  else if S = '|mult' then Result := TokNumMult
+  else if S = '|sets' then Result := TokNumSets
+  else if S = '|dist' then Result := TokNumDist
+
+  // Numeral form.
+  else if S = '|digit' then Result := TokNumDigit
+  else if S = '|numword' then Result := TokNumWord
+  else if S = '|roman' then Result := TokNumRoman
+
+  // Miscellaneous lexical properties.
+  else if S = '|abbr' then Result := TokAbbr
+  else if S = '|foreign' then Result := TokForeign
+  else if S = '|typo' then Result := TokTypo
+
+  // Animacy.
+  else if S = '|anim' then Result := TokAnim
+  else if S = '|inan' then Result := TokInan
+  else if S = '|human' then Result := TokHuman
+  else if S = '|nonhuman' then Result := TokNonHuman;
+end;
+
+// Initialize UD tags in symbol table.
+procedure InitUDTagSymbols;
+var
+  i: Integer;
+begin
+  SetLength(SymbolTable, UDTagBoundary);
+
+  // Mark unused reserved positions.
+  for i := FirstTagToken to UDTagBoundary - 1 do
+    SymbolTable[i] := '<RES' + IntToStr(i) + '>';
+
+  // Parts of speech.
+  SymbolTable[TokNoun] := '|noun';
+  SymbolTable[TokVerb] := '|verb';
+  SymbolTable[TokAdj] := '|adj';
+  SymbolTable[TokAdv] := '|adv';
+  SymbolTable[TokPrep] := '|prep';
+  SymbolTable[TokDet] := '|det';
+  SymbolTable[TokPron] := '|pron';
+  SymbolTable[TokAux] := '|aux';
+  SymbolTable[TokSConj] := '|sconj';
+  SymbolTable[TokCConj] := '|cconj';
+  SymbolTable[TokPart] := '|part';
+  SymbolTable[TokIntj] := '|intj';
+  SymbolTable[TokNum] := '|num';
+  SymbolTable[TokPropn] := '|propn';
+  SymbolTable[TokX] := '|x';
+  SymbolTable[TokSym] := '|sym';
+  SymbolTable[TokPunct] := '|punct';
+
+  // Number.
+  SymbolTable[TokSing] := '|sg';
+  SymbolTable[TokPlur] := '|pl';
+
+  // Person.
+  SymbolTable[TokPerson1] := '|1p';
+  SymbolTable[TokPerson2] := '|2p';
+  SymbolTable[TokPerson3] := '|3p';
+
+  // Case.
+  SymbolTable[TokNom] := '|nom';
+  SymbolTable[TokAcc] := '|acc';
+  SymbolTable[TokGen] := '|gen';
+  SymbolTable[TokDat] := '|dat';
+  SymbolTable[TokLoc] := '|loc';
+  SymbolTable[TokIns] := '|ins';
+  SymbolTable[TokVoc] := '|voc';
+
+  // Gender.
+  SymbolTable[TokMasc] := '|masc';
+  SymbolTable[TokFem] := '|fem';
+  SymbolTable[TokNeut] := '|neut';
+  SymbolTable[TokCommon] := '|common';
+
+  // Tense.
+  SymbolTable[TokPast] := '|past';
+  SymbolTable[TokPres] := '|pres';
+  SymbolTable[TokFut] := '|fut';
+
+  // Mood.
+  SymbolTable[TokMoodInd] := '|ind';
+  SymbolTable[TokMoodImp] := '|imp';
+  SymbolTable[TokMoodSub] := '|sub';
+  SymbolTable[TokMoodCond] := '|cond';
+  SymbolTable[TokMoodOpt] := '|opt';
+
+  // Verb form.
+  SymbolTable[TokVerbFin] := '|fin';
+  SymbolTable[TokVerbInf] := '|inf';
+  SymbolTable[TokVerbGer] := '|ger';
+  SymbolTable[TokPart]    := '|participle';
+  SymbolTable[TokVerbConv] := '|conv';
+
+  // Voice.
+  SymbolTable[TokVoiceAct] := '|act';
+  SymbolTable[TokVoicePass] := '|pass';
+  SymbolTable[TokVoiceMid] := '|mid';
+
+  // Aspect.
+  SymbolTable[TokAspectImp] := '|impf';
+  SymbolTable[TokAspectPerf] := '|perf';
+  SymbolTable[TokAspectProg] := '|prog';
+  SymbolTable[TokAspectProsp] := '|prosp';
+
+  // Degree.
+  SymbolTable[TokDegreePos] := '|pos';
+  SymbolTable[TokDegreeCmp] := '|cmp';
+  SymbolTable[TokDegreeSup] := '|sup';
+  SymbolTable[TokDegreeAbs] := '|abs';
+
+  // Definiteness.
+  SymbolTable[TokDefiniteDef] := '|def';
+  SymbolTable[TokDefiniteInd] := '|indef';
+
+  // Pronoun type.
+  SymbolTable[TokPronArt] := '|art';
+  SymbolTable[TokPronDem] := '|dem';
+  SymbolTable[TokPronInt] := '|int';
+  SymbolTable[TokPronPrs] := '|prs';
+  SymbolTable[TokPronRel] := '|rel';
+  SymbolTable[TokPronInd] := '|indpron';
+  SymbolTable[TokPronNeg] := '|negpron';
+  SymbolTable[TokPronTot] := '|tot';
+
+  // Possessive.
+  SymbolTable[TokPoss] := '|poss';
+
+  // Reflexive.
+  SymbolTable[TokRefl] := '|refl';
+
+  // Polarity.
+  SymbolTable[TokPolarityNeg] := '|neg';
+  SymbolTable[TokPolarityPos] := '|positive';
+
+  // Numeral type.
+  SymbolTable[TokNumCard] := '|card';
+  SymbolTable[TokNumOrd] := '|ord';
+  SymbolTable[TokNumFrac] := '|frac';
+  SymbolTable[TokNumMult] := '|mult';
+  SymbolTable[TokNumSets] := '|sets';
+  SymbolTable[TokNumDist] := '|dist';
+
+  // Numeral form.
+  SymbolTable[TokNumDigit] := '|digit';
+  SymbolTable[TokNumWord] := '|numword';
+  SymbolTable[TokNumRoman] := '|roman';
+
+  // Miscellaneous lexical properties.
+  SymbolTable[TokAbbr] := '|abbr';
+  SymbolTable[TokForeign] := '|foreign';
+  SymbolTable[TokTypo] := '|typo';
+
+  // Animacy.
+  SymbolTable[TokAnim] := '|anim';
+  SymbolTable[TokInan] := '|inan';
+  SymbolTable[TokHuman] := '|human';
+  SymbolTable[TokNonHuman] := '|nonhuman';
+end;
 
 { Load the Corpus }
 // Read the corpus as a stream of binary.
@@ -106,9 +377,6 @@ begin
 
     if VerboseTokenize then
       if DisplayEachByteRead then
-        {if B < 32 then
-          Write('<', B, '>')
-        else}
           Write(Chr(B));
   end;
   CloseFile(F);
@@ -132,27 +400,25 @@ end;
 function IsSpecial(T: Integer): Boolean;
 begin
   Result := (T = BOS) or (T = EOS) or (T = PAD) or (T = UNK);
+
+  if TokenizerKind = UDTokenizer then
+    Result := Result or ((T >= FirstTagToken) and (T < UDTagBoundary));
 end;
 
 // Build the initial token linked list from the Corpus.
 procedure BuildTokenListFromCorpus(const Corpus: TBVector);
 var
-  i: Integer;
-  Node, Prev: PTokenNode;
-begin
-  Head := nil;
-  Tail := nil;
-  Prev := nil;
+  i, j, TagToken: Integer;
+  Prev: PTokenNode;
+  TagString: string;
 
-  for i := 0 to High(Corpus) do begin
+  procedure AppendToken(AToken: Integer);
+  var
+    Node: PTokenNode;
+  begin
     New(Node);
 
-    // Tiny Stories separator byte 254 becomes the EOS token.
-    if Corpus[i] = 254 then
-      Node^.Tok := EOS
-    else
-      Node^.Tok := Corpus[i];
-
+    Node^.Tok := AToken;
     Node^.Prev := Prev;
     Node^.Next := nil;
 
@@ -162,6 +428,49 @@ begin
       Head := Node;
 
     Prev := Node;
+  end;
+
+begin
+  Head := nil;
+  Tail := nil;
+  Prev := nil;
+  i := 0;
+
+  while i <= High(Corpus) do begin
+
+    // If DU tagging is enabled, recognize |tag as one reserved token.
+    if (TokenizerKind = UDTokenizer) and (Corpus[i] = Ord('|')) then begin
+      TagString := '|';
+      j := i + 1;
+
+      // A tag ends at the next | or whitespace.
+      while (j <= High(Corpus)) and (Corpus[j] <> Ord('|')) and (Corpus[j] <> 9)
+        and (Corpus[j] <> 10) and (Corpus[j] <> 13) and (Corpus[j] <> 32) do begin
+        TagString := TagString + Chr(Corpus[j]);
+        Inc(j);
+      end;
+
+      TagToken := ReservedTagToken(TagString);
+
+      if TagToken >= 0 then begin
+        AppendToken(TagToken);
+        i := j;
+        Continue;
+      end;
+
+      // Not a reserved UD tag. Treat the | as an ordinary corpus byte.
+      AppendToken(Corpus[i]);
+      Inc(i);
+      Continue;
+    end;
+
+    // Tiny Stories separator byte 254 becomes EOS.
+    if Corpus[i] = 254 then
+      AppendToken(EOS)
+    else
+      AppendToken(Corpus[i]);
+
+    Inc(i);
   end;
 
   Tail := Prev;
@@ -566,6 +875,8 @@ begin
   UNK := Length(SymbolTable);
   SetLength(SymbolTable, UNK + 1);
   SymbolTable[UNK] := '<UNK>';
+  if TokenizerKind = UDTokenizer then
+    InitUDTagSymbols;
 end;
 
 // After performing a merge, add a new merge symbol to the symbol table.
@@ -612,7 +923,7 @@ var
         Pause;
       end;
       'p', 'P': begin        // Pause work.
-        Writeln('Paused...');
+        Write('Paused... ');
         Pause;
       end;
       's', 'S': begin
@@ -781,7 +1092,12 @@ begin
   Writeln('--- Symbols Statistics ---');
   Writeln('Number of raw byte symbols: ', 256);
   Writeln('Number of special symbols: ', 4);
-  Writeln('Number of merged symbols: ', nSymbols - 260);
+  if TokenizerKind = UDTokenizer then begin
+    Writeln('Number of reserved DU tag slots: ', UDTagBoundary - FirstTagToken);
+    Writeln('Number of merged symbols: ', nSymbols - UDTagBoundary);
+  end
+  else
+    Writeln('Number of merged symbols: ', nSymbols - 260);
 
   { --- First pass: compute lengths, min, max, sum --- }
   SetLength(Lengths, n);
@@ -1085,7 +1401,12 @@ begin
   nCorpus := Length(Corpus);
 
   Writeln('Symbolizing and merging started.');
-  Writeln('Maximum symbols = ', MaxSymbols, '. Base symbols = ', nSymbols, '. Maximum merges = ', MaxMerges, '. Maximum pair counts = ', MaxPairCount, '.');
+  Write('Maximum symbols = ', MaxSymbols, '. Base symbols = ', nSymbols, '. Maximum merges = ', MaxMerges, '. Maximum pair counts = ', MaxPairCount, '.',
+    'Tok Kind = ', TokenizerKindName(TokenizerKind), '.');
+  if TokenizerKind = UDTokenizer then
+    Writeln(' UD tags are from ', FirstTagToken, ' to ', UDTagBoundary, '.')
+  else
+    Writeln;
 
   TrainBPEHash(Head, Tail, MaxMerges, MaxSymbols, MergeCount, StartSymbol);
 
@@ -1108,6 +1429,8 @@ begin
 
   FreeTokenList(Head, Tail);
   Writeln('Symbolizing and merging ended.');
+  SaveSymbolTableIfMissing(CurrentBaseName);
+  nMerges := MergeCount; // nMerge is the total number of merges.
 end;
 
 end.

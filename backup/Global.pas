@@ -19,7 +19,8 @@ var
   VerboseTokenize: Boolean = False;              // Display steps in Tokenize and Symbolize units.
   VeryVerboseTokenize: Boolean = False;          // Very verbose in Tokenize units.
   VerboseTransform: Boolean = False;             // Displays X, Q, ScoresHead1, etc. in Transform units.
-  VerboseInfer: Boolean = True;                  // Displays steps in Infer unit.
+  VerboseInfer: Boolean = False;                 // Displays many steps in Infer unit.
+  DetailInfer: Boolean = False;                  // Displays some steps in Infer unit.
   // Displaying data.
   DisplayCorpus: Boolean = False;                // One set for real tokenizing and one set for debug.
   DisplayWindow: Boolean = False;                // Display the SeqLen window.
@@ -55,18 +56,19 @@ const
   GPT2BOS = 50258;                // WesChat extension.
   GPT2UNK = 50259;                // WesChat extension; normally never needed.
   GPT2ModelVocabSize = 50260;
+  ModelMagic:  array[0..7] of Char = ('W','E','S','2','M','O','D','L');
   // Other constants.
   RecentCount = 10;               // Rolling means in training.
   Version: shortstring = '1.2';   // Version 1.2.
-  InvSqrtHeadDim: Single = 1 / Sqrt(HeadDim);         // Used in softmax.
-  FirstMergedToken = 260;         // First token after all extended ASCII and 4 specials.
+  FirstMergedToken = 400;         // First token after all extended ASCII and 4 specials.
   DisplayLength = 100;            // Length of diaplying corpus or tokens.
+  InvSqrtHeadDim: Single = 1 / Sqrt(HeadDim);    // Used in softmax.
 
 type                              // SeqLen = L, ModelDim = D, ModelDim/nHead = H, DB is Proj*D, DV is DimVocab.
-  // cublas type.
+  // Cublas type.
   TcublasHandle = Pointer;
-  // Tokenizer type.
-  TTokenizer = (WesTokenizer, GPT2Tokenizer);
+  // Tokenizer kind type.
+  TTokenizerKind = (WesTokenizer, UDTokenizer, GPT2Tokenizer);
   // Seq, Model, Vocab, Head, Hidden, Scores, Embedding, Proj types.
   TSeqVector = array [0..ModelDim - 1] of Single;                              // D
   TSeqVectorProj = array[0..ModelDimProj - 1] of Single;                       // DB (DB is like D)
@@ -156,45 +158,55 @@ type                              // SeqLen = L, ModelDim = D, ModelDim/nHead = 
   // Display types.
   TPart = (B, E, F, G);                // Length = VocabSize * Dimension. But only use nSymbols in rows.
   TSymbolTable = TRBSVector;           // Array of symbols. So index of array is a symbol string.
-  // LearningTypes.
-  TLearning = (FlatLearning, FastLearning, SlowLearning, RolledOffLearning);
-  TTrainingCheckpoint = packed record
-    // Training position.
-    GlobalStep: Int64;
-    CompletedEpochs: Integer;
-
-    // Learning-rate state.
-    LearningStyle: TLearning;
-    LearningRate: Double;
-    OverrideLearningRate: Double;
-    BaseLearningRate: Double;
-    FloorLearningRate: Double;
-    Rolloff: Double;
-
-    // Optimization.
-    WeightDecay: Double;
-    ClipLimit: Single;
-
-    // Temperatures.
-    TTemperature: Single;
-    ITemperature: Single;
-
-    // Dropout.
-    ADropout: Single;
-    RDropout: Single;
-    MLPDropout: Single;
-
-    // Window generation.
-    ShuffleWindows: Boolean;
-    Stride: Integer;
-    StartStride: Integer;
-    GlobalSeed: UInt64;
-    // AdamW.
-    AdamWStep: Int64;
-    AdamBeta1: Single;
-    AdamBeta2: Single;
-    AdamEpsilon: Single;
+  // Learning style types.
+  TLearningStyle = (FlatLearning, FastLearning, SlowLearning, RolledOffLearning);
+  // Adaptive LR.
+  type
+  TAdaptiveLRState = record
+    Initialized: Boolean;
+    PrevLoss: Double;
+    PrevParamRMS: Double;
+    PrevUpdateRatio: Double;
+    PrevMRMS: Double;
+    PrevSqrtVRMS: Double;
+    PrevMaxGammaRMS: Double;
+    ConsecutiveWorse: Integer;
+    ConsecutiveFlat: Integer;
+    LastLRChangeEpoch: Integer;
   end;
+  type
+    TTrainingCheckpoint = record
+      GlobalStep: Int64;
+      CompletedEpochs: Integer;
+      LearningStyle: TLearningStyle;
+      LearningRate: Double;
+      OverrideLearningRate: Double;
+      BaseLearningRate: Double;
+      FloorLearningRate: Double;
+      RollOff: Double;
+      WeightDecay: Double;
+      ClipLimit: Double;
+      TTemperature: Double;
+      ITemperature: Double;
+      ADropOut: Double;
+      RDropOut: Double;
+      MLPDropOut: Double;
+      ShuffleWindows: Boolean;
+      Stride: Integer;
+      StartStride: Integer;
+      GlobalSeed: QWord;
+      AdamWStep: Int64;
+      AdamBeta1: Double;
+      AdamBeta2: Double;
+      AdamEpsilon: Double;
+      AdaptiveLR: Boolean;
+      AdaptiveLRState: TAdaptiveLRState;
+      MinLoss: Double;
+      MinLossEpoch: Integer;
+      BestSavedLoss: Double;
+      LastBestSaveEpoch: Integer;
+    end;
+
   // Param block types.
   TParamBlock = array[0..nBlock - 1] of record
     Wq, Wk, Wv, W0:                 TWeightTensor;         // Weights.
@@ -264,6 +276,9 @@ var
   CudartPresent: Boolean;                        // Is cudart present?
   WesChatKernelPresent: Boolean;                 // Is my kernel present?
   // Tokenize vars.                              // Need in order to use in decoding in Infer.
+  // UDTagOn: Boolean = True;                       // True means use UD tags.
+  UDPipeFileName: string = 'c:\wc\ud\udpipe.exe';
+  UDModelFileName: string = 'c:\wc\ud\english-ewt-ud-2.4-190531.udpipe';
   Vocab: TStringList;                            // Vocabulary for ChatGPT.
   // Current work and file names.
   ExistingWorkRoot: string = 'C:\wc\';
@@ -281,16 +296,20 @@ var
   LogFileName: string = '';
   // Corpus vars.
   nCorpus: Integer;                              // Length of corpus.
+  MergeCount: Integer;                           // Count of merges.
+  nMerges: Integer;                               // Number of merges.
+  CorpusID: UInt64;                              // Identifier for corpus.
   SymbolTable: TSymbolTable;                     // Symbol table.
   WorkingName, WorkingDir: string;               // Saving data.
   CorpusFileInfo: string;                        // Saving long string of info on corpus.
   MultipleFileName: string;                      // Using multiple corpuses and outputting single file name.
   nTokenizedCorpus: Integer;                     // Length of tokenized corpus.
+  RawTokenCount, PaddedTokenCount: Integer;      // Raw and padded token count.
   // Target and Query vars.
   InputTokens: TIDimVector;                      // Input tokens.
   dInputTokens: PInteger;                        // Input tokens.
   TargetTokens: TIDimVector;                     // Target tokens. Shifted by  +1.
-  dTargetTokens: PInteger;
+  dTargetTokens: PInteger;                       // Target tokens.
   // Extra char vars.
   BOS: Integer = 256;                            // Begining of corpus.
   EOS: Integer = 257;                            // End of corpus.
@@ -298,7 +317,10 @@ var
   UNK: Integer = 259;                            // Unknown.
   // Model settings vars.
   Training:             Boolean = False;         // True = training mode: training temperature and dropout enabled.
-  LearningStyle:        TLearning = SlowLearning;// Style of learning.
+  LearningStyle:        TLearningStyle = SlowLearning;     // Style of learning.
+  TrainLogFile:         Text;                    // Log for training data.
+  TrainLogOpen:         Boolean = False;         // Training log open?
+  TrainLogFileName:     string = '';             // Name of training log.
   ShuffleWindows:       Boolean = True;          // Shuffle the windows each epoch.
   BaseLearningRate:     Double = 0.000100;       // Base learning rate for Gradient.
   FloorLearningRate:    Double = 0.000005;       // Floor learning rate for Gradient.
@@ -324,8 +346,13 @@ var
   DisplaySubstage:      Boolean = False;         // Display progress by stage in train and transform.
   DisplayEpoch:         Boolean = True;          // Display progress by epoch in train and transform.
   Stage:                Byte;                    // Indentation for stage;
-  // Adaptive Learning var.
-  AdaptiveLearning: Boolean = True;
+  // Adaptive LR adnd Loss.
+  AdaptiveLR: Boolean = True;
+  AdaptiveLRState: TAdaptiveLRState;
+  MinLoss: Double;
+  MinLossEpoch: Integer;
+  BestSavedLoss: Double;
+  LastBestSaveEpoch: Integer;
   // Saving vars.
   WorkRoot:             string = '';             // Work folder name set by user or default.
   CorpusDir:            string = '';             // Folder for corpus files.
@@ -337,7 +364,6 @@ var
   RunDir:               string = '';             // Folder for run files (not used).
   ListDir:              string = '';             // Folder for list files (not used).
   ScratchDir:           string = '';             // Folder for scratch files (not used).
-  SymbolMagic:          array[0..3] of Char = ('S', 'Y', 'M', 'T');  // Global magic, for saving symbol table.
   // Adam hyperparameters.
   AdamBeta1:            Single = 0.90000;
   AdamBeta2:            Single = 0.99900;
@@ -350,7 +376,7 @@ var
   nSymbols: Integer;                             // Number of symbols produced/loaded by tokenizer.
   nVocab: Integer;                               // Active model vocabulary size; normally set from nSymbols.
   TokenID: TIVector;                             // Same as TokenizedCorpus.
-  Tokenizer: TTokenizer;                         // WesChat or GPT2Chat tokenizer;
+  TokenizerKind: TTokenizerKind;                 // WesChat or GPT2Chat tokenizer;
   NewModel: Boolean = True;                      // If new model, initialize params.
   ParamsNeedCopyToDevice: Boolean = True;        // True  = host parameters need to be sent to GPU. False = current parameters are already on GPU
   CorpusPresent: Boolean = False;                // Parts of program present.
@@ -359,9 +385,148 @@ var
   TokenizedCorpusPresent: Boolean = False;
   ModelPresent: Boolean = False;
   QueryPresent: Boolean = False;
+const
+  // Boundaries and starts.
+  FirstTagToken = 260;
+  UDTagBoundary = 400;
+
+  // Basic byte/special tokens.
+  TokBOS = 256;
+  TokEOS = 257;
+  TokPAD = 258;
+  TokNUL = 259;
+
+  // Parts of speech.
+  TokNoun  = 260;   // |noun
+  TokVerb  = 261;   // |verb
+  TokAdj   = 262;   // |adj
+  TokAdv   = 263;   // |adv
+  TokPrep  = 264;   // |prep
+  TokDet   = 265;   // |det
+  TokPron  = 266;   // |pron
+  TokAux   = 267;   // |aux
+  TokSConj = 268;   // |sconj
+  TokCConj = 269;   // |cconj
+  TokPart  = 270;   // |part
+  TokIntj  = 271;   // |intj
+  TokNum   = 272;   // |num
+  TokPropn = 273;   // |propn
+  TokX     = 274;   // |x
+  TokSym   = 275;   // |sym
+  TokPunct = 276;   // |punct
+
+  // Number.
+  TokSing = 277;    // |sg
+  TokPlur = 278;    // |pl
+
+  // Person.
+  TokPerson1 = 279; // |1p
+  TokPerson2 = 280; // |2p
+  TokPerson3 = 281; // |3p
+
+  // Case.
+  TokNom = 282;     // |nom
+  TokAcc = 283;     // |acc
+  TokGen = 284;     // |gen
+  TokDat = 285;     // |dat
+  TokLoc = 286;     // |loc
+  TokIns = 287;     // |ins
+  TokVoc = 288;     // |voc
+
+  // Gender.
+  TokMasc   = 289;  // |masc
+  TokFem    = 290;  // |fem
+  TokNeut   = 291;  // |neut
+  TokCommon = 292;  // |common
+
+  // Tense.
+  TokPast = 293;    // |past
+  TokPres = 294;    // |pres
+  TokFut  = 295;    // |fut
+
+  // Mood.
+  TokMoodInd  = 296; // |ind
+  TokMoodImp  = 297; // |imp
+  TokMoodSub  = 298; // |sub
+  TokMoodCond = 299; // |cond
+  TokMoodOpt  = 300; // |opt
+
+  // Verb form.
+  TokVerbFin        = 301; // |fin
+  TokVerbInf        = 302; // |inf
+  TokVerbGer        = 303; // |ger
+  TokVerbPart       = 304; // |participle
+  TokVerbConv       = 305; // |conv
+
+  // Voice.
+  TokVoiceAct  = 306; // |act
+  TokVoicePass = 307; // |pass
+  TokVoiceMid  = 308; // |mid
+
+  // Aspect.
+  TokAspectImp   = 309; // |impf
+  TokAspectPerf  = 310; // |perf
+  TokAspectProg  = 311; // |prog
+  TokAspectProsp = 312; // |prosp
+
+  // Degree.
+  TokDegreePos = 313; // |pos
+  TokDegreeCmp = 314; // |cmp
+  TokDegreeSup = 315; // |sup
+  TokDegreeAbs = 316; // |abs
+
+  // Definiteness.
+  TokDefiniteDef = 317; // |def
+  TokDefiniteInd = 318; // |indef
+
+  // Pronoun type.
+  TokPronArt = 319; // |art
+  TokPronDem = 320; // |dem
+  TokPronInt = 321; // |int
+  TokPronPrs = 322; // |prs
+  TokPronRel = 323; // |rel
+  TokPronInd = 324; // |indpron
+  TokPronNeg = 325; // |negpron
+  TokPronTot = 326; // |tot
+
+  // Possessive.
+  TokPoss = 327;    // |poss
+
+  // Reflexive.
+  TokRefl = 328;    // |refl
+
+  // Polarity.
+  TokPolarityNeg = 329; // |neg
+  TokPolarityPos = 330; // |positive
+
+  // Numeral type.
+  TokNumCard = 331; // |card
+  TokNumOrd  = 332; // |ord
+  TokNumFrac = 333; // |frac
+  TokNumMult = 334; // |mult
+  TokNumSets = 335; // |sets
+  TokNumDist = 336; // |dist
+
+  // Numeral form.
+  TokNumDigit = 337; // |digit
+  TokNumWord  = 338; // |numword
+  TokNumRoman = 339; // |roman
+
+  // Miscellaneous lexical properties.
+  TokAbbr    = 340; // |abbr
+  TokForeign = 341; // |foreign
+  TokTypo    = 342; // |typo
+
+  // Animacy.
+  TokAnim     = 343; // |anim
+  TokInan     = 344; // |inan
+  TokHuman    = 345; // |human
+  TokNonHuman = 346; // |nonhuman
+
+  // First ID available for ordinary learned symbols is FirstMergedToken - 400.
 
 implementation
 
 begin
 end.
-
+1111

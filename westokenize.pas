@@ -2,7 +2,7 @@ unit WesTokenize;
 
 {$mode ObjFPC}{$H+}{$I proprietary.txt}
 
-{ WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wesparsons.com.}
+{ WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellsouth.net, www.wesparsons.com.}
 
 interface
 
@@ -53,7 +53,6 @@ procedure BuildTrie(out Root: PTrieNode);
 function MatchLongest(root: PTrieNode; const text: TBVector; startPos: Integer;
   out tokenID, matchLen: Integer): Boolean;
 procedure ReportStatistics(const TokenizedCorpus: TIVector);
-procedure DetokenizeToDisplay(const TokenizedCorpus: TIVector; const Part: TPart = B);
 procedure SaveTokenizationLog(const TokenizedCorpus: TIVector; const LogFileName: string);
 procedure TokenizeWesBytes(const Corpus: TBVector; var Tokens: TIVector);
 procedure RunWesTokenize(const Corpus: TBVector; var TokenizedCorpus: TIVector);
@@ -130,20 +129,6 @@ begin
   FreeTrie(TrieHead);
 end;
 
-{procedure FreeTrie(var Node: PTrieNode);
-var
-  j: Integer;
-begin
-  if Node = nil then Exit;
-
-  for j := 0 to 255 do
-    if Node^.Children[j] <> nil then
-      FreeTrie(Node^.Children[j]);
-
-  Dispose(Node);
-  Node := nil;
-end;}
-
 // Trie procedure: Match longest.
 function MatchLongest(root: PTrieNode;
   const text: TBVector;
@@ -185,6 +170,82 @@ begin
   end
   else
     Result := False;
+end;
+
+// Difference first merged token for UD corpus.
+function CurrentFirstMergedToken: Integer;
+begin
+  if TokenizerKind = UDTokenizer then
+    Result := UDTagBoundary
+  else
+    Result := FirstMergedToken;
+end;
+
+// Match a reserved UD tag such as |noun, |pl, |past.
+function MatchReservedUDTag(root: PTrieNode; const text: TBVector; startPos: Integer;
+  out tokenID, matchLen: Integer): Boolean;
+var
+  Node: PTrieNode;
+  i: Integer;
+  c: Byte;
+  LastMatchID, LastMatchLen: Integer;
+begin
+  Node := root;
+  LastMatchID := -1;
+  LastMatchLen := 0;
+  i := startPos;
+
+  while i < Length(text) do begin
+    c := text[i];
+
+    if Node^.Children[c] = nil then Break;
+
+    Node := Node^.Children[c];
+
+    // Record only reserved DU-tag terminals.
+    if (Node^.TokenID >= FirstTagToken) and (Node^.TokenID < UDTagBoundary) then begin
+      LastMatchID := Node^.TokenID;
+      LastMatchLen := i - startPos + 1;
+    end;
+
+    Inc(i);
+  end;
+
+  if LastMatchID >= 0 then begin
+    tokenID := LastMatchID;
+    matchLen := LastMatchLen;
+    Result := True;
+  end
+  else begin
+    tokenID := -1;
+    matchLen := 0;
+    Result := False;
+  end;
+end;
+
+// Helper for reporting unknown UD tags.
+function UDTextAtPosition(const Corpus: TBVector; StartPos: Integer): string;
+var
+  i: Integer;
+begin
+  Result := '';
+
+  if (StartPos < 0) or (StartPos > High(Corpus)) then Exit;
+
+  i := StartPos;
+
+  // First byte should be '|'.
+  if Corpus[i] = Ord('|') then begin
+    Result := '|';
+    Inc(i);
+  end;
+
+  // Tag ends at another | or whitespace.
+  while (i <= High(Corpus)) and (Corpus[i] <> Ord('|')) and (Corpus[i] <> 9) and
+        (Corpus[i] <> 10) and (Corpus[i] <> 13) and (Corpus[i] <> 32) do begin
+    Result := Result + Chr(Corpus[i]);
+    Inc(i);
+  end;
 end;
 
 // Tokenize Corpus from SymbolTable loaded by program.
@@ -322,6 +383,36 @@ procedure ReportStatistics(const TokenizedCorpus: TIVector);
 // Calculate number of symbol types and token instances.
 procedure CalculateSymbolCount;
 var
+  i, T, MergeStart: Integer;
+begin
+  MergeStart := CurrentFirstMergedToken;
+
+  MergedTypes := 0;
+  UnmergedTypes := 0;
+
+  // Count symbol types.
+  for i := 0 to High(SymbolTable) do
+    if i >= MergeStart then
+      Inc(MergedTypes)
+    else
+      Inc(UnmergedTypes);
+
+  // Count token instances.
+  MergedInstances := 0;
+  UnmergedInstances := 0;
+
+  for i := 0 to High(TokenizedCorpus) do begin
+    T := TokenizedCorpus[i];
+
+    if T >= MergeStart then
+      Inc(MergedInstances)
+    else
+      Inc(UnmergedInstances);
+  end;
+end;
+
+{procedure CalculateSymbolCount;
+var
   i, T: Integer;
 begin
   MergedTypes := 0;
@@ -346,7 +437,7 @@ begin
     else
       Inc(UnmergedInstances);
   end;
-end;
+end;}
 
 // Count token usage.
 procedure CountTokenUsage(const TokenizedCorpus: TIVector; nSymbols: Integer; var Counts: TIVector);
@@ -575,51 +666,6 @@ begin
   Pause;
 end;
 
-// Detokenize tokenized corpus to text.
-// Detokenize tokenized corpus to text.
-procedure DetokenizeToDisplay(const TokenizedCorpus: TIVector; const Part: TPart = B);
-var
-  i, iB, iE, Cutoff: Integer;
-begin
-  if Length(TokenizedCorpus) = 0 then begin
-    Writeln('Detokenized Corpus is empty.');
-    Exit;
-  end;
-
-  if Length(TokenizedCorpus) < 500 then
-    Cutoff := Length(TokenizedCorpus) - 1
-  else
-    Cutoff := 499;
-
-  Case Part of
-    B: begin
-      iB := 0;
-      iE := Cutoff;
-    end;
-    E: begin
-      iB := High(TokenizedCorpus) - Cutoff;
-      iE := High(TokenizedCorpus);
-    end;
-    F: begin
-      iB := 0;
-      iE := High(TokenizedCorpus);
-    end;
-  end;
-
-  Write('Detokenized Corpus, ');
-  Case Part of
-    B: Write('First 500 tokens: ');
-    E: Write('Last 500 tokens: ');
-    F: Write('All tokens: ');
-  end;
-  Writeln;
-
-  for i := iB to iE do
-    Write(SymbolTable[TokenizedCorpus[i]]);
-
-  Writeln;
-end;
-
 procedure SaveTokenizationLog(const TokenizedCorpus: TIVector; const LogFileName: string);
 var
   SaveOut: Text;
@@ -689,6 +735,60 @@ end;
 procedure TokenizeWesBytes(const Corpus: TBVector; var Tokens: TIVector);
 var
   i, BestSym, BestLen: Integer;
+
+  procedure AddToken(const Token: Integer);
+  begin
+    SetLength(Tokens, Length(Tokens) + 1);
+    Tokens[High(Tokens)] := Token;
+  end;
+
+begin
+  EnsureWesTrie;
+
+  if (TokenizerKind = UDTokenizer) and (Length(SymbolTable) < UDTagBoundary) then
+    raise Exception.CreateFmt('TokenizerKind is UDTokenizer, but SymbolTable has only %d entries; at least %d are required.', [Length(SymbolTable), UDTagBoundary]);
+  SetLength(Tokens, 1);
+  Tokens[0] := BOS;
+  i := 0;
+
+  while i < Length(Corpus) do begin
+    // Tiny Stories separator byte becomes EOS.
+    if Corpus[i] = 254 then begin
+      AddToken(EOS);
+      Inc(i);
+      Continue;
+    end;
+
+    // When UD tagging is enabled, first see whether a vertical bar begins one of the reserved grammatical tags.
+    if (TokenizerKind = UDTokenizer) and (Corpus[i] = Ord('|')) then begin
+      if MatchReservedUDTag(TrieHead, Corpus, i, BestSym, BestLen) then begin
+        AddToken(BestSym);
+        Inc(i, BestLen);
+        Continue;
+      end;
+    // If it is not a recognized UD tag, do nothing here. Fall through to normal Wes longest-symbol matching below.
+    end;
+
+    // Ordinary Wes-tokenizer longest-symbol matching.
+    if MatchLongest(TrieHead, Corpus, i, BestSym, BestLen) then begin
+      AddToken(BestSym);
+      Inc(i, BestLen);
+    end
+    else begin
+      // Every raw byte 0..255 should normally exist in SymbolTable,
+      // but retain the byte fallback.
+      AddToken(Corpus[i]);
+      Inc(i);
+    end;
+  end;
+
+  // Add EOS to the end.
+  AddToken(EOS);
+end;
+
+{procedure TokenizeWesBytes(const Corpus: TBVector; var Tokens: TIVector);
+var
+  i, BestSym, BestLen: Integer;
 begin
   EnsureWesTrie;
 
@@ -726,7 +826,7 @@ begin
 
   SetLength(Tokens, Length(Tokens) + 1);
   Tokens[High(Tokens)] := EOS;
-end;
+end;}
 
 // Run the tokenizer.
 procedure RunWesTokenize(const Corpus: TBVector; var TokenizedCorpus: TIVector);
@@ -760,7 +860,8 @@ begin
   if DisplayCorpusVerification then begin
      Writeln('--- Reconstructed Corpus, Beginning 500 bytes---');
      Writeln('Length = ', Length(TokenizedCorpus));
-     DetokenizeToDisplay(TokenizedCorpus, B);
+     //Write('Detokenized Corpus, First 500 tokens: ');
+     WesDetokenizeTextToDisplay(TokenizedCorpus, B);
      Writeln;
    end;
 
@@ -773,48 +874,6 @@ begin
    end;
 end;
 
-{procedure RunWesTokenize(const Corpus: TBVector; var TokenizedCorpus: TIVector);
-begin
-  // Timing.
-  t0 := Now;       // Start of timing for entire tokenization;
-  StopTime := 0;   // Time to subtract from timing.
-
-  // Create the tokenized corpus.
-  nCorpus := Length(Corpus);
-  if not Training then
-    FileName := 'Inference';
-  TokenizeFromSymbolTable(TokenizedCorpus, Corpus);
-
-  // Timing.
-  t1 := Now;
-
-  if DisplayTokenWork and VerboseTokenize then begin
-    Writeln('---  Token Frequencies ---');
-    CountSymbols(TokenizedCorpus);
-  end;
-
-  nSymbols := Length(SymbolTable);
-
-  // Report statistics.
-  if VerboseTokenize then
-    ReportStatistics(TokenizedCorpus);
-
- // Verify by reconstructing.
- if DisplayCorpusVerification then begin
-    Writeln('--- Reconstructed Corpus, Beginning 500 bytes---');
-    Writeln('Length = ', Length(TokenizedCorpus));
-    DetokenizeToDisplay(TokenizedCorpus, B);
-    Writeln;
-  end;
-
-  if DisplayTokenVerification then Begin
-    Write('First ', DisplayLength, ' tokens of detokenized corpus: ');
-    for i := 0 to Min(DisplayLength, High(TokenizedCorpus)) do
-      Write(TokenizedCorpus[i], ' ');
-    Writeln;
-    Pause;
-  end;
-end;}
 
 finalization
   FreeTrie(TrieHead);

@@ -2,7 +2,7 @@ unit UDTag;
 
 {$mode ObjFPC}{$H+}{$I proprietary.txt}
 
-{ WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wesparsons.com.}
+{ WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellsouth.net, www.wesparsons.com.}
 
 interface
 
@@ -161,6 +161,39 @@ function ConvertTag(const Word, UPOS, Feats: string; UnknownFeatures: TStringLis
 var
   Parts: TStringList;
   i: Integer;
+  Mapped, TagPrefix: string;
+begin
+  // Put all UD information before the word.
+  TagPrefix := '|' + MapPOS(UPOS);
+
+  if (Feats <> '') and (Feats <> '_') then begin
+    Parts := TStringList.Create;
+    try
+      Parts.Delimiter := '|';
+      Parts.StrictDelimiter := True;
+      Parts.DelimitedText := Feats;
+
+      for i := 0 to Parts.Count - 1 do begin
+        Mapped := MapFeat(Parts[i]);
+
+        if Mapped <> '' then
+          TagPrefix := TagPrefix + '|' + Mapped
+        else if Parts[i] <> '' then
+          UnknownFeatures.Add(Parts[i]);
+      end;
+
+    finally
+      Parts.Free;
+    end;
+  end;
+
+  Result := TagPrefix + ' ' + Word;
+end;
+
+{function ConvertTag(const Word, UPOS, Feats: string; UnknownFeatures: TStringList): string;
+var
+  Parts: TStringList;
+  i: Integer;
   Mapped: string;
 begin
   Result := Word + '|' + MapPOS(UPOS);
@@ -185,7 +218,7 @@ begin
   finally
     Parts.Free;
   end;
-end;
+end;}
 
 function IsNormalTokenID(const S: string): Boolean;
 var
@@ -337,7 +370,7 @@ begin
       P.Parameters.Add(InputFile);
       P.Options := [poUsePipes];
 
-      WriteLn('Running UDPipe...');
+      // WriteLn('Running UDPipe...');
       P.Execute;
 
       Pending := '';

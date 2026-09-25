@@ -6,12 +6,14 @@
 {  (or Delphi) for personal, research, and educational use.                    }
 {                                                                              }
 {  Author        : Wesley R. Parsons                                           }
-{  wespar@bellouth.net, www.wesparsons.com, Miami, Florida.                    }                                  
+{  wespar@bellsouth.net, www.wesparsons.com, Miami, Florida.                   }                                  
 {  First release : January 2026                                                }
 {  Version       : 1.2                                                         }
 {  Date          : January 18, 2026                                            }
 {                                                                              }
-{  Copyright © 2026 Wesley R. Parsons. All rights reserved.                    }
+{  Copyright © 2026 Wesley R. Parsons.                                         }
+{  This software is protected by U.S. and international copyright law.         }
+{  Unauthorized copying, distribution, or modification is prohibited.          }
 {                                                                              }
 {  License                                                                     }
 {  This program is free for personal, educational, and non-commercial use.     }
@@ -28,8 +30,4 @@
 {                                                                              }
 {==============================================================================}
 
-This project uses components licensed under the Mozilla Public License 2.0 (MPL 2.0).
-The MPL 2.0 license is available at: https://www.mozilla.org/MPL/2.0/
 
-Where applicable, source files covered by MPL 2.0 are included in their original
-or modified form, and remain under the MPL 2.0 license.

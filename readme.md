@@ -16,6 +16,8 @@ Most modern LLM development is done in Python using frameworks such as PyTorch o
 
 This makes it possible to see and control what is happening at each stage rather than relying on a framework to hide the implementation details.
 
+My interest in coding an LLM was influenced by Loglan. a constructed language I have been involved in since college.
+
 ---
 
 ## Status
@@ -65,33 +67,11 @@ Features include:
 
 WesChat also supports a tokenizer based on the native Wes tokenizer with reserved **Universal Dependencies (UD)** grammatical tokens.
 
-A normal corpus can first be processed with **UDPipe** to produce text such as:
-
-```text
-The|det|def|art girl|noun|sg was|aux|ind|past|fin running|verb|pres|participle .|punct
-```
-
-Grammatical annotations such as:
-
-```text
-|noun
-|verb
-|det
-|sg
-|pl
-|past
-|pres
-|fin
-|participle
-```
-
-are assigned reserved token IDs and are never merged by BPE.
-
-The model therefore learns both the text and explicit grammatical information.
+A normal corpus can be processed and prefixed with UD tags to learn both the text and explicit grammatical information.
 
 During inference:
 
-1. The user's ordinary text query is passed through UDPipe.
+1. The user's ordinary text query is prefixed with UD tags.
 2. The UD-tagged result is tokenized.
 3. The model receives both text and grammatical tokens as context.
 4. Generated UD tags remain in the model's autoregressive context.
@@ -123,16 +103,8 @@ WesChat can:
 * Load an existing symbol table
 * Tokenize a corpus
 * Save tokenized data
-* Generate a UD-tagged corpus using UDPipe
+* Generate a UD-tagged corpus.
 * Track corpus, symbol, token, and model files within a work directory
-
-UD tagging uses UDPipe in:
-
-```text
---tokenize --tag --output=conllu
-```
-
-mode. Dependency parsing is not required because WesChat currently uses the token form, universal part of speech, and morphological features.
 
 ---
 

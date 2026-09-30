@@ -242,15 +242,20 @@ begin
   Writeln;
   ReportPath('Best model', BestModelFileName);
 
+  Writeln;
   Writeln('--- Corpus / Tokenizer ---');
   Writeln('Tokenizer = ', TokenizerKindName(TokenizerKind), '; Corpus ID = ', CorpusID);
-  Writeln('Corpus bytes = ', nCorpus, '; Raw tokens = ', RawTokenCount, '; Stored tokens = ', nTokenizedCorpus, '; Symbols = ', nSymbols);
+  Writeln('Corpus bytes = ', nCorpus, '; Raw tokens = ', RawTokenCount, '; Stored tokens = ', nTokenizedCorpus, '; Symbols = ', Global.nVocab);
 
   Writeln('--- Model ---');
-  Writeln('Acivation = ', ActivationKindName(ActivationKind));
-  Write('ModelDim = ', ModelDim, '; ModelDimProj = ', ModelDimProj, '; Proj = ', Proj, '; Blocks = ', nBlock, '; Heads = ', nHead);
-  Write('; SeqLen = ', SeqLen, '; Stride = ', Stride, '; StartStride = ', StartStride, '; Shuffle = ', ShuffleWindows);
-  Writeln('; nVocab = ', Global.nVocab, '; DimVocab = ', DimVocab, '; Trainable parameters = ', NumberTrainableParameters);
+  Writeln('ModelDim = ', ModelDim, '; ModelDimProj = ', ModelDimProj, '; Proj = ', Proj, '; Blocks = ', nBlock, '; Heads = ', nHead,
+    '; SeqLen = ', SeqLen, '; Stride = ', Stride, '; StartStride = ', StartStride, '; Shuffle = ', ShuffleWindows, '; nVocab = ', Global.nVocab,
+    '; DimVocab = ', DimVocab, '; Trainable parameters = ', NumberTrainableParameters);
+  Write('Tokenizer = ', TokenizerKindName(TokenizerKind), '; Activation = ', ActivationKindName(ActivationKind), '; Normalization = ', NormKindName(NormKind),
+      '; DropOut = ', Training);
+  if Training then
+      Write(' (', ADropOut: 4: 3, ' ', MLPDropOut: 4: 3, ' ', RDropOut: 4: 3, ')');
+  Writeln;
 
   Writeln('--- Training ---');
   Writeln('Epoch = ', CompletedEpochs, '; GlobalStep = ', GlobalStep, '; AdamWStep = ', AdamWStep, '; MaxEpochs = ', MaxEpochs);
@@ -261,8 +266,8 @@ begin
   else
     Writeln('; Override LR = none; RollOff = ', RollOff:0:8);
 
-  Writeln('Adam: Beta1 = ', AdamBeta1:0:6, '; Beta2 = ', AdamBeta2:0:6, '; Epsilon = ', AdamEpsilon:0:10);
-  Write('WeightDecay = ', WeightDecay:0:7, '; ClipLimit = ', ClipLimit:0:4, '; GlobalSeed = ', GlobalSeed);
+  Write('Adam: Beta1 = ', AdamBeta1:0:6, '; Beta2 = ', AdamBeta2:0:6, '; Epsilon = ', AdamEpsilon:0:10);
+  Write('; Decay: WeightDecay = ', WeightDecay:0:7, '; ClipLimit = ', ClipLimit:0:4, '; GlobalSeed = ', GlobalSeed);
   Writeln('; Dropout: Attention = ', ADropout:0:4, '; MLP = ', MLPDropout:0:4, '; Residual = ', RDropout:0:4);
   Writeln('Temperature: Training = ', TTemperature:0:4, '; Inference = ', ITemperature:0:4);
 
@@ -318,9 +323,9 @@ end;
 // Display for inference CR/LF.
 function ConsoleText(const S: UnicodeString): UnicodeString;
 begin
-  Result := StringReplace(S, #13#10, #10, [rfReplaceAll]);
-  Result := StringReplace(Result, #13, #10, [rfReplaceAll]);
-  Result := StringReplace(Result, #10, #13#10, [rfReplaceAll]);
+  Result := UnicodeString(StringReplace(String(S), #13#10, #10, [rfReplaceAll]));
+  Result := UnicodeString(StringReplace(String(Result), #13, #10, [rfReplaceAll]));
+  Result := UnicodeString(StringReplace(String(Result), #10, #13#10, [rfReplaceAll]));
 end;
 
 // Display the tokenizer kind.
@@ -355,8 +360,8 @@ end;
 function NormKindName(const Kind: TNormKind): string;
 begin
   case Kind of
-    LayerNorm: Result := 'Layer Norm';
-    RMSNorm: Result := 'RMS Norm';
+    LayerNorm: Result := 'LayerNorm';
+    RMSNorm: Result := 'RMSNorm';
   else
     Result := 'Unknown norm function';
   end;

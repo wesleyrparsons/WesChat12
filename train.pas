@@ -417,7 +417,7 @@ var
   // Report interval timing and training throughput.
   procedure EpochIntervalReportInfo;
   begin
-    Write('Window # = ', WindowCount);
+    Write('>>Window # = ', WindowCount);
     if Epoch > 0 then
       Writeln('; Epoch time = ', Trunc(ElapsedEpochTime) div 3600,
         ' hours, ', (Trunc(ElapsedEpochTime) mod 3600) div 60, ' minutes, ', (ElapsedEpochTime mod 60): 0: 4,

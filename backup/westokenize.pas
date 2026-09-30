@@ -7,14 +7,10 @@ unit WesTokenize;
 interface
 
 uses
-  Classes,
-  Crt,
-  DateUtils,
-  Display,
-  FileUtil,
-  Global,
-  Math,
-  SysUtils;
+  { RTL and platform units }
+  Classes, Crt, DateUtils, FileUtil, Math, SysUtils,
+  { WesChat units }
+  Display, Global;
 
 type
   { Token count types }
@@ -812,8 +808,8 @@ begin
 
   // Optionally verify tokenization by reconstructing the corpus.
   if DisplayCorpusVerification then begin
-    Writeln('--- Reconstructed Corpus, Beginning 500 Bytes ---');
-    Writeln('Length = ', Length(TokenizedCorpus));
+    // Writeln('--- Reconstructed Corpus, Beginning 500 Bytes ---');
+    // Writeln('Length = ', Length(TokenizedCorpus));
     WesDetokenizeTextToDisplay(TokenizedCorpus, B);
     Writeln;
   end;

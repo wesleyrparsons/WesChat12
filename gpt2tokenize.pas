@@ -7,13 +7,10 @@ unit GPT2Tokenize;
 interface
 
 uses
-  Classes,
-  Display,
-  Fpjson,
-  Global,
-  Jsonparser,
-  SysUtils,
-  WesTokenize;
+  { RTL and platform units }
+  Classes, Fpjson, Jsonparser, SysUtils,
+  { WesChat units }
+  Display, Global, WesTokenize;
 
 procedure EnsureGPT2VocabLoaded;
 procedure EnsureGPT2MergesLoaded;
@@ -596,5 +593,6 @@ begin
       end;
   end;
 end;
+
 end.
 

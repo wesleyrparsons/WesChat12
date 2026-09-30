@@ -7,16 +7,10 @@ unit Train;
 interface
 
 uses
-  Display,
-  Global,
-  IOHandler,
-  Math,
-  Matrix,
-  OutputHead,
-  SysUtils,
-  TransformForward,
-  TransformBackprop,
-  Util;
+  { RTL and platform units }
+  Math, SysUtils,
+  { WesChat units }
+  Display, Global, IOHandler, Matrix, OutputHead, TransformForward, TransformBackprop, Util;
 
 { Training interface }
 { TokenizedCorpus contains token IDs used to build InputTokens and TargetTokens }
@@ -38,9 +32,27 @@ var
   Beta1Power, Beta2Power: Single;                     // AdamW bias-correction powers.
 
 { Training log }
+// Close the training log.
+procedure CloseTrainLog;
+begin
+  if not TrainLogOpen then Exit;
+
+  Writeln(TrainLogFile, 'Training session ended: ', DateTimeToStr(Now));
+  Writeln(TrainLogFile);
+  Flush(TrainLogFile);
+
+  CloseFile(TrainLogFile);
+  TrainLogOpen := False;
+end;
+
+{ Training log }
 // Open the training log.
 procedure OpenTrainLog(const FileName: string);
 begin
+  // Close a log left open by a preceding training session.
+  if TrainLogOpen then
+    CloseTrainLog;
+
   TrainLogFileName := FileName;
 
   AssignFile(TrainLogFile, TrainLogFileName);
@@ -59,6 +71,26 @@ begin
   Flush(TrainLogFile);
 end;
 
+{procedure OpenTrainLog(const FileName: string);
+begin
+  TrainLogFileName := FileName;
+
+  AssignFile(TrainLogFile, TrainLogFileName);
+
+  if FileExists(TrainLogFileName) then
+    Append(TrainLogFile)
+  else
+    Rewrite(TrainLogFile);
+
+  TrainLogOpen := True;
+
+  Writeln(TrainLogFile);
+  Writeln(TrainLogFile, '============================================================');
+  Writeln(TrainLogFile, 'Training session started: ', DateTimeToStr(Now));
+  Writeln(TrainLogFile, '============================================================');
+  Flush(TrainLogFile);
+end;}
+
 // Write one timestamped line to the training log.
 procedure TrainLog(const S: string);
 begin
@@ -66,19 +98,6 @@ begin
 
   Writeln(TrainLogFile, DateTimeToStr(Now), '  ', S);
   Flush(TrainLogFile);
-end;
-
-// Close the training log.
-procedure CloseTrainLog;
-begin
-  if not TrainLogOpen then Exit;
-
-  Writeln(TrainLogFile, 'Training session ended: ', DateTimeToStr(Now));
-  Writeln(TrainLogFile);
-  Flush(TrainLogFile);
-
-  CloseFile(TrainLogFile);
-  TrainLogOpen := False;
 end;
 
 // Write the starting model and training settings to the training log.
@@ -355,14 +374,15 @@ var
   AdaptiveLRReason: string = 'No change in adaptive learning yet.';
 
   // Report the current model and training specifications.
-  procedure ReportModelSpecsInfo;
+  procedure ReportModelSpecsInfo;   // Report alpha param if any for ELUs.
   begin
-  Write('>>Model ', ExtractFileName(ExcludeTrailingPathDelimiter(WorkingDir)), ': nTC = ', Length(TokenizedCorpus), '; nCorpus =  ', nCorpus, '; nVocab = ', nVocab,
-    '; DimVocab = ', DimVocab, '; Seqlen = ', SeqLen, '; Stride = ', Stride, '; ModelDim = ', ModelDim, '; nHead = ', nHead, '; nBlock =  ', nBlock,
-    '; Proj = ', Proj, '; Shuffle = ', ShuffleWindows, '; TokKind = ', TokenizerKindName(TokenizerKind), '; DropOut = ', Training);
-  if Training then
-    Writeln(' (', ADropOut: 4: 3, ' ', MLPDropOut: 4: 3, ' ', RDropOut: 4: 3, ').')
-  else
+    Writeln('>>Model ', ExtractFileName(ExcludeTrailingPathDelimiter(WorkingDir)), ': nTC = ', Length(TokenizedCorpus), '; nCorpus =  ', nCorpus, '; nVocab = ', nVocab,
+      '; DimVocab = ', DimVocab, '; Seqlen = ', SeqLen, '; Stride = ', Stride, '; ModelDim = ', ModelDim, '; nHead = ', nHead, '; nBlock =  ', nBlock, '; Proj = ', Proj,
+      '; Shuffle = ', ShuffleWindows, ';');
+    Write('  Tokenizer = ', TokenizerKindName(TokenizerKind), '; Activation = ', ActivationKindName(ActivationKind), '; Normalization = ', NormKindName(NormKind),
+      '; DropOut = ', Training);
+    if Training then
+      Write(' (', ADropOut: 4: 3, ' ', MLPDropOut: 4: 3, ' ', RDropOut: 4: 3, ')');
     Writeln('.');
   end;
 
@@ -815,7 +835,10 @@ begin
         Inc(GlobalStep);
       end;    // End sequence loop.
 
-      if StopTraining then Exit;
+      if StopTraining then begin
+        CloseTrainLog;
+        Exit;
+      end;
 
       // Compute mean loss and derived epoch statistics.
       if WindowCount = 0 then begin
@@ -900,10 +923,7 @@ begin
         if OverrideLearningRate <> -1.0 then begin
           Writeln('>>Learning rate: Override = ', LearningRate: 8: 6, '.');
         end
-        else if AdaptiveLR then begin
-          Writeln('>>Learning rate: Adaptive = ', LearningRate: 9: 7, '. ', AdaptiveLRReason);
-        end
-        else begin
+        else if not AdaptiveLR then begin
           case LearningStyle of
             FlatLearning: Write('>>Learning rate: Flat = ', LearningRate: 9: 7, '.');
 
@@ -933,11 +953,15 @@ begin
         // Report compact tensor statistics.
         ReportCompactTensorStatistics(WModelParams, CompactStats);
 
-        // Update the adaptive learning rate after reporting current statistics.
+        // Compute new adaptive LR for the next epoch.
         with CompactStats do
-          if AdaptiveLR and (OverrideLearningRate = -1.0) then
+          if AdaptiveLR and (OverrideLearningRate = -1.0) then begin
             ApplyAdaptiveLR(AdaptiveLRState, LearningRate, FloorLearningRate, MeanEpochLoss, MinLoss, DiffLoss,
-            AdamParamRMS, AdamUpdateRatio, AdamMRMS, AdamSqrtVRMS, MaxGammaRMS, Epoch, AdaptiveLRReason);
+              AdamParamRMS, AdamUpdateRatio, AdamMRMS, AdamSqrtVRMS, MaxGammaRMS, Epoch, AdaptiveLRReason);
+
+            Writeln('>>Learning rate: Adaptive = ', LearningRate: 9: 7,
+              ' for next epoch. ', AdaptiveLRReason);
+          end;
       end;      // End interval report.
 
       // Log the completed epoch.
@@ -947,6 +971,7 @@ begin
     on E: Exception do begin
       TrainSuccess := False;
       Writeln('Training Error: ', E.ClassName, '; ', E.Message, '.');
+      CloseTrainLog;
       Pause;
       Exit;
     end;

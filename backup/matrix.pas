@@ -8,6 +8,7 @@ unit Matrix;
 interface
 
 uses
+  { WesChat units }
   Global;
 
 type
@@ -75,7 +76,6 @@ procedure CuMatMulAccNT(handle: TcublasHandle; const A, B: PSingle; C: PSingle; 
 procedure CuMatMulAccNN(handle: TcublasHandle; const A, B: PSingle; C: PSingle; M, N, K: Integer);
 
 { Raw BLAS imports }
-
 // SGEMM.
 function cublasSgemm_v2(handle: TcublasHandle;
   transa, transb: Integer;
@@ -109,7 +109,6 @@ function cublasSscal_v2(handle: TcublasHandle;
 implementation
 
 { cuBLAS lifecycle }
-
 // Initialize the global cuBLAS handle.
 function CuBLAS_Init: Boolean;
 begin
@@ -151,7 +150,6 @@ begin
 end;
 
 { Gradient vector operations }
-
 // Copy one upstream gradient into two residual paths.
 procedure CuGradSplit(handle: TcublasHandle; const Upstream: PSingle; Left, Right: PSingle; Rows, Cols: Integer);
 var
@@ -183,7 +181,6 @@ begin
 end;
 
 { Matrix multiplication }
-
 // Full row-major matrix multiplication, C = A * B.
 procedure CuMatMulFullNN(Handle: TcublasHandle; const A, B: PSingle; C: PSingle; M, N, K, lda, ldb, ldc: Integer);
 var
@@ -312,7 +309,6 @@ begin
 end;
 
 { Vector operations }
-
 // Add a scaled vector: Y := Alpha * X + Y.
 procedure CuAddScaled(handle: TcublasHandle; N: Integer; Alpha: Single; const X: PSingle; Y: PSingle);
 var

@@ -171,6 +171,99 @@ void LaunchLayerNormBackward(
         dY, dX, Gamma, LNXhat, LNInvStd, dGamma, dBeta, SeqLen, ModelDim);
 }
 
+// RMSNorm Forward.
+#include <cuda_runtime.h>
+#include <math.h>
+
+extern "C" __global__
+void RMSNormForwardKernel(
+    const float* InX,
+    float* OutX,
+    const float* Gamma,
+    float* RMSXHat,
+    float* RMSInvStd,
+    int SeqLen,
+    int ModelDim,
+    float EPS)
+{
+    extern __shared__ float s_sum[];
+
+    int row = blockIdx.x;
+    int tid = threadIdx.x;
+
+    if (row >= SeqLen)
+        return;
+
+    const float* XRow = InX + row * ModelDim;
+    float* OutRow = OutX + row * ModelDim;
+    float* XHatRow = RMSXHat + row * ModelDim;
+
+    // Sum squares for this row.
+    float SumSq = 0.0f;
+
+    for (int j = tid; j < ModelDim; j += blockDim.x) {
+        float x = XRow[j];
+        SumSq += x * x;
+    }
+
+    s_sum[tid] = SumSq;
+    __syncthreads();
+
+    // Reduce sum of squares.
+    for (int stride = blockDim.x / 2; stride > 0; stride >>= 1) {
+        if (tid < stride)
+            s_sum[tid] += s_sum[tid + stride];
+
+        __syncthreads();
+    }
+
+    // Compute inverse RMS.
+    if (tid == 0) {
+        float MeanSq = s_sum[0] / (float)ModelDim;
+        RMSInvStd[row] = rsqrtf(MeanSq + EPS);
+    }
+
+    __syncthreads();
+
+    float InvRMS = RMSInvStd[row];
+
+    // Normalize and apply Gamma.
+    for (int j = tid; j < ModelDim; j += blockDim.x) {
+        float XHat = XRow[j] * InvRMS;
+
+        XHatRow[j] = XHat;
+        OutRow[j] = Gamma[j] * XHat;
+    }
+}
+
+extern "C" __declspec(dllexport)
+void LaunchRMSNormForward(
+    const float* InX,
+    float* OutX,
+    const float* Gamma,
+    float* RMSXHat,
+    float* RMSInvStd,
+    int SeqLen,
+    int ModelDim)
+{
+    const float EPS = 1.0e-5f;
+
+    int threads = 256;
+    int blocks = SeqLen;
+    int SharedBytes = threads * sizeof(float);
+
+    RMSNormForwardKernel<<<blocks, threads, SharedBytes>>>(
+        InX,
+        OutX,
+        Gamma,
+        RMSXHat,
+        RMSInvStd,
+        SeqLen,
+        ModelDim,
+        EPS
+    );
+}
+
 // AutoRegressive Mask.
 #include <cuda_runtime.h>
 
@@ -195,6 +288,93 @@ void LaunchAutoRegressiveMask(float* Scores, int SeqLen)
     );
 
     AutoRegressiveMaskKernel<<<blocks, threads>>>(Scores, SeqLen);
+}
+
+// RMSNorm Backward.
+#include <cuda_runtime.h>
+
+extern "C" __global__
+void RMSNormBackwardKernel(
+    const float* dY,
+    float* dX,
+    const float* Gamma,
+    const float* RMSXHat,
+    const float* RMSInvStd,
+    float* dGamma,
+    int SeqLen,
+    int ModelDim)
+{
+    extern __shared__ float s_sum[];
+
+    int row = blockIdx.x;
+    int tid = threadIdx.x;
+
+    if (row >= SeqLen)
+        return;
+
+    const float* dYRow = dY + row * ModelDim;
+    float* dXRow = dX + row * ModelDim;
+    const float* XHatRow = RMSXHat + row * ModelDim;
+
+    // Compute sum(G * XHat), where G = dY * Gamma.
+    float SumGXHat = 0.0f;
+
+    for (int j = tid; j < ModelDim; j += blockDim.x) {
+        float G = dYRow[j] * Gamma[j];
+        SumGXHat += G * XHatRow[j];
+    }
+
+    s_sum[tid] = SumGXHat;
+    __syncthreads();
+
+    // Reduce sum(G * XHat).
+    for (int stride = blockDim.x / 2; stride > 0; stride >>= 1) {
+        if (tid < stride)
+            s_sum[tid] += s_sum[tid + stride];
+
+        __syncthreads();
+    }
+
+    float MeanGXHat = s_sum[0] / (float)ModelDim;
+    float InvRMS = RMSInvStd[row];
+
+    // Compute dX and accumulate dGamma.
+    for (int j = tid; j < ModelDim; j += blockDim.x) {
+        float DY = dYRow[j];
+        float XHat = XHatRow[j];
+        float G = DY * Gamma[j];
+
+        dXRow[j] = InvRMS * (G - XHat * MeanGXHat);
+
+        atomicAdd(&dGamma[j], DY * XHat);
+    }
+}
+
+extern "C" __declspec(dllexport)
+void LaunchRMSNormBackward(
+    const float* dY,
+    float* dX,
+    const float* Gamma,
+    const float* RMSXHat,
+    const float* RMSInvStd,
+    float* dGamma,
+    int SeqLen,
+    int ModelDim)
+{
+    int threads = 256;
+    int blocks = SeqLen;
+    int SharedBytes = threads * sizeof(float);
+
+    RMSNormBackwardKernel<<<blocks, threads, SharedBytes>>>(
+        dY,
+        dX,
+        Gamma,
+        RMSXHat,
+        RMSInvStd,
+        dGamma,
+        SeqLen,
+        ModelDim
+    );
 }
 
 // AutoRegressiveMack Backward.
@@ -549,6 +729,598 @@ void LaunchReLUBackward(
         N
     );
 
+}
+
+// GELU Forward.
+#include <cuda_runtime.h>
+#include <math.h>
+
+extern "C" __global__
+void GELUForwardKernel(
+    const float* A,
+    float* B,
+    int N)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (idx < N) {
+        float x = A[idx];
+
+        const float Sqrt2OverPi = 0.7978845608028654f;
+        const float CubicCoeff = 0.044715f;
+
+        float x3 = x * x * x;
+        float u = Sqrt2OverPi * (x + CubicCoeff * x3);
+
+        B[idx] = 0.5f * x * (1.0f + tanhf(u));
+    }
+}
+
+extern "C" __declspec(dllexport)
+void LaunchGELUForward(
+    const float* A,
+    float* B,
+    int Rows,
+    int Cols)
+{
+    int N = Rows * Cols;
+
+    int threads = 256;
+    int blocks = (N + threads - 1) / threads;
+
+    GELUForwardKernel<<<blocks, threads>>>(A, B, N);
+}
+
+// GELU Backward.
+#include <cuda_runtime.h>
+#include <math.h>
+
+extern "C" __global__
+void GELUBackwardKernel(
+    const float* Hidden1,     // forward input
+    const float* GradOut,     // Hidden2.Grad
+    float* GradIn,            // Hidden1.Grad
+    int N)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (idx < N) {
+        float x = Hidden1[idx];
+
+        const float Sqrt2OverPi = 0.7978845608028654f;
+        const float CubicCoeff = 0.044715f;
+
+        float x2 = x * x;
+        float x3 = x2 * x;
+        float u = Sqrt2OverPi * (x + CubicCoeff * x3);
+        float t = tanhf(u);
+
+        float du_dx = Sqrt2OverPi * (1.0f + 3.0f * CubicCoeff * x2);
+
+        float dGELU =
+            0.5f * (1.0f + t) +
+            0.5f * x * (1.0f - t * t) * du_dx;
+
+        GradIn[idx] = GradOut[idx] * dGELU;
+    }
+}
+
+extern "C" __declspec(dllexport)
+void LaunchGELUBackward(
+    const float* Hidden1,
+    const float* GradOut,
+    float* GradIn,
+    int Rows,
+    int Cols)
+{
+    int N = Rows * Cols;
+
+    int threads = 256;
+    int blocks = (N + threads - 1) / threads;
+
+    GELUBackwardKernel<<<blocks, threads>>>(
+        Hidden1,
+        GradOut,
+        GradIn,
+        N
+    );
+}
+
+// SiLU Forward.
+#include <cuda_runtime.h>
+#include <math.h>
+
+extern "C" __global__
+void SiLUForwardKernel(
+    const float* A,
+    float* B,
+    int N)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (idx < N) {
+        float x = A[idx];
+        float sigmoid = 1.0f / (1.0f + expf(-x));
+
+        B[idx] = x * sigmoid;
+    }
+}
+
+extern "C" __declspec(dllexport)
+void LaunchSiLUForward(
+    const float* A,
+    float* B,
+    int Rows,
+    int Cols)
+{
+    int N = Rows * Cols;
+
+    int threads = 256;
+    int blocks = (N + threads - 1) / threads;
+
+    SiLUForwardKernel<<<blocks, threads>>>(A, B, N);
+}
+
+// SiLU Backward.
+#include <cuda_runtime.h>
+#include <math.h>
+
+extern "C" __global__
+void SiLUBackwardKernel(
+    const float* Hidden1,     // forward input
+    const float* GradOut,     // Hidden2.Grad
+    float* GradIn,            // Hidden1.Grad
+    int N)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (idx < N) {
+        float x = Hidden1[idx];
+        float sigmoid = 1.0f / (1.0f + expf(-x));
+
+        float dSiLU =
+            sigmoid * (1.0f + x * (1.0f - sigmoid));
+
+        GradIn[idx] = GradOut[idx] * dSiLU;
+    }
+}
+
+extern "C" __declspec(dllexport)
+void LaunchSiLUBackward(
+    const float* Hidden1,
+    const float* GradOut,
+    float* GradIn,
+    int Rows,
+    int Cols)
+{
+    int N = Rows * Cols;
+
+    int threads = 256;
+    int blocks = (N + threads - 1) / threads;
+
+    SiLUBackwardKernel<<<blocks, threads>>>(
+        Hidden1,
+        GradOut,
+        GradIn,
+        N
+    );
+}
+
+// Leaky ReLU Forward.
+#include <cuda_runtime.h>
+
+extern "C" __global__
+void LeakyReLUForwardKernel(
+    const float* A,
+    float* B,
+    int N,
+    float Alpha)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (idx < N) {
+        float x = A[idx];
+
+        B[idx] = (x > 0.0f) ? x : Alpha * x;
+    }
+}
+
+extern "C" __declspec(dllexport)
+void LaunchLeakyReLUForward(
+    const float* A,
+    float* B,
+    int Rows,
+    int Cols,
+    float Alpha)
+{
+    int N = Rows * Cols;
+
+    int threads = 256;
+    int blocks = (N + threads - 1) / threads;
+
+    LeakyReLUForwardKernel<<<blocks, threads>>>(
+        A,
+        B,
+        N,
+        Alpha
+    );
+}
+
+// Leaky ReLU Backward.
+#include <cuda_runtime.h>
+
+extern "C" __global__
+void LeakyReLUBackwardKernel(
+    const float* Hidden1,     // forward input
+    const float* GradOut,     // Hidden2.Grad
+    float* GradIn,            // Hidden1.Grad
+    int N,
+    float Alpha)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (idx < N) {
+        float x = Hidden1[idx];
+        float dLeakyReLU = (x > 0.0f) ? 1.0f : Alpha;
+
+        GradIn[idx] = GradOut[idx] * dLeakyReLU;
+    }
+}
+
+extern "C" __declspec(dllexport)
+void LaunchLeakyReLUBackward(
+    const float* Hidden1,
+    const float* GradOut,
+    float* GradIn,
+    int Rows,
+    int Cols,
+    float Alpha)
+{
+    int N = Rows * Cols;
+
+    int threads = 256;
+    int blocks = (N + threads - 1) / threads;
+
+    LeakyReLUBackwardKernel<<<blocks, threads>>>(
+        Hidden1,
+        GradOut,
+        GradIn,
+        N,
+        Alpha
+    );
+}
+
+// ELU Forward.
+#include <cuda_runtime.h>
+#include <math.h>
+
+extern "C" __global__
+void ELUForwardKernel(
+    const float* A,
+    float* B,
+    int N,
+    float Alpha)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (idx < N) {
+        float x = A[idx];
+
+        if (x > 0.0f)
+            B[idx] = x;
+        else
+            B[idx] = Alpha * (expf(x) - 1.0f);
+    }
+}
+
+extern "C" __declspec(dllexport)
+void LaunchELUForward(
+    const float* A,
+    float* B,
+    int Rows,
+    int Cols,
+    float Alpha)
+{
+    int N = Rows * Cols;
+
+    int threads = 256;
+    int blocks = (N + threads - 1) / threads;
+
+    ELUForwardKernel<<<blocks, threads>>>(
+        A,
+        B,
+        N,
+        Alpha
+    );
+}
+
+// ELU Backward.
+#include <cuda_runtime.h>
+#include <math.h>
+
+extern "C" __global__
+void ELUBackwardKernel(
+    const float* Hidden1,     // forward input
+    const float* GradOut,     // Hidden2.Grad
+    float* GradIn,            // Hidden1.Grad
+    int N,
+    float Alpha)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (idx < N) {
+        float x = Hidden1[idx];
+        float dELU;
+
+        if (x > 0.0f)
+            dELU = 1.0f;
+        else
+            dELU = Alpha * expf(x);
+
+        GradIn[idx] = GradOut[idx] * dELU;
+    }
+}
+
+extern "C" __declspec(dllexport)
+void LaunchELUBackward(
+    const float* Hidden1,
+    const float* GradOut,
+    float* GradIn,
+    int Rows,
+    int Cols,
+    float Alpha)
+{
+    int N = Rows * Cols;
+
+    int threads = 256;
+    int blocks = (N + threads - 1) / threads;
+
+    ELUBackwardKernel<<<blocks, threads>>>(
+        Hidden1,
+        GradOut,
+        GradIn,
+        N,
+        Alpha
+    );
+}
+
+// Softplus Forward.
+#include <cuda_runtime.h>
+#include <math.h>
+
+extern "C" __global__
+void SoftplusForwardKernel(
+    const float* A,
+    float* B,
+    int N)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (idx < N) {
+        float x = A[idx];
+
+        if (x > 0.0f)
+            B[idx] = x + log1pf(expf(-x));
+        else
+            B[idx] = log1pf(expf(x));
+    }
+}
+
+extern "C" __declspec(dllexport)
+void LaunchSoftplusForward(
+    const float* A,
+    float* B,
+    int Rows,
+    int Cols)
+{
+    int N = Rows * Cols;
+
+    int threads = 256;
+    int blocks = (N + threads - 1) / threads;
+
+    SoftplusForwardKernel<<<blocks, threads>>>(
+        A,
+        B,
+        N
+    );
+}
+
+// Softplus Backward.
+#include <cuda_runtime.h>
+#include <math.h>
+
+extern "C" __global__
+void SoftplusBackwardKernel(
+    const float* Hidden1,     // forward input
+    const float* GradOut,     // Hidden2.Grad
+    float* GradIn,            // Hidden1.Grad
+    int N)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (idx < N) {
+        float x = Hidden1[idx];
+        float sigmoid;
+
+        if (x >= 0.0f) {
+            float e = expf(-x);
+            sigmoid = 1.0f / (1.0f + e);
+        }
+        else {
+            float e = expf(x);
+            sigmoid = e / (1.0f + e);
+        }
+
+        GradIn[idx] = GradOut[idx] * sigmoid;
+    }
+}
+
+extern "C" __declspec(dllexport)
+void LaunchSoftplusBackward(
+    const float* Hidden1,
+    const float* GradOut,
+    float* GradIn,
+    int Rows,
+    int Cols)
+{
+    int N = Rows * Cols;
+
+    int threads = 256;
+    int blocks = (N + threads - 1) / threads;
+
+    SoftplusBackwardKernel<<<blocks, threads>>>(
+        Hidden1,
+        GradOut,
+        GradIn,
+        N
+    );
+}
+
+// Mish Forward.
+#include <cuda_runtime.h>
+#include <math.h>
+
+extern "C" __global__
+void MishForwardKernel(
+    const float* A,
+    float* B,
+    int N)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (idx < N) {
+        float x = A[idx];
+        float softplus;
+
+        if (x > 0.0f)
+            softplus = x + log1pf(expf(-x));
+        else
+            softplus = log1pf(expf(x));
+
+        B[idx] = x * tanhf(softplus);
+    }
+}
+
+extern "C" __declspec(dllexport)
+void LaunchMishForward(
+    const float* A,
+    float* B,
+    int Rows,
+    int Cols)
+{
+    int N = Rows * Cols;
+
+    int threads = 256;
+    int blocks = (N + threads - 1) / threads;
+
+    MishForwardKernel<<<blocks, threads>>>(
+        A,
+        B,
+        N
+    );
+}
+
+// Mish Backward.
+#include <cuda_runtime.h>
+#include <math.h>
+
+extern "C" __global__
+void MishBackwardKernel(
+    const float* Hidden1,     // forward input
+    const float* GradOut,     // Hidden2.Grad
+    float* GradIn,            // Hidden1.Grad
+    int N)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (idx < N) {
+        float x = Hidden1[idx];
+        float softplus;
+        float sigmoid;
+
+        // Numerically stable Softplus.
+        if (x > 0.0f)
+            softplus = x + log1pf(expf(-x));
+        else
+            softplus = log1pf(expf(x));
+
+        // Numerically stable sigmoid.
+        if (x >= 0.0f) {
+            float e = expf(-x);
+            sigmoid = 1.0f / (1.0f + e);
+        }
+        else {
+            float e = expf(x);
+            sigmoid = e / (1.0f + e);
+        }
+
+        float t = tanhf(softplus);
+
+        float dMish =
+            t +
+            x * (1.0f - t * t) * sigmoid;
+
+        GradIn[idx] = GradOut[idx] * dMish;
+    }
+}
+
+extern "C" __declspec(dllexport)
+void LaunchMishBackward(
+    const float* Hidden1,
+    const float* GradOut,
+    float* GradIn,
+    int Rows,
+    int Cols)
+{
+    int N = Rows * Cols;
+
+    int threads = 256;
+    int blocks = (N + threads - 1) / threads;
+
+    MishBackwardKernel<<<blocks, threads>>>(
+        Hidden1,
+        GradOut,
+        GradIn,
+        N
+    );
+}
+
+// Hadamard matrix multiplication.
+#include <cuda_runtime.h>
+
+extern "C" __global__
+void HadamardMultiplyKernel(
+    const float* Hidden1,
+    const float* HiddenG,
+    float* Hidden2,
+    int N)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (idx < N) {
+        Hidden2[idx] = Hidden1[idx] * HiddenG[idx];
+    }
+}
+
+extern "C" __declspec(dllexport)
+void LaunchHadamardMultiply(
+    const float* Hidden1,
+    const float* HiddenG,
+    float* Hidden2,
+    int Rows,
+    int Cols)
+{
+    int N = Rows * Cols;
+
+    int threads = 256;
+    int blocks = (N + threads - 1) / threads;
+
+    HadamardMultiplyKernel<<<blocks, threads>>>(
+        Hidden1,
+        HiddenG,
+        Hidden2,
+        N
+    );
 }
 
 // Softmax Forward Strided.

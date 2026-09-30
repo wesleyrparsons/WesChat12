@@ -1,5 +1,163 @@
 unit FlowChart;
 
+{$mode ObjFPC}{$H+}{$I proprietary.txt}
+
+interface
+implementation
+begin
+end.
+{ WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellsouth.net, www.wesparsons.com }
+
+                     Work Flow
+
+                         X>---------------------------V
+                         |||                          |
+                +------------------+                  |
+                |    Layer Norm    |                  |
+                +------------------+                  |
+                         |||                          |
+                         X1                           |
+                         |||                          |
+          +----------------------------------+        |
+          |      Attention Projections       |        |
+          +----------------------------------+        |
+             |||          |||          |||            |
+           Q=X1·Wq      K=X1·Wk      V=X1·Wv          |
+             |||          |||          |||            |
+             +------------+             |             |
+                    |||                 |             |
+           +------------------+         |             |
+           | Split/View Heads |         |             |
+           +------------------+         |             |
+                    |||                 |             |
+             Q heads, K heads           |             |
+                    |||                 |             |
+           +------------------+         |             |
+           | Apply RoPE Q, K  |         |             |
+           +------------------+         |             |
+                    |||                 |             |
+           +------------------+         |             |
+           | Scores = Q · Kᵀ  |         |             |
+           +------------------+         |             |
+                    |||                 |             |
+                  Scores1               |             |
+                    |||                 |             |
+           +------------------+         |             |
+           | Scale 1/sqrt(dh) |         |             |
+           +------------------+         |             |
+                    |||                 |             |
+           +------------------+         |             |
+           |  Causal Masking  |         |             |
+           +------------------+         |             |
+                    |||                 |             |
+                  Scores1               |             |
+                    |||                 |             |
+           +------------------+         |             |
+           |      Softmax     |         |             |
+           +------------------+         |             |
+                    |||                 |             |
+                  Scores2               |             |
+                    |||                 |             |
+           +------------------+         |             |
+           | Attention Dropout|         |             |
+           +------------------+         |             |
+                    |||                 |             |
+                  Scores2               |             |
+                    |||                 |             |
+           +------------------+         |             |
+           | X2h=Scores2 · Vh |<--------+             |
+           +------------------+                       |
+                    |||                               |
+           +------------------+                       |
+           |   Concat Heads   |                       |
+           +------------------+                       |
+                    |||                               |
+                     X2                               |
+                    |||                               |
+           +------------------+                       |
+           |    X3=X2 · W0    |                       |
+           +------------------+                       |
+                    |||                               |
+                     X3                               |
+                    |||                               |
+           +------------------+                       |
+           |     X4=X+X3      |<----------------------<
+           +------------------+
+                    |||
+                     X4>------------------------------V
+                    |||                               |
+           +------------------+                       |
+           |  Normalization   |                       |
+           +------------------+                       |
+                    |||                               |
+                     X5                               |
+                    |||                               |
+           +------------------+                       |
+           | H1=X5 · W1 + b1  |                       |
+           +------------------+                       |
+                    |||                               |
+                  Hidden1                             |
+                    |||                               |
+           +------------------+                       |
+           |    Activation    |                       |
+           | ReLU/GELU/SiLU   |                       |
+           +------------------+                       |
+                    |||                               |
+                  Hidden2                             |
+                    |||                               |
+           +------------------+                       |
+           |   MLP Dropout    |                       |
+           +------------------+                       |
+                    |||                               |
+                  Hidden2                             |
+                    |||                               |
+           +------------------+                       |
+           | X6=H2 · W2 + b2  |                       |
+           +------------------+                       |
+                    |||                               |
+                     X6                               |
+                    |||                               |
+           +------------------+                       |
+           | Residual Dropout |                       |
+           +------------------+                       |
+                    |||                               |
+           +------------------+                       |
+           |    X7=X4+X6      |<----------------------<
+           +------------------+
+                    |||
+                     X7
+                    |||
+             Next Transformer Block
+                    |||
+                     V
+
+        After the final transformer block only:
+
+                     X7
+                    |||
+         +-----------------------+
+         | Logits=X7·Embeddingsᵀ |
+         +-----------------------+
+                    |||
+                  Logits
+                    |||
+           +------------------+
+           |     Softmax      |
+           +------------------+
+                    |||
+              Probabilities
+                    |||
+           +------------------+
+           | Cross-Entropy    |
+           |    Gradient      |
+           +------------------+
+                    |||
+                TopGradient
+                    |||
+              Backpropagation
+```
+
+
 Work Flow.
                         X>----------------------V
                        |||                      |
@@ -90,7 +248,7 @@ Work Flow.
                        X4>----------------------V
                        |||                      |
               +------------------+              |
-              |     Layer Norm   |              |
+              |  Normalization   |              |
               +------------------+              |
                        |||                      |
                        X5                       |
@@ -144,55 +302,5 @@ Work Flow.
               +------------------+
                        |||
                    TopGradient
-
-Program.
-  Test.
-  Tokenize file.
-  Tokenize batch files.
-  Input tokens.
-  Tokenize. (optional)
-  Embed, Sequence Loop.
-    Init weights & biases.
-    Loop thru blocks.
-      Train.
-        Init grads.
-        Attention.
-          Head split.
-          Head concat.
-        FFN.
-        HeadOutput.
-        LossFunction.
-        BackPropopagate.
-      ModifyWeights.
-}
-{   Corpus                 Extra
-      V
-  Symbol Table          Merge List
-      V                 Meta Info
-  Token List
-      V
-Print | Display
-   TCorpus
-
-Pipeline 1                   Pipeline 2
-
-Corpus                       Corpus
-  V                            V
-  V                            V
-Create Symbol Table          Read Symbol Table
-  Read bytes                   Apply to Corpus
-  Linked lists                    V
-  Count pairs                     V
-  Sort pairs                      V
-  Merge Pairs                     V
-  Convert to array                V
-         V                        V
-         V                        V
-                TokenizedCorpus
-                  V
-                  V
-                Stats
-                  Create stats
-                  Save stats
 
 

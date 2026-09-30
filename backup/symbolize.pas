@@ -8,15 +8,10 @@ unit Symbolize;
 interface
 
 uses
-  Classes,
-  Crt,
-  DateUtils,
-  Display,
-  FileUtil,
-  Global,
-  IOHandler,
-  Math,
-  SysUtils;
+  { RTL and platform units }
+  Classes, Crt, DateUtils, FileUtil, Math, SysUtils,
+  { WesChat units }
+  Display, Global, IOHandler;
 
 type
   { Token linked-list types }
@@ -1312,7 +1307,7 @@ begin
     end;
 
     Writeln('File ', OutName, ' successfully saved.');
-    Writeln;
+    // Writeln;
 
   except
     on E: Exception do begin

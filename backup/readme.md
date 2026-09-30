@@ -33,7 +33,8 @@ The current implementation includes:
 * AdamW optimization
 * Weight tying
 * Dropout
-* Layer normalization
+* Selectable normalization, including LayerNorm and RMSNorm
+* Selectable MLP activation functions
 * Rotary positional embeddings
 * Model checkpointing and resume support
 * Multiple tokenizer formats
@@ -67,33 +68,11 @@ Features include:
 
 WesChat also supports a tokenizer based on the native Wes tokenizer with reserved **Universal Dependencies (UD)** grammatical tokens.
 
-A normal corpus can first be processed with **UDPipe** to produce text such as:
-
-```text
-The|det|def|art girl|noun|sg was|aux|ind|past|fin running|verb|pres|participle .|punct
-```
-
-Grammatical annotations such as:
-
-```text
-|noun
-|verb
-|det
-|sg
-|pl
-|past
-|pres
-|fin
-|participle
-```
-
-are assigned reserved token IDs and are never merged by BPE.
-
-The model therefore learns both the text and explicit grammatical information.
+A normal corpus can be processed and prefixed with UD tags to learn both the text and explicit grammatical information.
 
 During inference:
 
-1. The user's ordinary text query is passed through UDPipe.
+1. The user's ordinary text query is prefixed with UD tags.
 2. The UD-tagged result is tokenized.
 3. The model receives both text and grammatical tokens as context.
 4. Generated UD tags remain in the model's autoregressive context.
@@ -125,16 +104,8 @@ WesChat can:
 * Load an existing symbol table
 * Tokenize a corpus
 * Save tokenized data
-* Generate a UD-tagged corpus using UDPipe
+* Generate a UD-tagged corpus.
 * Track corpus, symbol, token, and model files within a work directory
-
-UD tagging uses UDPipe in:
-
-```text
---tokenize --tag --output=conllu
-```
-
-mode. Dependency parsing is not required because WesChat currently uses the token form, universal part of speech, and morphological features.
 
 ---
 
@@ -154,9 +125,16 @@ The architecture is configurable, but current experiments typically use models i
 
 Each block includes:
 
-**Pre-LayerNorm**
+**Pre-Normalization**
 
-Layer normalization is performed before the attention and MLP sublayers.
+Normalization is performed before the attention and MLP sublayers.
+
+WesChat supports selectable normalization:
+
+* LayerNorm
+* RMSNorm
+
+LayerNorm uses learned gamma and beta parameters. RMSNorm uses gamma without beta and reuses the same transformer-block architecture and normalization cache buffers.
 
 **Multi-Head Self-Attention**
 
@@ -176,9 +154,21 @@ RoPE is used to provide positional information to attention.
 The feed-forward section includes:
 
 * Input projection
-* ReLU activation
+* Selectable activation function
 * Output projection
 * Residual connection
+
+Current activation experiments include:
+
+* ReLU
+* Leaky ReLU
+* GELU
+* SiLU
+* ELU
+* Softplus
+* Mish
+
+The activation is selected without changing the surrounding MLP architecture. Activations that require an alpha parameter can store that value with the model configuration.
 
 **Dropout**
 
@@ -250,14 +240,13 @@ A major goal of WesChat is to keep transformer computation on the GPU.
 CUDA functionality includes custom kernels for operations such as:
 
 * Embedding lookup
-* Layer normalization
-* Layer-normalization backward pass
+* LayerNorm forward and backward passes
+* RMSNorm forward and backward passes
 * Softmax
 * Cross-entropy gradients
 * Dropout
 * Dropout backward pass
-* ReLU
-* ReLU backward pass
+* Activation forward and backward passes
 * Bias addition and bias gradients
 * Rotary positional embeddings
 * Gradient clipping
@@ -322,6 +311,9 @@ Depending on model version, saved information may include:
 * Embeddings
 * Model dimensions
 * Vocabulary information
+* Normalization kind
+* Activation kind
+* Activation alpha
 * Training progress
 * Optimizer state
 * Learning-rate state
@@ -329,7 +321,9 @@ Depending on model version, saved information may include:
 * Stride
 * Random seed state
 
-The program includes compatibility handling for older WesChat model formats.
+WES3 model files use a fixed-size metadata header with reserved space for compatible additions. Normalization and activation settings are stored in that header so a loaded model uses the same mathematical architecture with which it was trained.
+
+Older WES3 models that predate these fields are treated as using the earlier defaults. The program also includes compatibility handling for older WesChat model formats.
 
 ---
 
@@ -363,6 +357,8 @@ A typical recent configuration is:
 | Model dimension           |                 192 |
 | Sequence length           |                 256 |
 | MLP projection multiplier |                   4 |
+| Normalization             | LayerNorm or RMSNorm |
+| MLP activation            |          Selectable |
 | Precision                 |             Float32 |
 | Optimizer                 |               AdamW |
 | Output                    | Weight-tied softmax |
@@ -416,6 +412,8 @@ Active areas include:
 * CUDA performance
 * Model serialization
 * Checkpoint compatibility
+* Normalization experiments
+* Activation-function experiments
 * Inference quality
 * Sampling methods
 * Tokenization experiments

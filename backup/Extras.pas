@@ -2,11 +2,10 @@ unit Extras;
 
 {$mode ObjFPC}{$H+}{$I proprietary.txt}
 
-{ WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellouth.net, www.wesparsons.com.}
-
 interface
-
 implementation
+begin
+{ WesChat, Version 1.2, begun January 10, 2026, by Wesley R. Parsons, wespar@bellsouth.net, www.wesparsons.com }
 
 { Standard z-score transform: Xstd = X − μσ. The calls can still be optimized.
    μ = mean of the row. σ = standard deviation.}
@@ -273,6 +272,8 @@ begin
     for j := 0 to N - 1 do
       Result[j, i] := A[i, j];
 end;
+
+end.
 
 // Copied prior to recoding heads.
 {unit Transform;
@@ -1614,5 +1615,4 @@ Writeln('End of tranformer .');
 Pause;
 end;
 }
-
 

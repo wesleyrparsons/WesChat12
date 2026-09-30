@@ -4,7 +4,7 @@
 
 The project is built largely from the ground up as a way to understand how modern language models actually work at the level of tokens, matrices, gradients, GPU memory, and training algorithms.
 
-WesChat is not intended to compete with production LLM frameworks. It is an educational and experimental implementation that avoids high-level machine-learning frameworks and instead implements the major components directly.
+WesChat is an educational and experimental implementation that avoids high-level machine-learning frameworks and instead implements the major components directly.
 
 ---
 
@@ -16,7 +16,7 @@ Most modern LLM development is done in Python using frameworks such as PyTorch o
 
 This makes it possible to see and control what is happening at each stage rather than relying on a framework to hide the implementation details.
 
-My interest in coding an LLM was influenced by Loglan. a constructed language I have been involved in since college.
+My interest in coding an LLM was influenced by Loglan. a constructed language I have been involved with since college.
 
 ---
 
@@ -33,7 +33,8 @@ The current implementation includes:
 * AdamW optimization
 * Weight tying
 * Dropout
-* Layer normalization
+* Selectable normalization, including LayerNorm and RMSNorm
+* Selectable MLP activation functions
 * Rotary positional embeddings
 * Model checkpointing and resume support
 * Multiple tokenizer formats
@@ -116,17 +117,24 @@ The architecture is configurable, but current experiments typically use models i
 
 * 6 transformer blocks
 * 8 attention heads
-* Model dimensions around 192–256
-* Sequence lengths of 128 or 256
+* Model dimensions of 192
+* Sequence lengths of 256
 * Float32 parameters and activations
 
 ### Transformer Block
 
 Each block includes:
 
-**Pre-LayerNorm**
+**Pre-Normalization**
 
-Layer normalization is performed before the attention and MLP sublayers.
+Normalization is performed before the attention and MLP sublayers.
+
+WesChat supports selectable normalization:
+
+* LayerNorm
+* RMSNorm
+
+LayerNorm uses learned gamma and beta parameters. RMSNorm uses gamma without beta and reuses the same transformer-block architecture and normalization cache buffers.
 
 **Multi-Head Self-Attention**
 
@@ -146,9 +154,21 @@ RoPE is used to provide positional information to attention.
 The feed-forward section includes:
 
 * Input projection
-* ReLU activation
+* Selectable activation function
 * Output projection
 * Residual connection
+
+Current activation experiments include:
+
+* ReLU
+* Leaky ReLU
+* GELU
+* SiLU
+* ELU
+* Softplus
+* Mish
+
+The activation is selected without changing the surrounding MLP architecture. Activations that require an alpha parameter can store that value with the model configuration.
 
 **Dropout**
 
@@ -220,14 +240,13 @@ A major goal of WesChat is to keep transformer computation on the GPU.
 CUDA functionality includes custom kernels for operations such as:
 
 * Embedding lookup
-* Layer normalization
-* Layer-normalization backward pass
+* LayerNorm forward and backward passes
+* RMSNorm forward and backward passes
 * Softmax
 * Cross-entropy gradients
 * Dropout
 * Dropout backward pass
-* ReLU
-* ReLU backward pass
+* Activation forward and backward passes
 * Bias addition and bias gradients
 * Rotary positional embeddings
 * Gradient clipping
@@ -292,6 +311,9 @@ Depending on model version, saved information may include:
 * Embeddings
 * Model dimensions
 * Vocabulary information
+* Normalization kind
+* Activation kind
+* Activation alpha
 * Training progress
 * Optimizer state
 * Learning-rate state
@@ -299,7 +321,9 @@ Depending on model version, saved information may include:
 * Stride
 * Random seed state
 
-The program includes compatibility handling for older WesChat model formats.
+WES3 model files use a fixed-size metadata header with reserved space for compatible additions. Normalization and activation settings are stored in that header so a loaded model uses the same mathematical architecture with which it was trained.
+
+Older WES3 models that predate these fields are treated as using the earlier defaults. The program also includes compatibility handling for older WesChat model formats.
 
 ---
 
@@ -333,6 +357,8 @@ A typical recent configuration is:
 | Model dimension           |                 192 |
 | Sequence length           |                 256 |
 | MLP projection multiplier |                   4 |
+| Normalization             | LayerNorm or RMSNorm |
+| MLP activation            |          Selectable |
 | Precision                 |             Float32 |
 | Optimizer                 |               AdamW |
 | Output                    | Weight-tied softmax |
@@ -382,10 +408,13 @@ The goals of WesChat are to:
 Active areas include:
 
 * UD-aware tokenization and inference
+* Implementation of a gated feed-forward network
 * Training stability
 * CUDA performance
 * Model serialization
 * Checkpoint compatibility
+* Normalization experiments
+* Activation-function experiments
 * Inference quality
 * Sampling methods
 * Tokenization experiments
@@ -399,4 +428,4 @@ WesChat is a hands-on exploration of how transformer language models work, imple
 
 Rather than treating the transformer as a black box, WesChat exposes the machinery directly: tokens, embeddings, matrices, attention scores, gradients, optimizer state, CUDA kernels, and generated probabilities.
 
-If you are interested in language models at the level of **matrices, memory, math, and code**, WesChat may be useful—or at least interesting.
+If you are interested in language models at the level of **matrices, memory, math, and code**, WesChat may prove interesting.ast interesting.

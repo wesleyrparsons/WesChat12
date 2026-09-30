@@ -15,8 +15,9 @@ const
   ModelMagic: array[0..7] of Char = ('W','E','S','2','M','O','D','L');
   RecentCount = 10;                               // Number of values used for rolling means in training.
   DisplayLength = 100;                            // Number of corpus bytes or tokens normally displayed.
+  WES3ModelOptionsVersion = 1;                    // Version for additional model options.
 
-{ Model dimensions }
+  { Model dimensions }
 const
   MaxEpochs = 1000000;                            // Maximum number of epochs over the tokenized corpus.
   ModelDim = 192;                                 // Embedding and transformer dimension.
@@ -30,6 +31,11 @@ const
   InvSqrtHeadDim: Single = 1 / Sqrt(HeadDim);     // Attention scaling factor.
   MaxSymbols = 50400;                             // Maximum Wes/UD symbol count during BPE construction.
   DimVocab = 50400;                               // Physical model vocabulary capacity; must be >= nVocab.
+
+{ Activation function parameters }
+const
+  LeakyReLUAlpha = 0.01;
+  ELUAlpha = 1.0;
 
 { GPT-2 token constants }
 const
@@ -45,7 +51,6 @@ const
   FirstTagToken = 260;                            // First reserved UD tag token.
   UDTagBoundary = 400;                            // First token after the reserved UD range.
   FirstMergedToken = 400;                         // First ID available to learned BPE symbols in the current layout.
-
   TokBOS = 256;
   TokEOS = 257;
   TokPAD = 258;
@@ -200,6 +205,8 @@ type
   TcublasHandle = Pointer;
   TTokenizerKind = (WesTokenizer, UDTokenizer, GPT2Tokenizer);
   TLearningStyle = (FlatLearning, FastLearning, SlowLearning, RolledOffLearning);
+  TNormKind = (LayerNorm, RMSNorm);
+  TActivationKind = (ReLU, LeakyReLU, GELU, SiLU, ELU, Softplus, Mish);
   TPart = (B, E, F, G);
 
 { Corpus and utility vector types }
@@ -429,6 +436,7 @@ var
   PauseIfKeyPressed: Boolean = True;              // Allow keyboard-triggered pauses.
   StopTraining: Boolean;                          // Set when training should stop for user input.
   TrainSuccess: Boolean = False;                  // Training completed successfully.
+  YesToAll: Boolean = True;                       // Say Yes to the option.
 
   VerboseTokenize: Boolean = False;               // Display tokenization and symbolization details.
   VeryVerboseTokenize: Boolean = False;           // Display additional tokenization detail.
@@ -523,6 +531,9 @@ var
 { Training settings and state }
 var
   Training: Boolean = False;                      // True while training; enables training behavior such as dropout.
+  NormKind: TNormKind = LayerNorm;                // Layer norming kind.
+  ActivationKind: TActivationKind = ReLU;         // Activation kind.
+  ActivationAlpha: Single = 0.01;                 // Activation parameter.
   LearningStyle: TLearningStyle = SlowLearning;   // Learning-rate schedule style.
   ShuffleWindows: Boolean = True;                 // Shuffle training windows each epoch.
 

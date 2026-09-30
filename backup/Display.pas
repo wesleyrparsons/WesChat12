@@ -7,6 +7,7 @@ unit Display;
 interface
 
 uses
+  { WesChat units }
   Global;
 
 { Pausing and keyboard control }
@@ -18,11 +19,13 @@ procedure PauseNNL;
 
 function CheckForControlKey: Char;
 
-{ Symbol display }
+{ Symbol, activation, and normalization display }
 function CleanUpSymbol(const x: RawByteString): RawByteString;
 procedure DisplayByteSymbolTable(const SymbolTable: TSymbolTable);
 function ConsoleText(const S: UnicodeString): UnicodeString;
 function TokenizerKindName(const Kind: TTokenizerKind): string;
+function ActivationKindName(const Kind: TActivationKind): string;
+function NormKindName(const Kind: TNormKind): string;
 
 { Vector and matrix display }
 procedure DisplayVector(const V: TIVector);
@@ -59,7 +62,7 @@ uses
 
 { Report state }
 var
-  EmbeddingParams, AttentionParams, FFNParams, LayerNormParams, BlockParams, TotalParams: Int64;
+  EmbeddingParams, AttentionParams, FFNParams, NormParams, BlockParams, TotalParams: Int64;
 
 { Pausing and keyboard control }
 // Pause, unconditional, no new line.
@@ -122,9 +125,12 @@ begin
   FFNParams := Int64(2) * ModelDim * ModelDimProj + ModelDimProj + ModelDim;
 
   // Gamma1, Beta1, Gamma2, Beta2.
-  LayerNormParams := Int64(4) * ModelDim;
+  case NormKind of
+    LayerNorm: NormParams := Int64(4) * ModelDim;   // Gamma1, Beta1, Gamma2, Beta2.
+    RMSNorm: NormParams := Int64(2) * ModelDim;     // Gamma1, Gamma2.
+  end;
 
-  BlockParams := AttentionParams + FFNParams + LayerNormParams;
+  BlockParams := AttentionParams + FFNParams + NormParams;
   TotalParams := EmbeddingParams + Int64(nBlock) * BlockParams;
 end;
 
@@ -137,7 +143,10 @@ begin
   AllBlockParams := Int64(nBlock) * BlockParams;
 
   Writeln('--- Summary Specs and Trainable Parameters Calculation ---');
-  Writeln('Trainable Parameters: Embeddings, Wq, Wk, Wv, W0, W1, b1, W2, b2, Gamma1, Beta1, Gamma2, Beta2');
+  Case NormKind of
+    LayerNorm: Writeln('Trainable Parameters: Embeddings, Wq, Wk, Wv, W0, W1, b1, W2, b2, Gamma1, Beta1, Gamma2, Beta2');
+    RMSNorm: Writeln('Trainable Parameters: Embeddings, Wq, Wk, Wv, W0, W1, b1, W2, b2, Gamma1, Gamma2');
+  end;
   Writeln('nVocab        = ', Global.nVocab);
   Writeln('ModelDim      = ', ModelDim);
   Writeln('ModelDimProj  = ', ModelDimProj);
@@ -153,12 +162,21 @@ begin
   Writeln('FFN parameters per block:');
   Writeln('  2 * ModelDim * ModelDimProj + ModelDimProj + ModelDim');
   Writeln('  2 * ', ModelDim, ' * ', ModelDimProj, ' + ', ModelDimProj, ' + ', ModelDim, ' = ', FFNParams, '  Includes W1, W2, b1, and b2');
-  Writeln('LayerNorm parameters per block:');
-  Writeln('  4 * ModelDim');
-  Writeln('  4 * ', ModelDim, ' = ', LayerNormParams, '  (Includes Gamma1, Beta1, Gamma2, and Beta2)');
+  Case NormKind of
+    LayerNorm: begin
+      Writeln('LayerNorm parameters per block:');
+      Writeln('  4 * ModelDim');
+      Writeln('  4 * ', ModelDim, ' = ', NormParams, '  (Includes Gamma1, Beta1, Gamma2, and Beta2)');
+    end;
+    RMSNorm: begin
+      Writeln('RMSNorm parameters per block:');
+      Writeln('  2 * ModelDim');
+      Writeln('  2 * ', ModelDim, ' = ', NormParams, '  (Includes Gamma1 and Gamma2)');
+    end;
+  end;
   Writeln('Total parameters per transformer block:');
   Writeln('  Attention + FFN + LayerNorm');
-  Writeln('  ', AttentionParams, ' + ', FFNParams, ' + ', LayerNormParams, ' = ', BlockParams);
+  Writeln('  ', AttentionParams, ' + ', FFNParams, ' + ', NormParams, ' = ', BlockParams);
   Writeln('All transformer blocks:');
   Writeln('  nBlock * BlockParams');
   Writeln('  ', nBlock, ' * ', BlockParams, ' = ', AllBlockParams);
@@ -177,7 +195,7 @@ begin
 
   Writeln('--- Trainable Parameters ---');
   Writeln('Embeddings = ', EmbeddingParams, '; Attention/block = ', AttentionParams, '; FFN/block = ', FFNParams);
-  Writeln('LayerNorm/block = ', LayerNormParams, '; Total/block = ', BlockParams, '; All blocks = ', AllBlockParams);
+  Writeln('Norm/block = ', NormParams, '; Total/block = ', BlockParams, '; All blocks = ', AllBlockParams);
   Writeln('Total trainable parameters = ', TotalParams);
 end;
 
@@ -191,7 +209,7 @@ end;
 // Report model and training variables for display at Startup.
 procedure ReportStartupKeyVariables;
 begin
-  Writeln('Model: D=', ModelDim, '; Proj=', Proj, '; Heads=', nHead, '; Blocks=', nBlock, '; SeqLen=', SeqLen, '; Stride=', Stride, '; MaxVocab=', MaxVocab);
+  Writeln('Model: D=', ModelDim, '; Proj=', Proj, '; Heads=', nHead, '; Blocks=', nBlock, '; SeqLen=', SeqLen, '; Stride=', Stride, '; MaxSymbols=', MaxSymbols);
   Writeln('AdaptiveLR=', AdaptiveLR, '; Shuffle=', ShuffleWindows, '; Training=', Training, '; Dropout=', ADropout:0:3, '/', MLPDropout:0:3, '/', RDropout:0:3);
 end;
 
@@ -207,9 +225,9 @@ end;
 procedure ReportPath(const PathLabel, PathValue: string);
 begin
   if Trim(PathValue) = '' then
-    Writeln(PathLabel, ': (none)')
+    Write(PathLabel, ': (none)')
   else
-    Writeln(PathLabel, ': ', PathValue);
+    Write(PathLabel, ': ', PathValue);
 end;
 
 // Report the current program, corpus, model, and training state.
@@ -220,7 +238,8 @@ begin
 
   Writeln('--- Paths ---');
   ReportPath('Work root', WorkRoot);
-  ReportPath('Working directory', WorkingDir);
+  ReportPath('; Working directory', WorkingDir);
+  Writeln;
   ReportPath('Best model', BestModelFileName);
 
   Writeln('--- Corpus / Tokenizer ---');
@@ -228,27 +247,28 @@ begin
   Writeln('Corpus bytes = ', nCorpus, '; Raw tokens = ', RawTokenCount, '; Stored tokens = ', nTokenizedCorpus, '; Symbols = ', nSymbols);
 
   Writeln('--- Model ---');
-  Writeln('ModelDim = ', ModelDim, '; ModelDimProj = ', ModelDimProj, '; Proj = ', Proj, '; Blocks = ', nBlock, '; Heads = ', nHead);
-  Writeln('SeqLen = ', SeqLen, '; Stride = ', Stride, '; StartStride = ', StartStride, '; Shuffle = ', ShuffleWindows);
-  Writeln('nVocab = ', Global.nVocab, '; DimVocab = ', DimVocab, '; Trainable parameters = ', NumberTrainableParameters);
+  Writeln('Acivation = ', ActivationKindName(ActivationKind));
+  Write('ModelDim = ', ModelDim, '; ModelDimProj = ', ModelDimProj, '; Proj = ', Proj, '; Blocks = ', nBlock, '; Heads = ', nHead);
+  Write('; SeqLen = ', SeqLen, '; Stride = ', Stride, '; StartStride = ', StartStride, '; Shuffle = ', ShuffleWindows);
+  Writeln('; nVocab = ', Global.nVocab, '; DimVocab = ', DimVocab, '; Trainable parameters = ', NumberTrainableParameters);
 
   Writeln('--- Training ---');
   Writeln('Epoch = ', CompletedEpochs, '; GlobalStep = ', GlobalStep, '; AdamWStep = ', AdamWStep, '; MaxEpochs = ', MaxEpochs);
-  Writeln('LR = ', LearningRate:0:8, '; BaseLR = ', BaseLearningRate:0:8, '; FloorLR = ', FloorLearningRate:0:8, '; Adaptive = ', AdaptiveLR);
+  Write('LR = ', LearningRate:0:8, '; BaseLR = ', BaseLearningRate:0:8, '; FloorLR = ', FloorLearningRate:0:8, '; Adaptive = ', AdaptiveLR);
 
   if OverrideLearningRate <> -1.0 then
-    Writeln('Override LR = ', OverrideLearningRate:0:8, '; RollOff = ', RollOff:0:8)
+    Writeln('; Override LR = ', OverrideLearningRate:0:8, '; RollOff = ', RollOff:0:8)
   else
-    Writeln('Override LR = none; RollOff = ', RollOff:0:8);
+    Writeln('; Override LR = none; RollOff = ', RollOff:0:8);
 
-  Writeln('WeightDecay = ', WeightDecay:0:7, '; ClipLimit = ', ClipLimit:0:4, '; GlobalSeed = ', GlobalSeed);
   Writeln('Adam: Beta1 = ', AdamBeta1:0:6, '; Beta2 = ', AdamBeta2:0:6, '; Epsilon = ', AdamEpsilon:0:10);
-  Writeln('Dropout: Attention = ', ADropout:0:4, '; MLP = ', MLPDropout:0:4, '; Residual = ', RDropout:0:4);
+  Write('WeightDecay = ', WeightDecay:0:7, '; ClipLimit = ', ClipLimit:0:4, '; GlobalSeed = ', GlobalSeed);
+  Writeln('; Dropout: Attention = ', ADropout:0:4, '; MLP = ', MLPDropout:0:4, '; Residual = ', RDropout:0:4);
   Writeln('Temperature: Training = ', TTemperature:0:4, '; Inference = ', ITemperature:0:4);
 
   Writeln('--- Best Loss ---');
   if (MinLoss < MaxDouble) and (MinLoss <> 1000000) then
-    Write('Minimum = ', MinLoss: 0: 7, ' @ epoch ', MinLossEpoch)
+    Write('Minimum = ', MinLoss: 0: 7, ' in epoch ', MinLossEpoch)
   else
     Write('Minimum = none');
 
@@ -311,7 +331,34 @@ begin
     UDTokenizer:   Result := 'UDTokenizer';
     GPT2Tokenizer: Result := 'GPT2Tokenizer';
   else
-    Result := 'UnknownTokenizer';
+    Result := 'Unknown tokenizer';
+  end;
+end;
+
+// Display the activation kind.
+function ActivationKindName(const Kind: TActivationKind): string;
+begin
+  case Kind of
+    ReLU: Result := 'ReLU';
+    GELU: Result := 'GELU';
+    SiLU: Result := 'SiLU';
+    LeakyReLU: Result := 'LeakyReLU';
+    ELU: Result := 'ELU';
+    SoftPlus: Result := 'SoftPlus';
+    Mish: Result := 'Mish';
+  else
+    Result := 'Unknown activation function';
+  end;
+end;
+
+// Display the norm kind.
+function NormKindName(const Kind: TNormKind): string;
+begin
+  case Kind of
+    LayerNorm: Result := 'Layer Norm';
+    RMSNorm: Result := 'RMS Norm';
+  else
+    Result := 'Unknown norm function';
   end;
 end;
 

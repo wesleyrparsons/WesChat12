@@ -7,9 +7,10 @@ unit CombineTables;
 interface
 
 uses
-  Global,
-  IOHandler,
-  SysUtils;
+  { RTL and platform units }
+  SysUtils,
+  { WesChat units }
+  Global, IOHandler;
 
 procedure MergeSymbolTables(out CombinedTable: TSymbolTable);
 
@@ -22,10 +23,7 @@ type
 // Return True if a symbol table uses the fixed UD reserved-token layout.
 function IsUDSymbolTable(const Table: TSymbolTable): Boolean;
 begin
-  Result := (Length(Table) >= UDTagBoundary) and
-            (Table[TokNoun] = '|noun') and
-            (Table[TokVerb] = '|verb') and
-            (Table[TokPunct] = '|punct');
+  Result := (Length(Table) >= UDTagBoundary) and (Table[TokNoun] = '|noun') and (Table[TokVerb] = '|verb') and (Table[TokPunct] = '|punct');
 end;
 
 // Require one symbol to occur at its fixed token ID.

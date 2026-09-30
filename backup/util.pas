@@ -7,11 +7,10 @@ unit Util;
 interface
 
 uses
-  Display,
-  Global,
-  Math,
-  Matrix,
-  SysUtils;
+  { RTL and platform units }
+  Math, SysUtils,
+  { WesChat units }
+  Display, Global, Matrix;
 
 const
   WeightSize: Integer = ModelDim * ModelDim * SizeOf(Single);
@@ -79,6 +78,7 @@ procedure ResetTrainingStateForEnhancement(var WAdamWState: TWAdamWState);
 { AdamW optimization and diagnostics }
 procedure AdamWOptimizeBlock(var WModelParams: TWModelParams; var WAdamWState: TWAdamWState; const Blk: Integer;
   const Beta1Power, Beta2Power: Single);
+procedure ReinitializeBeta(var WModelParams: TWModelParams; var WAdamWState: TWAdamWState);
 procedure ResetAdamWStateForEnhancement(var WAdamWState: TWAdamWState);
 procedure AdamWOptimizeEmbeddings(var WModelParams: TWModelParams; var WAdamWState: TWAdamWState; const Beta1Power, Beta2Power: Single);
 procedure UpdateEmbeddingGradient(var WModelParams: TWModelParams; var WModelState: TWModelState);
@@ -97,8 +97,23 @@ procedure ApplyAdaptiveLR(var LRState: TAdaptiveLRState; var LearningRate: Doubl
 { CUDA kernel entry points }
 procedure LaunchReLUForward(A: PSingle; B: PSingle; Rows: Integer; Cols: Integer); cdecl; external WesChatKernelDLL;
 procedure LaunchReLUBackward(Hidden1: PSingle; GradOut: PSingle; GradIn: PSingle; Rows: Integer; Cols: Integer); cdecl; external WesChatKernelDLL;
-procedure LaunchClipVector(X: PSingle; N: Integer; Limit: Single); cdecl;
-  external WesChatKernelDLL;
+procedure LaunchGELUForward(A: PSingle; B: PSingle; Rows: Integer; Cols: Integer); cdecl; external WesChatKernelDLL;
+procedure LaunchGELUBackward(Hidden1: PSingle; GradOut: PSingle; GradIn: PSingle; Rows: Integer; Cols: Integer); cdecl; external WesChatKernelDLL;
+procedure LaunchSiLUForward(A: PSingle; B: PSingle; Rows: Integer; Cols: Integer); cdecl; external WesChatKernelDLL;
+procedure LaunchSiLUBackward(Hidden1: PSingle; GradOut: PSingle; GradIn: PSingle; Rows: Integer; Cols: Integer); cdecl; external WesChatKernelDLL;
+procedure LaunchLeakyReLUForward(A, B: PSingle; Rows, Cols: Integer; Alpha: Single); cdecl; external WesChatKernelDLL;
+procedure LaunchLeakyReLUBackward(Hidden1, GradOut, GradIn: PSingle; Rows, Cols: Integer; Alpha: Single); cdecl; external WesChatKernelDLL;
+procedure LaunchELUForward(A, B: PSingle; Rows, Cols: Integer; Alpha: Single); cdecl; external WesChatKernelDLL;
+procedure LaunchELUBackward(Hidden1, GradOut, GradIn: PSingle; Rows, Cols: Integer; Alpha: Single); cdecl; external WesChatKernelDLL;
+procedure LaunchSoftplusForward(A, B: PSingle; Rows, Cols: Integer); cdecl; external WesChatKernelDLL;
+procedure LaunchSoftplusBackward(Hidden1, GradOut, GradIn: PSingle; Rows, Cols: Integer); cdecl; external WesChatKernelDLL;
+procedure LaunchMishForward(A, B: PSingle; Rows, Cols: Integer); cdecl; external WesChatKernelDLL;
+procedure LaunchMishBackward(Hidden1, GradOut, GradIn: PSingle; Rows, Cols: Integer); cdecl; external WesChatKernelDLL;
+
+procedure LaunchHadamardMultiply(Hidden1, HiddenG: PSingle; Hidden2: PSingle; Rows, Cols: Integer);
+  cdecl; external WesChatKernelDLL;
+procedure LaunchClipVector(X: PSingle; N: Integer; Limit: Single);
+  cdecl; external WesChatKernelDLL;
 procedure LaunchEmbeddingLookup(Embeddings: PSingle; InputTokens: PInteger; X: PSingle; SeqLen: Integer; ModelDim: Integer);
   cdecl; external WesChatKernelDLL;
 procedure LaunchAutoRegressiveMask(Scores: PSingle; SeqLen: Integer);
@@ -117,6 +132,10 @@ procedure LaunchSoftmaxBackward(Y: PSingle; dY: PSingle; dX: PSingle; Rows: Inte
 procedure LaunchLayerNormForward(InX, OutX, Gamma, Beta, LNXhat, LNInvStd: PSingle; SeqLen, ModelDim: Integer);
   cdecl; external WesChatKernelDLL;
 procedure LaunchLayerNormBackward(dY, dX, Gamma, LNXhat, LNInvStd, dGamma, dBeta: PSingle; SeqLen, ModelDim: Integer);
+  cdecl; external WesChatKernelDLL;
+procedure LaunchRMSNormForward(InX, OutX, Gamma, RMSXHat, RMSInvStd: PSingle; SeqLen, ModelDim: Integer);
+  cdecl; external WesChatKernelDLL;
+procedure LaunchRMSNormBackward(dY, dX, Gamma, RMSXHat, RMSInvStd, dGamma: PSingle; SeqLen, ModelDim: Integer);
   cdecl; external WesChatKernelDLL;
 procedure LaunchRoPEForward(H: PSingle; const InvFreq: PSingle; SeqLen: Integer; NumHeads: Integer; HeadDim: Integer; RowStride: Integer);
   cdecl; external WesChatKernelDLL;
@@ -247,21 +266,21 @@ begin
 
   CorpusDir  := WorkRoot + 'corpus'  + DirectorySeparator;
   SymbolDir  := WorkRoot + 'symbols' + DirectorySeparator;
-  MergeDir   := WorkRoot + 'merges'  + DirectorySeparator;
   TokenDir   := WorkRoot + 'tokens'  + DirectorySeparator;
   ModelDir   := WorkRoot + 'models'  + DirectorySeparator;
   LogDir     := WorkRoot + 'logs'    + DirectorySeparator;
   RunDir     := WorkRoot + 'runs'    + DirectorySeparator;
+  ListDir    := WorkRoot + 'lists'   + DirectorySeparator;
   ScratchDir := WorkRoot + 'scratch' + DirectorySeparator;
 
   ForceDirectories(WorkRoot);
   ForceDirectories(CorpusDir);
   ForceDirectories(SymbolDir);
-  ForceDirectories(MergeDir);
   ForceDirectories(TokenDir);
   ForceDirectories(ModelDir);
   ForceDirectories(LogDir);
   ForceDirectories(RunDir);
+  ForceDirectories(ListDir);
   ForceDirectories(ScratchDir);
 end;
 
@@ -1086,6 +1105,43 @@ begin
     CheckCudaError('Initialize AdamW state.');
 end;
 
+// Reinitialize LayerNorm Beta parameters and their AdamW state.
+procedure ReinitializeBeta(var WModelParams: TWModelParams; var WAdamWState: TWAdamWState);
+var
+  k: Integer;
+begin
+  for k := 0 to nBlock - 1 do begin
+    // Beta parameter values and gradients on host.
+    FillChar(WModelParams.ParamBlock[k].Beta1.Value, ModelSize, 0);
+    FillChar(WModelParams.ParamBlock[k].Beta1.Grad, ModelSize, 0);
+    FillChar(WModelParams.ParamBlock[k].Beta2.Value, ModelSize, 0);
+    FillChar(WModelParams.ParamBlock[k].Beta2.Grad, ModelSize, 0);
+
+    // Beta AdamW moments on host.
+    FillChar(WAdamWState.ParamBlock[k].Beta1.M, ModelSize, 0);
+    FillChar(WAdamWState.ParamBlock[k].Beta1.V, ModelSize, 0);
+    FillChar(WAdamWState.ParamBlock[k].Beta2.M, ModelSize, 0);
+    FillChar(WAdamWState.ParamBlock[k].Beta2.V, ModelSize, 0);
+
+    if CudaAllocated then begin
+      // Beta parameter values and gradients on device.
+      cudaMemset(WModelParams.ParamBlock[k].Beta1.dValue, 0, ModelSize);
+      cudaMemset(WModelParams.ParamBlock[k].Beta1.dGrad, 0, ModelSize);
+      cudaMemset(WModelParams.ParamBlock[k].Beta2.dValue, 0, ModelSize);
+      cudaMemset(WModelParams.ParamBlock[k].Beta2.dGrad, 0, ModelSize);
+
+      // Beta AdamW moments on device.
+      cudaMemset(WAdamWState.ParamBlock[k].Beta1.dM, 0, ModelSize);
+      cudaMemset(WAdamWState.ParamBlock[k].Beta1.dV, 0, ModelSize);
+      cudaMemset(WAdamWState.ParamBlock[k].Beta2.dM, 0, ModelSize);
+      cudaMemset(WAdamWState.ParamBlock[k].Beta2.dV, 0, ModelSize);
+    end;
+  end;
+
+  if DebugCudaChecks and CudaAllocated then
+    CheckCudaError('Reinitialize Beta.');
+end;
+
 // Reset optimizer and training history before enhancement on a new corpus.
 procedure ResetTrainingStateForEnhancement(var WAdamWState: TWAdamWState);
 begin
@@ -1175,12 +1231,12 @@ begin
 end;
 
 { AdamW optimization }
+
 // Update one transformer block using AdamW.
 procedure AdamWOptimizeBlock(var WModelParams: TWModelParams; var WAdamWState: TWAdamWState; const Blk: Integer;
   const Beta1Power, Beta2Power: Single);
 begin
-  with WAdamWState.ParamBlock[Blk] do
-  with WModelParams.ParamBlock[Blk] do begin
+  with WAdamWState.ParamBlock[Blk] do with WModelParams.ParamBlock[Blk] do begin
 
     // Attention weights. Apply weight decay.
     LaunchAdamWUpdate(Wq.dValue, Wq.dGrad, WAdamWState.ParamBlock[Blk].Wq.dM, WAdamWState.ParamBlock[Blk].Wq.dV,
@@ -1209,19 +1265,23 @@ begin
     LaunchAdamWUpdate(b2.dValue, b2.dGrad, WAdamWState.ParamBlock[Blk].b2.dM, WAdamWState.ParamBlock[Blk].b2.dV,
       ModelDim, LearningRate, AdamBeta1, AdamBeta2, Beta1Power, Beta2Power, AdamEpsilon, 0.0);
 
-    // LayerNorm 1. No weight decay.
+    // Normalization 1. Gamma is used by LayerNorm and RMSNorm.
     LaunchAdamWUpdate(Gamma1.dValue, Gamma1.dGrad, WAdamWState.ParamBlock[Blk].Gamma1.dM, WAdamWState.ParamBlock[Blk].Gamma1.dV,
       ModelDim, LearningRate, AdamBeta1, AdamBeta2, Beta1Power, Beta2Power, AdamEpsilon, 0.0);
 
-    LaunchAdamWUpdate(Beta1.dValue, Beta1.dGrad, WAdamWState.ParamBlock[Blk].Beta1.dM, WAdamWState.ParamBlock[Blk].Beta1.dV,
-      ModelDim, LearningRate, AdamBeta1, AdamBeta2, Beta1Power, Beta2Power, AdamEpsilon, 0.0);
+    // Beta is used only by LayerNorm.
+    if NormKind = LayerNorm then
+      LaunchAdamWUpdate(Beta1.dValue, Beta1.dGrad, WAdamWState.ParamBlock[Blk].Beta1.dM, WAdamWState.ParamBlock[Blk].Beta1.dV,
+        ModelDim, LearningRate, AdamBeta1, AdamBeta2, Beta1Power, Beta2Power, AdamEpsilon, 0.0);
 
-    // LayerNorm 2. No weight decay.
+    // Normalization 2. Gamma is used by LayerNorm and RMSNorm.
     LaunchAdamWUpdate(Gamma2.dValue, Gamma2.dGrad, WAdamWState.ParamBlock[Blk].Gamma2.dM, WAdamWState.ParamBlock[Blk].Gamma2.dV,
       ModelDim, LearningRate, AdamBeta1, AdamBeta2, Beta1Power, Beta2Power, AdamEpsilon, 0.0);
 
-    LaunchAdamWUpdate(Beta2.dValue, Beta2.dGrad, WAdamWState.ParamBlock[Blk].Beta2.dM, WAdamWState.ParamBlock[Blk].Beta2.dV,
-      ModelDim, LearningRate, AdamBeta1, AdamBeta2, Beta1Power, Beta2Power, AdamEpsilon, 0.0);
+    // Beta is used only by LayerNorm.
+    if NormKind = LayerNorm then
+      LaunchAdamWUpdate(Beta2.dValue, Beta2.dGrad, WAdamWState.ParamBlock[Blk].Beta2.dM, WAdamWState.ParamBlock[Blk].Beta2.dV,
+        ModelDim, LearningRate, AdamBeta1, AdamBeta2, Beta1Power, Beta2Power, AdamEpsilon, 0.0);
   end;
 
   if DebugCudaChecks then

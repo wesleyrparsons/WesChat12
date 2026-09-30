@@ -7,10 +7,10 @@ unit TransformBackprop;
 interface
 
 uses
-  Display,
-  Global,
-  Matrix,
-  Util;
+  { RTL and platform units }
+  SysUtils,
+  { WesChat units }
+  Display, Global, Matrix, Util;
 
 procedure RunTransformBackprop(var WModelParams: TWModelParams; var WModelState: TWModelState; const Blk: Integer);
 
@@ -63,7 +63,15 @@ begin
 
     // 2C. Backpropagate the ReLU activation: Hidden2 -> Hidden1.
     if DisplaySubstage then Writeln('' : Stage, '2C. Transform Backprop, ReLU backward from Hidden2 to Hidden1');
-    LaunchReLUBackward(Hidden1.dValue, Hidden2.dGrad, Hidden1.dGrad, SeqLen, ModelDimProj);
+    case ActivationKind of
+      ReLU:      LaunchReLUBackward(Hidden1.dValue, Hidden2.dGrad, Hidden1.dGrad, SeqLen, ModelDimProj);
+      LeakyReLU: LaunchLeakyReLUBackward(Hidden1.dValue, Hidden2.dGrad, Hidden1.dGrad, SeqLen, ModelDimProj, ActivationAlpha);
+      GELU:      LaunchGELUBackward(Hidden1.dValue, Hidden2.dGrad, Hidden1.dGrad, SeqLen, ModelDimProj);
+      SiLU:      LaunchSiLUBackward(Hidden1.dValue, Hidden2.dGrad, Hidden1.dGrad, SeqLen, ModelDimProj);
+      ELU:       LaunchELUBackward(Hidden1.dValue, Hidden2.dGrad, Hidden1.dGrad, SeqLen, ModelDimProj, ActivationAlpha);
+      Softplus:  LaunchSoftplusBackward(Hidden1.dValue, Hidden2.dGrad, Hidden1.dGrad, SeqLen, ModelDimProj);
+      Mish:      LaunchMishBackward(Hidden1.dValue, Hidden2.dGrad, Hidden1.dGrad, SeqLen, ModelDimProj);
+    end;
 
     // 2B. Accumulate the b1 gradient from Hidden1.Grad.
     if DisplaySubstage then Writeln('' : Stage, '2B. Transform Backprop, obtain b1 Grad from Hidden1 Grad');
@@ -83,17 +91,20 @@ begin
 
     Stage := Stage - 2;
 
-    // 1J. Backpropagate X5 = LayerNorm(X4).
+    // 1J. Backpropagate X5 = Norm(X4).
     if DisplayStage then Writeln('' : Stage, 'Stage  1, Block ', Blk, ', Transform Backprop');
-    if DisplaySubstage then Writeln('' : Stage, '1J. Transform Backprop, LayerNorm backward from X5 to X4');
+    if DisplaySubstage then Writeln('' : Stage, '1J. Transform Backprop, Norm backward from X5 to X4');
 
-    // LayerNorm backward produces the X4 path gradient plus Gamma2 and Beta2 gradients.
-    LaunchLayerNormBackward(X5.dGrad, dX4FromLN2, Gamma2.dValue, dLNXHat2, dLNInvStd2, Gamma2.dGrad, Beta2.dGrad, SeqLen, ModelDim);
+    // Norm backward produces the X4 path gradient plus Gamma2 and Beta2 gradients.
+    case NormKind of
+      LayerNorm: LaunchLayerNormBackward(X5.dGrad, dX4FromLN2, Gamma2.dValue, dLNXHat2, dLNInvStd2, Gamma2.dGrad, Beta2.dGrad, SeqLen, ModelDim);
+      RMSNorm: LaunchRMSNormBackward(X5.dGrad, dX4FromLN2, Gamma2.dValue, dLNXHat2, dLNInvStd2, Gamma2.dGrad, SeqLen, ModelDim);
+    end;
     CuAccumulateGrad(CuHandle, dX4FromLN2, X4.dGrad, SeqLen, ModelDim);
 
     if VerboseTransform then begin
       cudaMemcpy(@X4.Grad[0, 0], X4.dGrad, XSize, cudaMemcpyDeviceToHost);
-      VTPDisplayX('Display X4.Grad after LayerNorm backward.', X4.Grad, G);
+      VTPDisplayX('Display X4.Grad after Norm backward.', X4.Grad, G);
     end;
 
     // 1I. Split the attention residual gradient: X4 = X + X3.
@@ -194,14 +205,17 @@ begin
       VTPDisplayX('Display X1.Grad after summing the Q, K, and V paths.', X1.Grad, G);
     end;
 
-    // 1A. Backpropagate X1 = LayerNorm(X).
+    // 1A. Backpropagate X1 = Norm(X).
     if DisplaySubstage then begin
-      Writeln('' : Stage, '1A. Transform Backprop, LayerNorm backward from X1 to X');
+      Writeln('' : Stage, '1A. Transform Backprop, Norm backward from X1 to X');
       PauseNNL;
     end;
 
-    // LayerNorm backward produces the X path gradient plus Gamma1 and Beta1 gradients.
-    LaunchLayerNormBackward(X1.dGrad, dXFromLN1, Gamma1.dValue, dLNXHat1, dLNInvStd1, Gamma1.dGrad, Beta1.dGrad, SeqLen, ModelDim);
+    // Norm backward produces the X path gradient plus Gamma1 and Beta1 gradients.
+    case NormKind of
+      LayerNorm: LaunchLayerNormBackward(X1.dGrad, dXFromLN1, Gamma1.dValue, dLNXHat1, dLNInvStd1, Gamma1.dGrad, Beta1.dGrad, SeqLen, ModelDim);
+      RMSNorm: LaunchRMSNormBackward(X1.dGrad, dXFromLN1, Gamma1.dValue, dLNXHat1, dLNInvStd1, Gamma1.dGrad, SeqLen, ModelDim);
+    end;
     CuAccumulateGrad(CuHandle, dXFromLN1, X.dGrad, SeqLen, ModelDim);
 
     if VerboseTransform then begin

@@ -7,11 +7,10 @@ unit IOHandler;
 interface
 
 uses
-  Display,
-  Global,
-  Math,
-  SysUtils,
-  Util;
+  { RTL and platform units }
+  Math, SysUtils,
+  { WesChat units }
+  Display, Global, Util, WesTokenize;
 
 { File input and output }
 function ComputeCorpusID(const OneCorpus: TBVector): QWord;
@@ -32,7 +31,6 @@ procedure ConvertTSSeparators(const FileName: string);
 implementation
 
 { WES3 file formats }
-
 const
   SymbolMagic3: array[0..7] of Char = ('W','E','S','3','S','Y','M','T');
   TokenMagic3: array[0..7] of Char = ('W','E','S','3','T','O','K','L');
@@ -89,15 +87,18 @@ type
     NBlock: UInt32;
     NHead: UInt32;
     SeqLen: UInt32;
-    ProgramVersion: TProgramVersionChars;
-    Reserved: array[0..903] of Byte;
+    ProgramVersion: array[0..15] of Char;
+    ModelOptionsVersion: UInt32;      // Model options.
+    NormKind: UInt32;
+    ActivationKind: UInt32;
+    ActivationAlpha: Single;
+    Reserved: array[0..887] of Byte;
   end;
   {$if SizeOf(TWES3ModelHeader) <> WES3ModelHeaderSize}
     {$fatal TWES3ModelHeader must be exactly 1024 bytes}
   {$endif}
 
 { File metadata helpers }
-
 // Copy the running program version into a zero-padded fixed-length header field.
 procedure StoreProgramVersion(var Dest: TProgramVersionChars);
 var
@@ -111,7 +112,6 @@ begin
 end;
 
 { Tokenizer metadata }
-
 // Set special-token IDs from a tokenizer kind when the file format does not store the IDs separately.
 procedure SetSpecialTokenIDsForKind(const Kind: TTokenizerKind);
 begin
@@ -133,7 +133,6 @@ begin
 end;
 
 { Corpus files }
-
 // Compute a stable FNV-1a identifier for a complete corpus byte vector.
 function ComputeCorpusID(const OneCorpus: TBVector): QWord;
 const
@@ -192,7 +191,6 @@ begin
 end;
 
 { Symbol tables }
-
 // Load a symbol table from WES3, WES2, or legacy SYMT format.
 procedure LoadSymbolTable(const FileName: string; var SymbolTable: TSymbolTable);
 var
@@ -417,7 +415,6 @@ begin
 end;
 
 { Token lists }
-
 // Load a token list from WES3, WES2, or legacy raw-token format.
 procedure LoadTokenList(const TokenFileName: string; var TokenizedCorpus: TIVector);
 var
@@ -620,7 +617,6 @@ end;
 
 
 { Model checkpoints }
-
 // Clear device pointers deserialized as part of the model record.
 procedure ClearDevicePointers(var Model: TWModelParams);
 var
@@ -850,6 +846,12 @@ begin
   Header.NHead := nHead;
   Header.SeqLen := SeqLen;
 
+  // Model options.
+  Header.ModelOptionsVersion := WES3ModelOptionsVersion;
+  Header.NormKind := Ord(NormKind);
+  Header.ActivationKind := Ord(ActivationKind);
+  Header.ActivationAlpha := ActivationAlpha;
+
   // Program version.
   StoreProgramVersion(Header.ProgramVersion);
 
@@ -1024,15 +1026,13 @@ begin
     // Validate architecture against current program settings.
     if Header.ModelDim <> ModelDim then begin
       CloseFile(F);
-      Writeln('ModelDim mismatch. File = ', Header.ModelDim,
-        '; Program = ', ModelDim, '.');
+      Writeln('ModelDim mismatch. File = ', Header.ModelDim, '; Program = ', ModelDim, '.');
       Exit;
     end;
 
     if Header.ModelDimProj <> ModelDimProj then begin
       CloseFile(F);
-      Writeln('ModelDimProj mismatch. File = ', Header.ModelDimProj,
-        '; Program = ', ModelDimProj, '.');
+      Writeln('ModelDimProj mismatch. File = ', Header.ModelDimProj, '; Program = ', ModelDimProj, '.');
       Exit;
     end;
 
@@ -1078,6 +1078,44 @@ begin
       Exit;
     end;
 
+    // Restore normalization and activation options.
+    if Header.ModelOptionsVersion = 0 then begin
+
+      // Older WES3 models used LayerNorm and ReLU.
+      NormKind := LayerNorm;
+      ActivationKind := ReLU;
+      ActivationAlpha := 0.01;
+
+    end
+    else if Header.ModelOptionsVersion = WES3ModelOptionsVersion then begin
+
+      if Header.NormKind > Ord(High(TNormKind)) then begin
+        CloseFile(F);
+        Writeln('Invalid normalization kind in WES3 model: ',
+          Header.NormKind, '.');
+        Exit;
+      end;
+
+      if Header.ActivationKind > Ord(High(TActivationKind)) then begin
+        CloseFile(F);
+        Writeln('Invalid activation kind in WES3 model: ',
+          Header.ActivationKind, '.');
+        Exit;
+      end;
+
+      NormKind := TNormKind(Header.NormKind);
+      ActivationKind := TActivationKind(Header.ActivationKind);
+      ActivationAlpha := Header.ActivationAlpha;
+
+    end
+    else begin
+      CloseFile(F);
+      Writeln('Unsupported model options version. File = ',
+        Header.ModelOptionsVersion, '; Program = ',
+        WES3ModelOptionsVersion, '.');
+      Exit;
+    end;
+
     // Restore model metadata.
     TokenizerKind := TTokenizerKind(Header.TokenizerKind);
     SetSpecialTokenIDsForKind(TokenizerKind);
@@ -1114,7 +1152,9 @@ begin
     NewModel := False;
     Result := True;
 
-    Writeln('Loaded WES3 model: ', FileName, '.');
+    // use name functions
+    Writeln('Loaded WES3 model: ', FileName, '. Norm = ', NormKindName(NormKind), '; Activation = ', ActivationKindName(ActivationKind),
+      '; alpha = ', ActivationAlpha:0:4, '.');
 
   except
     try
@@ -1127,7 +1167,6 @@ begin
 end;
 
 { TinyStories conversion }
-
 // Convert <|endoftext|> story separators to byte 254.
 procedure ConvertTSEndOfText(const FileName: string);
 const
